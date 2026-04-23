@@ -1,5 +1,12 @@
 # reason-over-search v1 (Docker)
 
+## What this image contains
+
+- Conda env `retriever` for `local_retriever/`
+- Conda env `evaluation_search_r1` (Python 3.11) for `evaluation_search_r1/`
+- App code copied to `/app/local_retriever` and `/app/evaluation_search_r1`
+- Eval package installed in editable mode during build: `python setup.py develop --no-deps`
+
 ## Build (from repository root)
 
 The `Dockerfile` uses `FROM --platform=linux/amd64` so the result matches **Vast.ai** and typical cloud GPUs (**x86_64**), even when you build on an **Apple Silicon** machine. The first such build on a Mac can be slower (QEMU) while it runs the `RUN` steps.
@@ -38,6 +45,8 @@ Inside the container:
 
 ```bash
 source /opt/miniforge3/etc/profile.d/conda.sh
+
+# Retriever env
 conda activate retriever
 cd /app/local_retriever
 
@@ -76,6 +85,28 @@ docker push pantomiman/reason-over-search-v1:v1
 ```
 
 On Vast, you can `ssh` in or use their terminal, `conda activate retriever`, and run the same `python` command as above.
+
+## Run evaluation env (inside container)
+
+```bash
+source /opt/miniforge3/etc/profile.d/conda.sh
+conda activate evaluation_search_r1
+cd /app/evaluation_search_r1
+
+# Example:
+python run_eval.py \
+  --config_path flashrag/config/basic_config.yaml \
+  --method_name search-r1 \
+  --data_dir /app/data \
+  --dataset_name bamboogle \
+  --split test \
+  --save_dir /app/evaluation_search_r1/results/bamboogle \
+  --save_note search_r1_base \
+  --sgl_remote_url 127.0.0.1:3000 \
+  --remote_retriever_url 127.0.0.1:3005 \
+  --generator_model search_r1_base_model \
+  --apply_chat False
+```
 
 ## Vast SSH troubleshooting
 

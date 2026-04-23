@@ -5,3 +5,7 @@ __pycache__/
 local_retriever/corpus/
 local_retriever/indexes/
 local_retriever/models/
+
+# Evaluation
+evaluation_search_r1/search_r1_base_model/
+evaluation_search_r1/search_r1_instruct_model/
