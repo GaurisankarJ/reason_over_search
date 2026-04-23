@@ -1,0 +1,7 @@
+# Python
+__pycache__/
+
+# Local Retriever
+local_retriever/corpus/
+local_retriever/indexes/
+local_retriever/models/
