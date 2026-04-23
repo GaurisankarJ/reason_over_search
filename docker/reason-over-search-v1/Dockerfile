@@ -1,9 +1,14 @@
 # reason-over-search v1 — base environment only (no auto-started services).
 # Extends Vast’s image for good layer cache; add v2 / v3 sibling folders for other envs.
 # See: https://hub.docker.com/r/vastai/base-image/
+#
+# Pin base to linux/amd64: Vast hosts and “expected amd64” builds are x86_64. Without this, a
+# `docker build` on Apple Silicon produces an arm64 image, which will not run as a base (or
+# on Vast) for amd64-only workflows.
 
 ARG VAST_BASE_TAG=cuda-12.8.1-auto
-FROM vastai/base-image:${VAST_BASE_TAG}
+ARG TARGETPLATFORM=linux/amd64
+FROM --platform=${TARGETPLATFORM} vastai/base-image:${VAST_BASE_TAG}
 
 LABEL org.opencontainers.image.title="reason-over-search-v1"
 LABEL org.opencontainers.image.version="1"
@@ -23,6 +28,10 @@ RUN /opt/miniforge3/bin/conda create -n retriever python=3.10 -y && \
 
 # App tree (data dirs excluded via root .dockerignore; mount or copy at runtime)
 COPY local_retriever ${APP_ROOT}/local_retriever
+
+# Run on every Vast boot before SSH auth so key perms are accepted.
+COPY docker/reason-over-search-v1/10-fix-ssh-perms.sh /etc/vast_boot.d/10-fix-ssh-perms.sh
+RUN chmod +x /etc/vast_boot.d/10-fix-ssh-perms.sh
 
 # Retrieval server settings
 ENV RETRIEVER_PORT=3005

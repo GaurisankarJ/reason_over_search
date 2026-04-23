@@ -2,9 +2,24 @@
 
 ## Build (from repository root)
 
+The `Dockerfile` uses `FROM --platform=linux/amd64` so the result matches **Vast.ai** and typical cloud GPUs (**x86_64**), even when you build on an **Apple Silicon** machine. The first such build on a Mac can be slower (QEMU) while it runs the `RUN` steps.
+
 ```bash
 docker build -f docker/reason-over-search-v1/Dockerfile -t reason-over-search-v1:v1 .
 ```
+
+**If a remote builder still complains about base platform**, use Buildx and load into the local engine:
+
+```bash
+docker buildx build --platform linux/amd64 \
+  -f docker/reason-over-search-v1/Dockerfile \
+  -t reason-over-search-v1:v1 --load .
+```
+
+Pushing a previously **arm64-only** image to Hub and reusing it as a base for an **amd64** build causes `InvalidBaseImagePlatform`. Rebuild with `linux/amd64` and push that tag.
+
+This image also includes a Vast boot hook that normalizes `/root/.ssh/authorized_keys` permissions on startup to avoid OpenSSH rejecting key auth with:
+`Authentication refused: bad ownership or modes for file /root/.ssh/authorized_keys`.
 
 ## Run an interactive shell
 
@@ -61,3 +76,23 @@ docker push pantomiman/reason-over-search-v1:v1
 ```
 
 On Vast, you can `ssh` in or use their terminal, `conda activate retriever`, and run the same `python` command as above.
+
+## Vast SSH troubleshooting
+
+If you see:
+
+- `No ED25519 host key is known ... and you have requested strict checking`
+- `Authentication refused: bad ownership or modes for file /root/.ssh/authorized_keys`
+
+use:
+
+```bash
+# First connect once and accept/add host key (or use StrictHostKeyChecking=accept-new)
+ssh -o StrictHostKeyChecking=accept-new -p <PORT> root@ssh<HOST>.vast.ai
+```
+
+Then your tunnel command works:
+
+```bash
+ssh -o StrictHostKeyChecking=accept-new -p <PORT> root@ssh<HOST>.vast.ai -L 8080:localhost:8080
+```
