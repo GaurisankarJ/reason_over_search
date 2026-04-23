@@ -76,6 +76,28 @@ python -m sglang.launch_server \
 
 ## Run Evalution
 
+### Search-R1 Reward-Compatible Evaluation
+
+To compute Search-R1-format reward signals together with standard EM/F1/Acc metrics, add:
+
+```bash
+  --search_r1_mode True \
+  --search_r1_structure_format_score 0.2 \
+  --search_r1_final_format_score 0.1 \
+  --search_r1_retrieval_score 0.1
+```
+
+When enabled, output files include per-sample fields such as:
+- `search_r1_reward`
+- `search_r1_format_valid`
+- `search_r1_retrieval_hit`
+- `search_r1_extracted_answer`
+
+And `metric_score.txt` will also include:
+- `search_r1_reward`
+- `search_r1_format_valid_rate`
+- `search_r1_retrieval_hit_rate`
+
 ##### Bamboogle (`data/bamboogle/test.jsonl`)
 
 ```bash
@@ -130,28 +152,6 @@ python run_eval.py \
 ```
 
 Use `--split train` for `train.jsonl`.
-
-## Search-R1 Reward-Compatible Evaluation
-
-To compute Search-R1-format reward signals together with standard EM/F1/Acc metrics, add:
-
-```bash
-  --search_r1_mode True \
-  --search_r1_structure_format_score 0.2 \
-  --search_r1_final_format_score 0.1 \
-  --search_r1_retrieval_score 0.1
-```
-
-When enabled, output files include per-sample fields such as:
-- `search_r1_reward`
-- `search_r1_format_valid`
-- `search_r1_retrieval_hit`
-- `search_r1_extracted_answer`
-
-And `metric_score.txt` will also include:
-- `search_r1_reward`
-- `search_r1_format_valid_rate`
-- `search_r1_retrieval_hit_rate`
 
 ##### 2WikiMultihopQA (`data/2wikimultihopqa/{dev,train}.jsonl`)
 
