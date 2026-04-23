@@ -16,6 +16,28 @@ python setup.py develop --no-deps
 pip install -r requirements.txt
 ```
 
+3. Download Models
+
+```
+cd evaluation_search_r1
+mkdir -p search_r1_base_model search_r1_instruct_model
+
+# Install once (if needed)
+pip install -U "huggingface_hub[cli]"
+
+# Base model:
+# https://huggingface.co/PeterJinGo/SearchR1-nq_hotpotqa_train-qwen2.5-3b-em-grpo/tree/main
+huggingface-cli download PeterJinGo/SearchR1-nq_hotpotqa_train-qwen2.5-3b-em-grpo \
+  --local-dir search_r1_base_model \
+  --local-dir-use-symlinks False
+
+# Instruct model:
+# https://huggingface.co/PeterJinGo/SearchR1-nq_hotpotqa_train-qwen2.5-3b-it-em-grpo/tree/main
+huggingface-cli download PeterJinGo/SearchR1-nq_hotpotqa_train-qwen2.5-3b-it-em-grpo \
+  --local-dir search_r1_instruct_model \
+  --local-dir-use-symlinks False
+```
+
 ## Run SG Lang
 
 #### Base Model

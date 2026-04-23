@@ -15,12 +15,62 @@ conda activate retriever
 pip install -r requirements.txt
 ```
 
+3. Download Corpus
+
+```
+cd local_retriever
+mkdir -p corpus
+
+# Install once (if needed)
+pip install -U "huggingface_hub[cli]"
+
+# Download from Hugging Face dataset:
+# https://huggingface.co/datasets/PeterJinGo/wiki-18-corpus/tree/main
+huggingface-cli download PeterJinGo/wiki-18-corpus \
+  --repo-type dataset \
+  --include "wiki-18.jsonl.gz" \
+  --local-dir corpus \
+  --local-dir-use-symlinks False
+
+# Extract and rename to match retriever_config.yaml
+gunzip -f corpus/wiki-18.jsonl.gz
+mv corpus/wiki-18.jsonl corpus/wiki18_100w.jsonl
+```
+
+4. Download Index
+
+```
+cd local_retriever
+mkdir -p indexes
+
+# Download from Hugging Face dataset:
+# https://huggingface.co/datasets/PeterJinGo/wiki-18-e5-index/tree/main
+huggingface-cli download PeterJinGo/wiki-18-e5-index \
+  --repo-type dataset \
+  --local-dir indexes \
+  --local-dir-use-symlinks False
+
+# If files are split into part_aa / part_ab, merge and extract:
+cat indexes/part_aa indexes/part_ab > indexes/wiki18_100w_e5_flat_inner.index.gz
+gunzip -f indexes/wiki18_100w_e5_flat_inner.index.gz
+```
+
+5. Download Embedding Model
+
+```
+cd local_retriever
+mkdir -p models
+
+# Download model from Hugging Face:
+# https://huggingface.co/intfloat/e5-base-v2/tree/main
+huggingface-cli download intfloat/e5-base-v2 \
+  --local-dir models/e5-base-v2 \
+  --local-dir-use-symlinks False
+```
+
 ## Run Retriever
 
 ```
-# TEST
-python retriever_serving.py --config retriever_config_mini.yaml --num_retriever 1 --port 3005
-
 python retriever_serving.py --config retriever_config.yaml --num_retriever 1 --port 3005
 ```
 
