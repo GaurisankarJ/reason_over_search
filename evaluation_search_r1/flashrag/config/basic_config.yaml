@@ -56,10 +56,10 @@ faiss_gpu: False # whether use gpu to hold index
 corpus_path: ~ # path to corpus in '.jsonl' format that store the documents
 
 instruction: ~ # instruction for the retrieval model
-retrieval_topk: 5 # number of retrieved documents
+retrieval_topk: 3 # number of retrieved documents (Search-R1: top-3)
 retrieval_batch_size: 256 # batch size for retrieval
 retrieval_use_fp16: True # whether to use fp16 for retrieval model
-retrieval_query_max_length: 128 # max length of the query
+retrieval_query_max_length: 256 # max length of the query (Search-R1: 256)
 save_retrieval_cache: False # whether to save the retrieval cache
 use_retrieval_cache: False # whether to use the retrieval cache
 retrieval_cache_path: ~ # path to the retrieval cache
@@ -114,10 +114,9 @@ gpu_memory_utilization: 0.85 # ratio of gpu's memory usage for generator
 
 # -------------------------------------------------Evaluation Settings------------------------------------------------#
 # Metrics to evaluate the result
-metrics: ["em", "f1", "acc", "precision", "recall", "input_tokens"]
+metrics: ["em", "acc", "f1"]
 # Specify setting for metric, will be called within certain metrics
 metric_setting:
-  retrieval_recall_topk: 5
   tokenizer_name: "gpt-4"
 save_metric_score: True #　whether to save the metric score into txt file
 

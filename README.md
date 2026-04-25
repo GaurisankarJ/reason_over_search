@@ -74,8 +74,8 @@ Target benchmarks:
 
 5. Run baseline evaluations.
    - Run all target benchmarks listed in this milestone.
-   - Run each benchmark `3` times per model variant.
-   - Report the average score across the 3 runs for each benchmark.
+   - Run each benchmark `5` times per model variant.
+   - Report the average score across the 5 runs for each benchmark.
 
 ### If Results Diverge from Paper
 
@@ -88,7 +88,7 @@ Target benchmarks:
 
 1. All evaluation datasets downloaded, verified, and tracked appropriately.
 2. Evaluation pipeline validated and run on all listed benchmarks.
-3. Aggregated results from repeated runs (3 runs per benchmark/model variant).
+3. Aggregated results from repeated runs (5 runs per benchmark/model variant).
 4. Code reviewed and cleaned up for clarity (remove unnecessary complexity/fluff).
 5. Docker setup verified; documentation updated for clear reproduction.
 6. Repository state suitable for easy reproduction and publication submission.

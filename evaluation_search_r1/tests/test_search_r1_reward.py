@@ -1,5 +1,4 @@
-from flashrag.search_r1.reward import compute_search_r1_reward
-from flashrag.search_r1.answer_utils import extract_answer, last_boxed_only_string, remove_boxed
+from flashrag.search_r1.reward import compute_search_r1_reward, extract_solution
 
 
 def test_search_r1_reward_valid_and_correct():
@@ -18,17 +17,17 @@ def test_search_r1_reward_valid_and_correct():
 
 
 def test_search_r1_reward_format_fallback_score():
-    text = "<answer>wrong</answer>"
+    # Mismatched <think> tags → invalid format → final_format_score (0.1) when answer is wrong.
+    text = "<think>foo<answer>wrong</answer>"
     result = compute_search_r1_reward(text, ["France"])
     assert result["format_valid"] is False
     assert result["reward"] == 0.1
 
 
-def test_answer_boxed_helpers_keep_correctness_path():
-    text = "<answer> The final answer is \\[ \\boxed{Paris} \\] </answer>"
-    answer_part = extract_answer(text)
-    assert answer_part is not None
-    boxed = last_boxed_only_string(answer_part)
-    assert boxed == "\\boxed{Paris}"
-    assert remove_boxed(boxed) == "Paris"
+def test_extract_solution_returns_last_answer():
+    text = "<answer>first</answer> filler <answer> Paris </answer>"
+    assert extract_solution(text) == "Paris"
 
+
+def test_extract_solution_none_when_missing():
+    assert extract_solution("no tags here") is None

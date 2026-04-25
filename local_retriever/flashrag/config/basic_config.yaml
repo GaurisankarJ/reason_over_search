@@ -26,10 +26,10 @@ faiss_gpu: false
 corpus_path: ~
 
 instruction: ~
-retrieval_topk: 5
+retrieval_topk: 3
 retrieval_batch_size: 256
 retrieval_use_fp16: true
-retrieval_query_max_length: 128
+retrieval_query_max_length: 256
 save_retrieval_cache: false
 use_retrieval_cache: false
 retrieval_cache_path: ~

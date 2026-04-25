@@ -12,8 +12,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from flashrag.pipeline.parallelism import INFERENCE_MAX_WORKERS
 from flashrag.search_r1.templates import SEARCH_R1_TEMPLATE
-from flashrag.search_r1.answer_utils import remove_boxed, last_boxed_only_string, extract_answer
-from flashrag.search_r1.reward import compute_search_r1_reward
+from flashrag.search_r1.reward import extract_solution
 from flashrag.search_r1.parser import extract_search_tag_query
 
 class SearchR1Pipeline(BasicPipeline):
@@ -27,9 +26,6 @@ class SearchR1Pipeline(BasicPipeline):
         self.generator = generator
         self.apply_chat = apply_chat
         self.enable_thinking = enable_thinking
-        self.search_r1_structure_format_score = float(config.get("search_r1_structure_format_score", 0.2))
-        self.search_r1_final_format_score = float(config.get("search_r1_final_format_score", 0.1))
-        self.search_r1_retrieval_score = float(config.get("search_r1_retrieval_score", 0.1))
         print(f"enable_thinking: {enable_thinking}")
         # Search-R1 training wraps the filled SEARCH_R1_TEMPLATE as a user-role message
         # (see nq_search.py make_prefix in the upstream repo). Inference must match: use
@@ -45,34 +41,12 @@ class SearchR1Pipeline(BasicPipeline):
             "<result>",
             "</result>",]})
 
-    def _extract_pred_fallback(self, final_response: str) -> str:
-        """Extract the final answer robustly even when format drifts from strict template."""
-        answer_part = extract_answer(final_response)
-        candidates = []
-        if answer_part is not None:
-            candidates.append(answer_part)
-        candidates.append(final_response)
-
-        # Prefer boxed answers when present.
-        for text in candidates:
-            boxed = last_boxed_only_string(text) if text else None
-            if boxed is None:
-                continue
-            try:
-                return remove_boxed(boxed).strip()
-            except Exception:
-                pass
-
-        # Fallback: if <answer>...</answer> exists without boxed formatting, use plain text.
-        if answer_part:
-            plain = re.sub(r"<[^>]+>", "", answer_part).strip()
-            if plain:
-                return plain
-
-        return ""
-
     def run_item(self, item):
-        user_content = self.prompt_template.format(prompt=item.question)
+        # Match Search-R1 preprocessing (qa_search_test_merge.py): strip + ensure trailing '?'.
+        question = (item.question or "").strip()
+        if question and question[-1] != '?':
+            question += '?'
+        user_content = self.prompt_template.format(prompt=question)
         if self.apply_chat:
             query = self.tokenizer.apply_chat_template(
                 [{'role': 'user', 'content': user_content}],
@@ -80,13 +54,15 @@ class SearchR1Pipeline(BasicPipeline):
             )
         else:
             query = user_content
-        
+
         init_query = query
         item.update_output("query", query)
 
         remain_length = self.config['generator_max_input_len']
-        max_search_turns = 8
-        step_limit = 512
+        # Match Search-R1 evaluate.sh: max_turns=4, max_response_length=500, max_obs_length=500.
+        max_search_turns = 4
+        step_limit = 500
+        max_obs_length = 500
         turns = 0
         over_length_flag = False
         stop_tokens = ['</search>', '</answer>', '<|im_end|>', '<|endoftext|>']
@@ -132,14 +108,30 @@ class SearchR1Pipeline(BasicPipeline):
 
                 if search_status.startswith("valid_search"):
                     search_result = self.retriever.search(search_content)
+                    # Match Search-R1 _passages2string: "Doc i(Title: <title>) <text>\n"
                     retrieval_text = ''
-                    for line in search_result:
-                        retrieval_text += f"{line['contents']}\n\n"
+                    for idx, line in enumerate(search_result):
+                        content = line['contents']
+                        title = content.split('\n')[0]
+                        text = '\n'.join(content.split('\n')[1:])
+                        retrieval_text += f"Doc {idx + 1}(Title: {title}) {text}\n"
                     retrieval_text = retrieval_text.strip()
+                    # Truncate to max_obs_length tokens (paper: 500) so multi-turn prompts don't blow up.
+                    obs_ids = self.tokenizer.encode(retrieval_text, add_special_tokens=False)
+                    if len(obs_ids) > max_obs_length:
+                        retrieval_text = self.tokenizer.decode(
+                            obs_ids[:max_obs_length], skip_special_tokens=True
+                        )
+                    # Match generation.py: f'\n\n<information>{search_results.strip()}</information>\n\n'
+                    query += f"{output_str}\n\n<information>{retrieval_text}</information>\n\n"
                 else:
-                    retrieval_text = 'nothing to search'
-
-                query += f"{output_str}\n<information>\n{retrieval_text}\n</information>"
+                    # Match generation.py: corrective observation when the action is invalid.
+                    query += (
+                        f"{output_str}\nMy previous action is invalid. "
+                        "If I want to search, I should put the query between <search> and </search>. "
+                        "If I want to give the final answer, I should put the answer between "
+                        "<answer> and </answer>. Let me try again.\n"
+                    )
             elif stop_reason == 'stop' and (
                 stop_matched == 151643
                 or stop_matched == 151645
@@ -185,27 +177,10 @@ class SearchR1Pipeline(BasicPipeline):
         item.update_output("completion_tokens", completion_tokens)
         item.update_output("remain_length", remain_length)
 
-        # Even on length stop, try robust extraction to avoid silent empty predictions.
-        answer = self._extract_pred_fallback(final_response)
-        if over_length_flag and answer == "":
-            item.update_output("pred", "")
-        else:
-            item.update_output("pred", answer)
+        answer = extract_solution(final_response) or ""
+        item.update_output("pred", answer)
 
-        reward_meta = compute_search_r1_reward(
-            solution_str=final_response,
-            golden_answers=item.golden_answers,
-            structure_format_score=self.search_r1_structure_format_score,
-            final_format_score=self.search_r1_final_format_score,
-            retrieval_score=self.search_r1_retrieval_score,
-        )
-        item.update_output("search_r1_reward", reward_meta["reward"])
-        item.update_output("search_r1_format_valid", reward_meta["format_valid"])
-        item.update_output("search_r1_retrieval_hit", reward_meta["retrieval_hit"])
-        item.update_output("search_r1_extracted_answer", reward_meta["extracted_answer"])
-        item.update_output("search_r1_format_reason", reward_meta["format_reason"])
 
-        
     def run(self, dataset, do_eval=True, pred_process_fun=None):
         with ThreadPoolExecutor(max_workers=INFERENCE_MAX_WORKERS) as executor:
             futures = [executor.submit(self.run_item, item) for item in dataset]

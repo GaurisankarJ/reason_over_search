@@ -100,8 +100,7 @@ def ircot(args, config_dict):
     result = pipeline.run(test_data)
 
 def search_r1(args, config_dict):
-    base_metrics = ["em", "f1", "acc", "precision", "recall", "input_tokens"]
-    config_dict["metrics"] = base_metrics + ["search_r1_reward"]
+    config_dict["metrics"] = ["em", "acc", "f1"]
     config_dict["search_r1_mode"] = True
     config = Config(args.config_path, config_dict)
     all_split = get_dataset(config)
@@ -128,9 +127,6 @@ if __name__ == "__main__":
     parser.add_argument("--apply_chat", type=_str2bool, default=True)
     parser.add_argument("--enable_thinking", type=_str2bool, default=False)
     parser.add_argument("--search_r1_mode", type=_str2bool, default=False)
-    parser.add_argument("--search_r1_structure_format_score", type=float, default=0.2)
-    parser.add_argument("--search_r1_final_format_score", type=float, default=0.1)
-    parser.add_argument("--search_r1_retrieval_score", type=float, default=0.1)
 
     func_dict = {
         "naive": naive,
@@ -150,9 +146,6 @@ if __name__ == "__main__":
         "save_note": args.save_note if args.save_note else args.method_name,
         "enable_thinking": args.enable_thinking,
         "search_r1_mode": args.search_r1_mode,
-        "search_r1_structure_format_score": args.search_r1_structure_format_score,
-        "search_r1_final_format_score": args.search_r1_final_format_score,
-        "search_r1_retrieval_score": args.search_r1_retrieval_score,
     }
     if args.sgl_remote_url is not None:
         config_dict["sgl_remote_url"] = args.sgl_remote_url
