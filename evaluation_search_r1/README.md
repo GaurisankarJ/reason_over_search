@@ -52,9 +52,7 @@ python -m sglang.launch_server \
   --dtype bfloat16 \
   --host 0.0.0.0 \
   --port 3000 \
-  --trust-remote-code \
-  --disable-overlap \
-  --disable-radix-cache
+  --trust-remote-code
 ```
 
 #### Instruct Model
@@ -69,9 +67,7 @@ python -m sglang.launch_server \
   --dtype bfloat16 \
   --host 0.0.0.0 \
   --port 3000 \
-  --trust-remote-code \
-  --disable-overlap \
-  --disable-radix-cache
+  --trust-remote-code
 ```
 
 ## Run Evalution

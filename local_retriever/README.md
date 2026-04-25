@@ -75,7 +75,7 @@ huggingface-cli download intfloat/e5-base-v2 \
 ## Run Retriever
 
 ```
-python retriever_serving.py --config retriever_config.yaml --num_retriever 1 --port 3005
+python retriever_serving.py --config retriever_config.yaml --num_retriever 4 --port 3005
 ```
 
 ## API Endpoints

@@ -68,8 +68,6 @@ start_sglang() {
     --host 0.0.0.0 \
     --port "$PORT" \
     --trust-remote-code \
-    --disable-overlap \
-    --disable-radix-cache \
     > "$logfile" 2>&1 &
   echo "[sglang] launched pid $!"
 }

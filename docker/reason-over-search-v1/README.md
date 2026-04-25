@@ -50,7 +50,7 @@ source /opt/miniforge3/etc/profile.d/conda.sh
 conda activate retriever
 cd /app/local_retriever
 
-python retriever_serving.py --config retriever_config_mini.yaml --num_retriever 1 --port 3005
+python retriever_serving.py --config retriever_config_mini.yaml --num_retriever 4 --port 3005
 ```
 
 In another shell on the host, check health:
@@ -69,7 +69,7 @@ docker run --rm -it -p 3005:3005 \
   --entrypoint /opt/miniforge3/bin/conda \
   reason-over-search-v1:v1 \
   run --no-capture-output -n retriever python /app/local_retriever/retriever_serving.py \
-  --config /app/local_retriever/retriever_config_mini.yaml --port 3005 --num_retriever 1
+  --config /app/local_retriever/retriever_config_mini.yaml --port 3005 --num_retriever 4
 ```
 
 ## Build OOMs on pip/conda
