@@ -1,0 +1,480 @@
+Metadata-Version: 2.4
+Name: evaluation-search-r1
+Version: 0.1.4.dev0
+Description-Content-Type: text/markdown
+Requires-Dist: accelerate==1.13.0
+Requires-Dist: aiofiles==24.1.0
+Requires-Dist: aiohappyeyeballs==2.6.1
+Requires-Dist: aiohttp==3.13.3
+Requires-Dist: aiohttp-cors==0.8.1
+Requires-Dist: aiosignal==1.4.0
+Requires-Dist: altair==6.0.0
+Requires-Dist: annotated-doc==0.0.4
+Requires-Dist: annotated-types==0.7.0
+Requires-Dist: antlr4-python3-runtime==4.9.3
+Requires-Dist: anyio==4.13.0
+Requires-Dist: asttokens==3.0.1
+Requires-Dist: attrs==26.1.0
+Requires-Dist: base58==2.1.1
+Requires-Dist: blinker==1.9.0
+Requires-Dist: blis==1.3.3
+Requires-Dist: bm25s==0.2.0
+Requires-Dist: brotli==1.2.0
+Requires-Dist: cachetools==7.0.5
+Requires-Dist: catalogue==2.0.10
+Requires-Dist: certifi==2026.2.25
+Requires-Dist: cffi==2.0.0
+Requires-Dist: charset-normalizer==3.4.6
+Requires-Dist: chonkie==1.3.1
+Requires-Dist: click==8.3.1
+Requires-Dist: cloudpathlib==0.23.0
+Requires-Dist: cloudpickle==3.1.2
+Requires-Dist: codetiming==1.4.0
+Requires-Dist: colorful==0.5.8
+Requires-Dist: confection==1.3.3
+Requires-Dist: cryptography==46.0.6
+Requires-Dist: cymem==2.0.13
+Requires-Dist: datasets==4.8.4
+Requires-Dist: decorator==5.2.1
+Requires-Dist: dill==0.4.1
+Requires-Dist: diskcache==5.6.3
+Requires-Dist: distlib==0.4.0
+Requires-Dist: distro==1.9.0
+Requires-Dist: einops==0.8.2
+Requires-Dist: executing==2.2.1
+Requires-Dist: faiss-cpu==1.13.2
+Requires-Dist: fastapi==0.135.2
+Requires-Dist: ffmpy==1.0.0
+Requires-Dist: filelock==3.25.2
+Requires-Dist: frozenlist==1.8.0
+Requires-Dist: fschat==0.2.36
+Requires-Dist: fsspec==2026.2.0
+Requires-Dist: gguf==0.18.0
+Requires-Dist: gitdb==4.0.12
+Requires-Dist: GitPython==3.1.46
+Requires-Dist: google-api-core==2.30.0
+Requires-Dist: google-auth==2.49.1
+Requires-Dist: googleapis-common-protos==1.73.1
+Requires-Dist: gradio==6.10.0
+Requires-Dist: gradio_client==2.4.0
+Requires-Dist: groovy==0.1.2
+Requires-Dist: grpcio==1.78.0
+Requires-Dist: h11==0.16.0
+Requires-Dist: hf-gradio==0.3.0
+Requires-Dist: hf-xet==1.4.2
+Requires-Dist: httpcore==1.0.9
+Requires-Dist: httptools==0.7.1
+Requires-Dist: httpx==0.28.1
+Requires-Dist: huggingface_hub==0.36.2
+Requires-Dist: compressed-tensors==0.13.0
+Requires-Dist: loguru==0.7.3
+Requires-Dist: hydra-core==1.3.2
+Requires-Dist: idna==3.11
+Requires-Dist: importlib_metadata==8.7.1
+Requires-Dist: interegular==0.3.3
+Requires-Dist: ipython==9.10.1
+Requires-Dist: ipython_pygments_lexers==1.1.1
+Requires-Dist: jedi==0.19.2
+Requires-Dist: jieba==0.42.1
+Requires-Dist: Jinja2==3.1.6
+Requires-Dist: jiter==0.13.0
+Requires-Dist: joblib==1.5.3
+Requires-Dist: jsonlines==4.0.0
+Requires-Dist: jsonschema==4.26.0
+Requires-Dist: jsonschema-specifications==2025.9.1
+Requires-Dist: langid==1.1.6
+Requires-Dist: lark==1.2.2
+Requires-Dist: latex2mathml==3.79.0
+Requires-Dist: llvmlite==0.44.0
+Requires-Dist: lm-format-enforcer==0.11.3
+Requires-Dist: markdown-it-py==4.0.0
+Requires-Dist: markdown2==2.5.5
+Requires-Dist: MarkupSafe==3.0.3
+Requires-Dist: matplotlib-inline==0.2.1
+Requires-Dist: mdurl==0.1.2
+Requires-Dist: mistral_common==1.10.0
+Requires-Dist: mpmath==1.3.0
+Requires-Dist: msgpack==1.1.2
+Requires-Dist: msgspec==0.20.0
+Requires-Dist: multidict==6.7.1
+Requires-Dist: multiprocess==0.70.19
+Requires-Dist: murmurhash==1.0.15
+Requires-Dist: narwhals==2.18.1
+Requires-Dist: nest-asyncio==1.6.0
+Requires-Dist: networkx==3.6.1
+Requires-Dist: nh3==0.3.4
+Requires-Dist: nltk==3.9.4
+Requires-Dist: numba==0.61.2
+Requires-Dist: numpy==2.2.6
+Requires-Dist: nvidia-ml-py==13.595.45
+Requires-Dist: omegaconf==2.3.0
+Requires-Dist: openai==2.6.1
+Requires-Dist: opencensus==0.11.4
+Requires-Dist: opencensus-context==0.1.3
+Requires-Dist: opencv-python-headless==4.13.0.92
+Requires-Dist: orjson==3.11.7
+Requires-Dist: outlines==0.1.11
+Requires-Dist: packaging==25.0.0
+Requires-Dist: pandas==2.3.3
+Requires-Dist: parso==0.8.6
+Requires-Dist: partial-json-parser==0.2.1.1.post7
+Requires-Dist: peft==0.18.1
+Requires-Dist: pexpect==4.9.0
+Requires-Dist: pillow==12.1.1
+Requires-Dist: platformdirs==4.9.4
+Requires-Dist: preshed==3.0.13
+Requires-Dist: prometheus-fastapi-instrumentator==7.1.0
+Requires-Dist: prometheus_client==0.24.1
+Requires-Dist: prompt_toolkit==3.0.52
+Requires-Dist: propcache==0.4.1
+Requires-Dist: proto-plus==1.27.2
+Requires-Dist: protobuf==6.33.6
+Requires-Dist: psutil==7.2.2
+Requires-Dist: ptyprocess==0.7.0
+Requires-Dist: pure_eval==0.2.3
+Requires-Dist: py-cpuinfo==9.0.0
+Requires-Dist: py-spy==0.4.1
+Requires-Dist: pyairports==0.0.1
+Requires-Dist: pyarrow==23.0.1
+Requires-Dist: pyasn1==0.6.3
+Requires-Dist: pyasn1_modules==0.4.2
+Requires-Dist: pybind11==3.0.2
+Requires-Dist: pycountry==26.2.16
+Requires-Dist: pycparser==3.0
+Requires-Dist: pydantic==2.12.5
+Requires-Dist: pydantic-extra-types==2.11.1
+Requires-Dist: pydantic_core==2.41.5
+Requires-Dist: pydeck==0.9.1
+Requires-Dist: pydub==0.25.1
+Requires-Dist: Pygments==2.19.2
+Requires-Dist: pylatexenc==2.10
+Requires-Dist: PyStemmer==3.0.0
+Requires-Dist: python-dateutil==2.9.0.post0
+Requires-Dist: python-discovery==1.2.1
+Requires-Dist: python-dotenv==1.2.2
+Requires-Dist: python-multipart==0.0.22
+Requires-Dist: pytz==2026.1.post1
+Requires-Dist: PyYAML==6.0.3
+Requires-Dist: pyzmq==27.1.0
+Requires-Dist: rank-bm25==0.2.2
+Requires-Dist: ray==2.10.0
+Requires-Dist: referencing==0.37.0
+Requires-Dist: regex==2026.2.28
+Requires-Dist: requests==2.33.0
+Requires-Dist: rich==14.3.3
+Requires-Dist: rouge==1.0.1
+Requires-Dist: rouge-chinese==1.0.3
+Requires-Dist: rpds-py==0.30.0
+Requires-Dist: safehttpx==0.1.7
+Requires-Dist: safetensors==0.7.0
+Requires-Dist: scipy==1.17.1
+Requires-Dist: semantic-version==2.10.0
+Requires-Dist: sentencepiece==0.2.1
+Requires-Dist: sentry-sdk==2.56.0
+Requires-Dist: setproctitle==1.3.7
+Requires-Dist: sglang<0.6.0,>=0.4.6.post1
+Requires-Dist: sgl-kernel==0.3.21
+Requires-Dist: shellingham==1.5.4
+Requires-Dist: shortuuid==1.0.13
+Requires-Dist: six==1.17.0
+Requires-Dist: smart_open==7.5.1
+Requires-Dist: smmap==5.0.3
+Requires-Dist: sniffio==1.3.1
+Requires-Dist: spacy==3.8.13
+Requires-Dist: spacy-legacy==3.0.12
+Requires-Dist: spacy-loggers==1.0.5
+Requires-Dist: srsly==2.5.3
+Requires-Dist: stack-data==0.6.3
+Requires-Dist: starlette==0.52.1
+Requires-Dist: streamlit==1.55.0
+Requires-Dist: svgwrite==1.4.3
+Requires-Dist: sympy==1.14.0
+Requires-Dist: tenacity==9.1.4
+Requires-Dist: tensordict==0.11.0
+Requires-Dist: thinc==8.3.13
+Requires-Dist: tiktoken==0.12.0
+Requires-Dist: tokenizers==0.22.2
+Requires-Dist: toml==0.10.2
+Requires-Dist: tomlkit==0.13.3
+Requires-Dist: torch==2.9.1
+Requires-Dist: torchaudio==2.9.1
+Requires-Dist: torchdata==0.11.0
+Requires-Dist: torchvision==0.24.1
+Requires-Dist: tornado==6.5.5
+Requires-Dist: tqdm==4.67.3
+Requires-Dist: traitlets==5.14.3
+Requires-Dist: transformers<5,>=4.51.0
+Requires-Dist: typer==0.24.1
+Requires-Dist: typing-inspection==0.4.2
+Requires-Dist: typing_extensions==4.15.0
+Requires-Dist: tzdata==2025.3
+Requires-Dist: urllib3==2.6.3
+Requires-Dist: uvicorn==0.42.0
+Requires-Dist: uvloop==0.22.1
+Requires-Dist: virtualenv==21.2.0
+Requires-Dist: wandb==0.25.1
+Requires-Dist: wasabi==1.1.3
+Requires-Dist: watchfiles==1.1.1
+Requires-Dist: wavedrom==2.0.3.post3
+Requires-Dist: wcwidth==0.6.0
+Requires-Dist: weasel==1.0.0
+Requires-Dist: websockets==16.0
+Requires-Dist: wrapt==2.1.2
+Requires-Dist: xxhash==3.6.0
+Requires-Dist: yarl==1.23.0
+Requires-Dist: zipp==3.23.0
+Dynamic: description
+Dynamic: description-content-type
+Dynamic: requires-dist
+
+# Evalutation Search R1
+
+## Environment Setup
+
+1. Create a conda environment
+
+```
+conda create -n evaluation_search_r1 python=3.11 -y
+conda activate evaluation_search_r1
+python setup.py develop --no-deps
+```
+
+2. Install requirements
+
+```
+pip install -r requirements.txt
+```
+
+3. Download Models
+
+```
+cd evaluation_search_r1
+mkdir -p search_r1_base_model search_r1_instruct_model
+
+# Install once (if needed)
+pip install -U "huggingface_hub[cli]"
+
+# Base model:
+# https://huggingface.co/PeterJinGo/SearchR1-nq_hotpotqa_train-qwen2.5-3b-em-grpo/tree/main
+huggingface-cli download PeterJinGo/SearchR1-nq_hotpotqa_train-qwen2.5-3b-em-grpo \
+  --local-dir search_r1_base_model \
+  --local-dir-use-symlinks False
+
+# Instruct model:
+# https://huggingface.co/PeterJinGo/SearchR1-nq_hotpotqa_train-qwen2.5-3b-it-em-grpo/tree/main
+huggingface-cli download PeterJinGo/SearchR1-nq_hotpotqa_train-qwen2.5-3b-it-em-grpo \
+  --local-dir search_r1_instruct_model \
+  --local-dir-use-symlinks False
+```
+
+## Run SG Lang
+
+#### Base Model
+
+```bash
+python -m sglang.launch_server \
+  --served-model-name search_r1_base \
+  --model-path search_r1_base_model \
+  --tp 1 \
+  --context-length 8192 \
+  --enable-metrics \
+  --dtype bfloat16 \
+  --host 0.0.0.0 \
+  --port 3000 \
+  --trust-remote-code \
+  --disable-overlap \
+  --disable-radix-cache
+```
+
+#### Instruct Model
+
+```bash
+python -m sglang.launch_server \
+  --served-model-name search_r1_instruct \
+  --model-path search_r1_instruct_model \
+  --tp 1 \
+  --context-length 8192 \
+  --enable-metrics \
+  --dtype bfloat16 \
+  --host 0.0.0.0 \
+  --port 3000 \
+  --trust-remote-code \
+  --disable-overlap \
+  --disable-radix-cache
+```
+
+## Run Evalution
+
+### Search-R1 Reward-Compatible Evaluation
+
+To compute Search-R1-format reward signals together with standard EM/F1/Acc metrics, add:
+
+```bash
+  --search_r1_mode True \
+  --search_r1_structure_format_score 0.2 \
+  --search_r1_final_format_score 0.1 \
+  --search_r1_retrieval_score 0.1
+```
+
+When enabled, output files include per-sample fields such as:
+- `search_r1_reward`
+- `search_r1_format_valid`
+- `search_r1_retrieval_hit`
+- `search_r1_extracted_answer`
+
+And `metric_score.txt` will also include:
+- `search_r1_reward`
+- `search_r1_format_valid_rate`
+- `search_r1_retrieval_hit_rate`
+
+##### Bamboogle (`data/bamboogle/test.jsonl`)
+
+```bash
+python run_eval.py \
+  --config_path flashrag/config/basic_config.yaml \
+  --method_name search-r1 \
+  --data_dir /app/data \
+  --dataset_name bamboogle \
+  --split test \
+  --save_dir /app/evaluation_search_r1/results/bamboogle \
+  --save_note search_r1_base \
+  --sgl_remote_url 127.0.0.1:3000 \
+  --remote_retriever_url 127.0.0.1:3005 \
+  --generator_model search_r1_base_model \
+  --apply_chat False
+```
+
+##### HotpotQA (`data/hotpotqa/{dev,train}.jsonl`)
+
+```bash
+python run_eval.py \
+  --config_path flashrag/config/basic_config.yaml \
+  --method_name search-r1 \
+  --data_dir /app/data \
+  --dataset_name hotpotqa \
+  --split dev \
+  --save_dir /app/evaluation_search_r1/results/hotpotqa \
+  --save_note search_r1_base \
+  --sgl_remote_url 127.0.0.1:3000 \
+  --remote_retriever_url 127.0.0.1:3005 \
+  --generator_model search_r1_base_model \
+  --apply_chat False
+```
+
+Use `--split train` to run on `train.jsonl` instead.
+
+##### MuSiQue (`data/musique/{dev,train}.jsonl`)
+
+```bash
+python run_eval.py \
+  --config_path flashrag/config/basic_config.yaml \
+  --method_name search-r1 \
+  --data_dir /app/data \
+  --dataset_name musique \
+  --split dev \
+  --save_dir /app/evaluation_search_r1/results/musique \
+  --save_note search_r1_base \
+  --sgl_remote_url 127.0.0.1:3000 \
+  --remote_retriever_url 127.0.0.1:3005 \
+  --generator_model search_r1_base_model \
+  --apply_chat False
+```
+
+Use `--split train` for `train.jsonl`.
+
+##### 2WikiMultihopQA (`data/2wikimultihopqa/{dev,train}.jsonl`)
+
+```bash
+python run_eval.py \
+  --config_path flashrag/config/basic_config.yaml \
+  --method_name search-r1 \
+  --data_dir /app/data \
+  --dataset_name 2wikimultihopqa \
+  --split dev \
+  --save_dir /app/evaluation_search_r1/results/2wikimultihopqa \
+  --save_note search_r1_base \
+  --sgl_remote_url 127.0.0.1:3000 \
+  --remote_retriever_url 127.0.0.1:3005 \
+  --generator_model search_r1_base_model \
+  --apply_chat False
+```
+
+Use `--split train` for `train.jsonl`.
+
+#### Instruct Model
+
+##### Reasoning (optional)
+
+##### Bamboogle (`data/bamboogle/test.jsonl`)
+
+```bash
+python run_eval.py \
+  --config_path flashrag/config/basic_config.yaml \
+  --method_name search-r1 \
+  --data_dir /app/data \
+  --dataset_name bamboogle \
+  --split test \
+  --save_dir /app/evaluation_search_r1/results/bamboogle \
+  --save_note search_r1_instruct \
+  --sgl_remote_url 127.0.0.1:3000 \
+  --remote_retriever_url 127.0.0.1:3005 \
+  --generator_model search_r1_instruct_model \
+  --apply_chat True
+```
+
+##### HotpotQA (`data/hotpotqa/{dev,train}.jsonl`)
+
+```bash
+python run_eval.py \
+  --config_path flashrag/config/basic_config.yaml \
+  --method_name search-r1 \
+  --data_dir /app/data \
+  --dataset_name hotpotqa \
+  --split dev \
+  --save_dir /app/evaluation_search_r1/results/hotpotqa \
+  --save_note search_r1_instruct \
+  --sgl_remote_url 127.0.0.1:3000 \
+  --remote_retriever_url 127.0.0.1:3005 \
+  --generator_model search_r1_instruct_model \
+  --apply_chat True
+```
+
+Use `--split train` to run on `train.jsonl` instead.
+
+##### MuSiQue (`data/musique/{dev,train}.jsonl`)
+
+```bash
+python run_eval.py \
+  --config_path flashrag/config/basic_config.yaml \
+  --method_name search-r1 \
+  --data_dir /app/data \
+  --dataset_name musique \
+  --split dev \
+  --save_dir /app/evaluation_search_r1/results/musique \
+  --save_note search_r1_instruct \
+  --sgl_remote_url 127.0.0.1:3000 \
+  --remote_retriever_url 127.0.0.1:3005 \
+  --generator_model search_r1_instruct_model \
+  --apply_chat True
+```
+
+Use `--split train` for `train.jsonl`.
+
+##### 2WikiMultihopQA (`data/2wikimultihopqa/{dev,train}.jsonl`)
+
+```bash
+python run_eval.py \
+  --config_path flashrag/config/basic_config.yaml \
+  --method_name search-r1 \
+  --data_dir /app/data \
+  --dataset_name 2wikimultihopqa \
+  --split dev \
+  --save_dir /app/evaluation_search_r1/results/2wikimultihopqa \
+  --save_note search_r1_instruct \
+  --sgl_remote_url 127.0.0.1:3000 \
+  --remote_retriever_url 127.0.0.1:3005 \
+  --generator_model search_r1_instruct_model \
+  --apply_chat True
+```
+
+Use `--split train` for `train.jsonl`.

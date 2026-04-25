@@ -1,0 +1,8 @@
+em: 0.032
+f1: 0.050951981351981354
+acc: 0.048
+precision: 0.04820346320346321
+recall: 0.06066666666666667
+search_r1_reward: 0.056
+search_r1_format_valid_rate: 0.104
+search_r1_retrieval_hit_rate: 0.04

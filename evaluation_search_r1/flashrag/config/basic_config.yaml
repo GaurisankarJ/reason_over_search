@@ -102,7 +102,7 @@ openai_setting:
   base_url: ~
 
 generator_model_path: ~
-generator_max_input_len: 1024 # max length of the input
+generator_max_input_len: 4096 # max length of the input
 generator_batch_size: 4 # batch size for generation, invalid for vllm
 generation_params:
   #do_sample: false

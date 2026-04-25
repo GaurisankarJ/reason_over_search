@@ -1,5 +1,9 @@
 # Retriever
 
+> **How the search actually works + RAM costs + swapping in a quantized index:** see [INDEXING.md](INDEXING.md).
+>
+> TL;DR — the flat FAISS index is ~65 GB because it stores exact 768-dim float32 vectors for all 21 M wiki-18 passages. A quantized index (e.g. `IVF65536,SQ8`) cuts that to ~16 GB with <1% recall loss and faster queries; only `index_path` in the config changes.
+
 ## Environment Setup
 
 1. Create a conda environment
@@ -97,7 +101,7 @@ curl -X POST "http://127.0.0.1:3005/search" \
 ### Search (with scores)
 
 ```bash
-curl -X POST "http://127.0.0.1:3000/search" \
+curl -X POST "http://127.0.0.1:3005/search" \
   -H "Content-Type: application/json" \
   -d '{
     "query": "Who wrote The Lord of the Rings?",
@@ -124,7 +128,7 @@ curl -X POST "http://127.0.0.1:3005/batch_search" \
 ### Batch Search (with scores)
 
 ```bash
-curl -X POST "http://127.0.0.1:3000/batch_search" \
+curl -X POST "http://127.0.0.1:3005/batch_search" \
   -H "Content-Type: application/json" \
   -d '{
     "query": [
