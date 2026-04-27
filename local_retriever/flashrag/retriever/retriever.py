@@ -354,6 +354,9 @@ class DenseRetriever(BaseTextRetriever):
         if self.index_path is None or not os.path.exists(self.index_path):
             raise Warning(f"Index file {self.index_path} does not exist!")
         self.index = faiss.read_index(self.index_path)
+        nprobe = self._config.get("faiss_nprobe")
+        if nprobe is not None and hasattr(self.index, "nprobe"):
+            self.index.nprobe = int(nprobe)
         if self.use_faiss_gpu:
             if not _faiss_gpu_supported():
                 warnings.warn("FAISS GPU requested but GPU bindings are unavailable. Falling back to CPU index.")
@@ -362,6 +365,8 @@ class DenseRetriever(BaseTextRetriever):
             co.useFloat16 = True
             co.shard = True
             self.index = faiss.index_cpu_to_all_gpus(self.index, co=co)
+            if nprobe is not None and hasattr(self.index, "nprobe"):
+                self.index.nprobe = int(nprobe)
 
     
     def update_additional_setting(self):

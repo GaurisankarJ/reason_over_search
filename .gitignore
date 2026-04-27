@@ -9,3 +9,16 @@ local_retriever/models/
 # Evaluation
 evaluation_search_r1/search_r1_base_model/
 evaluation_search_r1/search_r1_instruct_model/
+
+
+# Environment
+/.venv
+local_retriever/.venv
+
+# Data
+data_subsample/
+.jsonl
+
+
+# Results
+evaluation_search_r1/results

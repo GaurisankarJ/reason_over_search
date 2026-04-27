@@ -18,6 +18,14 @@ retriever_semaphore = None
 def init_retriever(args):
     global retriever_semaphore
     config = Config(args.config)
+    # CLI overrides win over both yaml and Config._init_device's hardware autodetection.
+    config['faiss_gpu'] = bool(args.gpu)
+    if args.index is not None:
+        config['index_path'] = args.index
+    print(
+        f"index_path={config['index_path']}  faiss_gpu={config['faiss_gpu']}  "
+        f"nprobe={config.get('faiss_nprobe')}"
+    )
     for i in range(args.num_retriever):
         print(f"Initializing retriever {i+1}/{args.num_retriever}")
         retriever = get_retriever(config)
@@ -138,6 +146,14 @@ if __name__ == "__main__":
                         default="./retriever_config.yaml")
     parser.add_argument("--num_retriever", type=int, default=1)
     parser.add_argument("--port", type=int, default=80)
+    parser.add_argument(
+        "--gpu", action="store_true",
+        help="Hold the FAISS index in VRAM. Requires a faiss-gpu build (see .venv setup).",
+    )
+    parser.add_argument(
+        "--index", type=str, default=None,
+        help="Override index_path from the yaml. e.g. ./indexes/wiki18_100w_e5_ivf4096_sq8.index",
+    )
     args = parser.parse_args()
 
     init_retriever(args)

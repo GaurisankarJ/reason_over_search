@@ -23,6 +23,7 @@ retrieval_model_path: ~
 index_path: ~
 multimodal_index_path_dict: ~
 faiss_gpu: false
+faiss_nprobe: ~  # IVF nprobe; only applied when the index is IVF-based (FlatIP ignores it)
 corpus_path: ~
 
 instruction: ~

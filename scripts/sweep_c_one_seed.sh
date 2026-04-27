@@ -25,6 +25,6 @@ done
 
 echo
 echo "=== aggregating ==="
-"$REPO_ROOT/scripts/aggregate.py" --output "$REPO_ROOT/RESULTS_PLAN_C.md"
-echo "done — see RESULTS_PLAN_C.md"
+"$REPO_ROOT/scripts/aggregate.py" --output "$REPO_ROOT/evaluation_search_r1/RESULTS_PLAN_C.md"
+echo "done — see evaluation_search_r1/RESULTS_PLAN_C.md"
 date
