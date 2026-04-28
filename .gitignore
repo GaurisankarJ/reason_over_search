@@ -1,5 +1,6 @@
 # Python
 __pycache__/
+.DS_Store
 
 # Local Retriever
 local_retriever/corpus/
