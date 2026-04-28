@@ -118,4 +118,4 @@ Realistic sweet spot for this 4090: re-enable radix-cache + overlap, bump worker
 | SGLang fails to load on switch | `manage_sglang.sh switch` waits up to 10 min for `/get_model_info` and exits non-zero on timeout. |
 | Disk fill (intermediate JSONs hundreds of MB per run) | Clean old runs in `evaluation_search_r1/results/`. |
 | Retriever bottleneck on big datasets | Use `--num_retriever 4` or IVF-SQ8 (see above). |
-| Determinism | SGLang at temp=1.0; `seed` in `save_note` is a label only (SGLang ignores FlashRAG's `seed`). |
+| Determinism | SGLang at `temperature=0` (greedy, matches paper eval per [PAPER_VS_OURS_AUDIT.md D3](PAPER_VS_OURS_AUDIT.md)); `seed` in `save_note` is a label only (SGLang ignores FlashRAG's `seed`). |

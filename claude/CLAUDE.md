@@ -61,33 +61,40 @@ Paper targets we compare against (Qwen2.5-3B EM, Search-R1 v5 Table 3):
 
 ## What's been done so far (state as of 2026-04-28)
 
-Phase 1 reproduction is essentially complete on the **instruct** variant; the **base** variant has an unresolved one-sided gap.
+Canonical state lives in [docs/MILESTONE_1.md#status-2026-04-28](../docs/MILESTONE_1.md#status-2026-04-28). Summary:
 
 **Setup**:
-- Both GRPO checkpoints downloaded and **identity-verified by LFS sha256** against the upstream HF repos (`PeterJinGo/SearchR1-nq_hotpotqa_train-qwen2.5-3b-(it-)em-grpo`). Underlying base is `Qwen/Qwen2.5-3B`. Note: `config.json` `_name_or_path` reads the underlying Qwen path (same as on the HF GRPO repo), not the GRPO repo name — sha256 is the real identity check. Details in [REPRODUCIBILITY.md](../docs/REPRODUCIBILITY.md).
-- Wiki-18 corpus + E5-base-v2 encoder + flat and IVF-SQ8 FAISS indexes downloaded/built and live on this box.
+- Both GRPO checkpoints sha256-verified (`PeterJinGo/SearchR1-nq_hotpotqa_train-qwen2.5-3b-(it-)em-grpo`).
+- Wiki-18 corpus + E5-base-v2 + flat & IVF-SQ8 FAISS indexes built.
 - Datasets present for all 7 benchmarks + deterministic 1k subsamples.
-- 10 divergences from the official Search-R1 repo audited and fixed (passage formatting, retrieval_topk 5→3, `<information>` whitespace, max_search_turns 8→4, observation truncation to 500 tokens, question normalization, retrieval_query_max_length 128→256, invalid-search corrective text, first-match `<search>` regex, per-step token cap 512→500). Full table in [REPRODUCIBILITY.md](../docs/REPRODUCIBILITY.md).
+- 10 divergences from upstream audited and fixed (full table in [REPRODUCIBILITY.md](../docs/REPRODUCIBILITY.md)).
+- Exhaustive paper-vs-ours audit ([PAPER_VS_OURS_AUDIT.md](../docs/PAPER_VS_OURS_AUDIT.md)) catalogued 8 more divergences (D1-D8). The 3 actionable ones are now applied:
+  - **D1** `apply_chat=True` for base in [`run_one.sh:35`](../scripts/run_one.sh#L35) — load-bearing fix.
+  - **D-prompt-micro** restored `For example, <answer> Beijing </answer>.` in [`templates.py:10`](../evaluation_search_r1/flashrag/search_r1/templates.py#L10).
+  - **D8** removed `add_special_tokens` block in [`active_pipeline.py`](../evaluation_search_r1/flashrag/pipeline/active_pipeline.py).
 
-**Smoke + Plan B results** (1 seed × 7 datasets × 2 variants; large datasets 1k-subsampled, Bamboogle/MuSiQue full — see [COMPARISON_PLAN_B.md](../docs/COMPARISON_PLAN_B.md)):
+**Plan B v0** (no fixes, baseline gap analysis) — historical, archived in [COMPARISON_PLAN_B.md](../docs/COMPARISON_PLAN_B.md):
+- Instruct avg +3.1 pp vs paper (reproduction-grade).
+- Base avg −8.3 pp vs paper, below on all 7 datasets (one-sided → systematic).
 
-- **Instruct**: average +3.1 pp vs paper (0.367 vs 0.336). Within ±5 pp on 6/7 datasets; Bamboogle is the only outlier (+12.8 pp / ~3.4 σ on n=125). Reproduction-grade; the small positive bias is consistent with cleaner `</answer>` closure than the paper's training-time rollouts.
-- **Base**: average **−8.3 pp** vs paper (0.229 vs 0.312). **Below paper on all 7 datasets** (−1.6 to −16.2 pp). One-sided across the board → not subsample noise, not a sampling lottery — likely a systematic config issue.
+**Plan B v1** (locked config, all 3 fixes) — converging:
 
-**Top suspects for the base gap** (ranked by cost / information ratio in [COMPARISON_PLAN_B.md](../docs/COMPARISON_PLAN_B.md)):
-1. **Apply_chat=False on base** (probe-confirmed on Bamboogle): `run_one.sh:35` hard-codes `apply_chat=False` for base, but the base GRPO checkpoint ships with a Qwen2.5 chat template. Re-running Bamboogle base with `apply_chat=True` closed the gap to paper exactly (EM 0.112→0.128, paper 0.128) and pushed `</answer>` close-rate 84%→100%. NQ/TriviaQA/PopQA/HotpotQA likely benefit too. **Probe sweep on NQ-1k + TriviaQA-1k is the in-flight next step.**
-2. **Prompt template missing one sentence**: our [`templates.py:1-11`](../evaluation_search_r1/flashrag/search_r1/templates.py) drops upstream's `For example, <answer> Beijing </answer>.` from the base prompt. Small but real divergence; one-line fix. (LOW severity per [PAPER_VS_OURS_AUDIT.md](../docs/PAPER_VS_OURS_AUDIT.md#prompt-template-micro-divergence-negligible).)
-3. **Special-token additions at runtime** ([`active_pipeline.py:37-42`](../evaluation_search_r1/flashrag/pipeline/active_pipeline.py#L37-L42)): we add `<search>`, `</search>`, etc. as additional special tokens after tokenizer load; upstream does not. Changes runtime IDs vs what the model was GRPO-trained on. LOW severity, easy to remove. See [PAPER_VS_OURS_AUDIT.md D8](../docs/PAPER_VS_OURS_AUDIT.md#d8-special-token-additions).
-4. **Base trace hygiene visibility**: Plan B doesn't surface per-dataset truncation rate. Likely silently undercounting base on factoid datasets the same way it was on Bamboogle pre-apply_chat.
-5. **Single seed at greedy**: tokenizer/KV-cache nondeterminism still gives ~1–2 pp drift; need 2–3 seeds to bracket per-dataset variance before Plan A.
+| NQ-1k run | EM | Δ vs prior |
+|---|---:|---:|
+| v0 | 0.316 | — |
+| +apply_chat only | 0.346 | +3.0 pp |
+| **v1 (locked)** | **0.390** | **+4.4 pp on top** |
+| Paper | 0.421 | residual +3.1 pp |
 
-**Note on temperature**: Earlier in this session I hypothesized the paper uses `temperature=1.0`. **That was wrong.** [PAPER_VS_OURS_AUDIT.md D3](../docs/PAPER_VS_OURS_AUDIT.md) shows verl's `_validate()` hard-codes `do_sample=False` and `vllm_rollout.py` overrides to `temperature=0, top_p=1.0` for validation. Paper eval is greedy. Our `temperature: 0.0` is **correct**. Post-mortem: [docs/archive/TEMPERATURE_HYPOTHESIS_WRONG.md](../docs/archive/TEMPERATURE_HYPOTHESIS_WRONG.md).
+The two minor fixes turned out to give +4.4 pp combined on NQ — the audit's "≤1 pp each" estimate was low. Total +7.4 pp from v0 closes the base gap to within plausible single-seed + subsample noise. v1 sweep on remaining 6 datasets is in flight (since 16:35 today, ETA ~5 h to last dataset).
 
-Recommendation: **don't launch Plan A (~17 days) until the base gap closes to ~3 pp on at least one dataset**; otherwise it just buys tighter error bars on a wrong number.
+The Bamboogle EM 0.088 from the v1 sweep was n=125 variance, not a regression. Post-mortem: [docs/archive/BAMBOOGLE_REGRESSION_INVESTIGATION.md](../docs/archive/BAMBOOGLE_REGRESSION_INVESTIGATION.md).
 
-**Autoresearch loop** — ran on branch `experiment_ros/apr27`. Instruct/Bamboogle baseline at EM 0.336 (greedy, temp=0); 11 ablations tried, only `temperature=0` (greedy) was kept. Discarded include `topk 3→5`, `max_obs_length 500→750`, `max_search_turns 4→5`, multi-query retrieval, query expansion, dropping the default chat-template system message, repetition_penalty 1.05, and serializing inference. Per-ablation reasoning in [docs/archive/DISCARDED_ABLATIONS.md](../docs/archive/DISCARDED_ABLATIONS.md).
+**Note on temperature**: Earlier this session I hypothesized paper eval uses `temperature=1.0`. That was wrong — verl's `_validate()` hard-codes `do_sample=False` and `vllm_rollout.py` overrides to `temperature=0, top_p=1.0`. Our `temperature: 0.0` is correct. Post-mortem: [docs/archive/TEMPERATURE_HYPOTHESIS_WRONG.md](../docs/archive/TEMPERATURE_HYPOTHESIS_WRONG.md).
 
-**Plan A prep** — `eval_final` branch (off `experiment_ros/apr27`) is the working branch for the Plan A launch. Cost analysis for Vast.ai in [docs/VAST_AI_PLAN_A.md](../docs/VAST_AI_PLAN_A.md) (cheapest: 8× RTX 4090 marketplace ≈ $58–77; balanced: 3× H100 PCIe ≈ $108).
+**Autoresearch loop** — ran on branch `experiment_ros/apr27`. 11 ablations tried; only `temperature=0` was kept. Per-ablation reasoning in [docs/archive/DISCARDED_ABLATIONS.md](../docs/archive/DISCARDED_ABLATIONS.md).
+
+**Plan A prep** — `eval_final` branch is the working branch. Vast.ai cost analysis in [docs/VAST_AI_PLAN_A.md](../docs/VAST_AI_PLAN_A.md) (cheapest: 8× RTX 4090 marketplace ≈ $58–77; balanced: 3× H100 PCIe ≈ $108).
 
 ## How to run a single eval
 
@@ -127,16 +134,12 @@ Single RTX 4090 (24 GB), AMD EPYC 7642 (48c/96t), 503 GB RAM. No NVLink, single 
 
 ## What's next
 
-**Immediate** — close the base-variant gap before Plan A. In order from [COMPARISON_PLAN_B.md#recommended-next-steps-before-plan-a](../docs/COMPARISON_PLAN_B.md#recommended-next-steps-before-plan-a):
+Canonical list in [docs/MILESTONE_1.md#whats-left](../docs/MILESTONE_1.md#whats-left). Summary:
 
-1. **(in flight)** Re-run base on NQ-1k + TriviaQA-1k with `apply_chat=True`. Bamboogle probe closed the gap exactly via this single flag flip (EM 0.112→0.128, format-validity 84%→100%). [PAPER_VS_OURS_AUDIT.md D1](../docs/PAPER_VS_OURS_AUDIT.md#d1-in-detail-the-load-bearing-one) is the smoking gun.
-2. (~5 min) Add the missing `For example, <answer> Beijing </answer>.` sentence back to [`templates.py`](../evaluation_search_r1/flashrag/search_r1/templates.py) (audit D-prompt-micro). One-line edit; LOW severity but free.
-3. (~5 min) Remove the `add_special_tokens` block in [`active_pipeline.py:37-42`](../evaluation_search_r1/flashrag/pipeline/active_pipeline.py#L37-L42) (audit D8). Re-run a smoke to confirm `</search>` still matches as a stop string.
-4. (~30 min) Tabulate `format_valid` / length-truncation rate from existing Plan B run JSONs per (dataset, variant). Uses data we already have.
-5. (~2 h) Re-run base on NQ-1k with `step_limit` 500→1024; only if (1) leaves a residual gap.
-6. (~4 h) One-seed full-NQ base run; confirms whether the gap survives at scale.
-7. (~1 day) Add 2nd and 3rd seed to Plan B for variance bracketing.
-8. Only then: Plan C (3.4 days, full data, 1 seed) or Plan A (17 days, full sweep — see [docs/VAST_AI_PLAN_A.md](../docs/VAST_AI_PLAN_A.md) for the ≤24 h Vast.ai fleet plan).
+1. **Tabulate format-validity / length-truncation rate** per (dataset, variant) from the in-flight v1 sweep's JSONs once they land. Extend `aggregate.py` to surface `'</answer>' in final_response` close-rate.
+2. **One-seed full-data runs** for **both base and instruct** (~4 h × 2 on a 4090) to confirm the v1 config converges at scale, not just on 1 k subsamples.
+3. **Plan A on Vast.ai** — Jose's job; instructions in [docs/VAST_AI_PLAN_A.md](../docs/VAST_AI_PLAN_A.md) (5 seeds × 7 × 2 = 70 runs, ≤24 h on a fleet, ~$58–108 budget).
+4. **Aggregate, write up, publish**: per-benchmark means + std-dev across the 5 seeds, side-by-side with paper, plus the audit + cost summary.
 
 Do **not** change `temperature` or `top_p` — paper eval is greedy. See note above.
 

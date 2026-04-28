@@ -65,7 +65,7 @@ Trace shape verified end-to-end: chat template applied for instruct; `Doc i(Titl
 ### Reading the smoke deltas
 
 - **Base −4 pp** vs paper is within ~1.3 σ on n=125 — unremarkable single-seed sampling variance.
-- **Instruct +12.8 pp** is outside noise (~3.4 σ) but in the model's favour. Most likely candidates: (a) lucky seed at temp=1.0; (b) cleaner `</answer>` stop than the paper's training-time rollout, which helps the instruct variant (always reaches `</answer>`) more than base (length-truncates 17 % of the time); (c) paper version drift across the 5 arxiv revisions.
+- **Instruct +12.8 pp** is outside noise (~3.4 σ) but in the model's favour. Most likely candidates: (a) cleaner `</answer>` stop than the paper's training-time rollout, which helps the instruct variant (always reaches `</answer>`) more than base (length-truncates 17 % of the time); (b) paper version drift across the 5 arxiv revisions; (c) single-seed n=125 variance. *(Note: an earlier draft of this list cited "lucky seed at temp=1.0" — that was based on a wrong assumption about paper sampling; both paper eval and ours run greedy. See [PAPER_VS_OURS_AUDIT.md D3](PAPER_VS_OURS_AUDIT.md).)*
 - Both deltas point the *same way* would be evidence of a systemic issue. They don't, so the pipeline is not broken — the gap is mostly noise plus a small systematic edge from how cleanly we close traces.
 
 Decision: don't chase the overshoot. Tighten with more seeds and at least one big-N benchmark — see [RESULTS_PLAN_B.md](RESULTS_PLAN_B.md).

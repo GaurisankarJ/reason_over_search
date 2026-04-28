@@ -94,34 +94,38 @@ Target benchmarks:
 - Both GRPO checkpoints (base, instruct) sha256-verified against the upstream HF repos.
 - Wiki-18 corpus + E5-base-v2 encoder + FAISS Flat IP and IVF-SQ8 indexes built.
 - Exhaustive paper-vs-ours audit ([PAPER_VS_OURS_AUDIT.md](PAPER_VS_OURS_AUDIT.md)): 8 divergences catalogued, 10 earlier ones already fixed ([REPRODUCIBILITY.md](REPRODUCIBILITY.md)).
-- Plan B sweep (1 seed × 7 datasets × 2 variants; 1k subsamples for large datasets, full Bamboogle/MuSiQue) — see [RESULTS_PLAN_B.md](RESULTS_PLAN_B.md), [COMPARISON_PLAN_B.md](COMPARISON_PLAN_B.md).
-- Bamboogle apply_chat=True probe on base: closed gap to paper exactly (EM 0.112→0.128, close-rate 84%→100%).
+- Plan B sweep (1 seed × 7 datasets × 2 variants; 1k subsamples for large datasets, full Bamboogle/MuSiQue) — full per-dataset numbers in [RESULTS_PLAN_B.md](RESULTS_PLAN_B.md).
+- Three audit fixes applied: `apply_chat=True` for base ([run_one.sh:35](../scripts/run_one.sh#L35)), `For example, <answer> Beijing </answer>.` restored ([templates.py:10](../evaluation_search_r1/flashrag/search_r1/templates.py#L10)), `add_special_tokens` block removed ([active_pipeline.py](../evaluation_search_r1/flashrag/pipeline/active_pipeline.py)).
+- Plan B v1 base sweep (locked config, all 7 datasets, seed 1) running on local since 2026-04-28 16:35.
 - Vast.ai Plan-A fleet costing: 8× RTX 4090 ≈ $58–77 / 24 h ([VAST_AI_PLAN_A.md](VAST_AI_PLAN_A.md)).
 
 ### Results so far
 
-Plan B average EM vs paper (Search-R1 v5 Table 3, Qwen2.5-3B GRPO):
+**Configuration is converging on NQ-1k.** The two "≤1 pp" minor fixes turned out to be much more impactful than the audit estimated:
 
-| Variant  | Plan B | Paper | Δ |
+| NQ-1k run | EM | Δ vs prior |
+|---|---:|---:|
+| Plan B v0 (no chat, no minor fixes) | 0.316 | — |
+| Probe: base + apply_chat only | 0.346 | +3.0 pp |
+| **v1 (locked): base + apply_chat + prompt sentence + no special tokens** | **0.390** | **+4.4 pp on top** |
+| Paper | 0.421 | +3.1 pp residual gap |
+
+So the two minor fixes together gave +4.4 pp on NQ — the audit underestimated. Combined with apply_chat that's +7.4 pp from v0, leaving ~3.1 pp residual to paper (within subsample SE + plausible single-seed noise).
+
+This also resolves the Bamboogle regression worry: the EM 0.088 from the v1 sweep was n=125 variance, not a real regression. The locked config is genuinely converging. See [docs/archive/BAMBOOGLE_REGRESSION_INVESTIGATION.md](archive/BAMBOOGLE_REGRESSION_INVESTIGATION.md) for the post-mortem.
+
+TriviaQA is now running (~6%); sweep ETA ~5 h to last dataset.
+
+**Plan B (v0) average vs paper** — kept here as the pre-fix baseline:
+
+| Variant  | Plan B v0 | Paper | Δ |
 |---       |---:    |---:   |---:|
 | Instruct | 0.367  | 0.336 | **+3.1 pp** (reproduction-grade) |
-| Base     | 0.229  | 0.312 | **−8.3 pp** (below on all 7 datasets) |
-
-- **Instruct**: within ±5 pp on 6 of 7 datasets; Bamboogle overshoots by +12.8 pp. Reproduction is essentially complete on this variant.
-- **Base**: one-sided gap on every dataset → systematic, not noise. Root cause identified ([PAPER_VS_OURS_AUDIT.md D1](PAPER_VS_OURS_AUDIT.md#d1-in-detail-the-load-bearing-one)): `scripts/run_one.sh:35` hard-codes `apply_chat=False` for base, but the upstream training code applies the chat template unconditionally. Bamboogle probe confirmed the fix; full sweep pending.
+| Base     | 0.229  | 0.312 | **−8.3 pp** |
 
 ## What's left
 
-In order, gating Plan A.
-
-**Done / in flight**:
-- ✅ All three audit fixes applied: `apply_chat=True` for base ([run_one.sh:35](../scripts/run_one.sh#L35)), `For example, <answer> Beijing </answer>.` restored ([templates.py:10](../evaluation_search_r1/flashrag/search_r1/templates.py#L10)), `add_special_tokens` block removed ([active_pipeline.py](../evaluation_search_r1/flashrag/pipeline/active_pipeline.py)).
-- 🟡 Base sweep with the fixes on all 7 datasets (data_subsample, seed 1) running via `run_variant_sweep.sh` since 2026-04-28 16:35. Bamboogle complete; NQ in progress; 5 more queued.
-
-**Open**:
-1. **Inspect the Bamboogle base regression** from this sweep (EM 0.088 vs the earlier 13:05 probe's 0.128). Likely culprit: `add_special_tokens` removal or template-sentence restore. Diff the intermediate JSONs.
-2. **Tabulate format-validity / length-truncation rate** per (dataset, variant) from the in-flight sweep's JSONs once they land. Extend `aggregate.py` to surface `'</answer>' in final_response` close-rate.
-3. **One-seed full-NQ base run** (~4 h on a 4090) to confirm the gap closes at scale, not just on subsamples.
-4. **Plan A on Vast.ai** — 5 seeds × 7 × 2 = 70 runs, ~517 K examples, ≤24 h on a fleet ([VAST_AI_PLAN_A.md](VAST_AI_PLAN_A.md)).
-5. **Aggregate, write up, publish**: per-benchmark means + std-dev across the 5 seeds, side-by-side with paper, plus the audit + cost summary.
-6. **Code/Docker cleanup** for deliverables (4)–(6) above.
+1. **Tabulate format-validity / length-truncation rate** per (dataset, variant) from the in-flight v1 sweep's JSONs once they land. Extend `aggregate.py` to surface `'</answer>' in final_response` close-rate.
+2. **One-seed full-data runs** for **both base and instruct** (~4 h × 2 on a 4090) to confirm the v1 config converges at scale, not just on 1 k subsamples.
+3. **Plan A on Vast.ai** — 5 seeds × 7 × 2 = 70 runs, ~517 K examples, ≤24 h on a fleet. Instructions for **Jose**: see [VAST_AI_PLAN_A.md](VAST_AI_PLAN_A.md).
+4. **Aggregate, write up, publish**: per-benchmark means + std-dev across the 5 seeds, side-by-side with paper, plus the audit + cost summary.
