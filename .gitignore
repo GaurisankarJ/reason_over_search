@@ -24,3 +24,6 @@ data_subsample/
 
 # Results
 evaluation_search_r1/results
+
+# Run logs
+*.log
