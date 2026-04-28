@@ -4,12 +4,15 @@
 Walks `evaluation_search_r1/results/<dataset>/<dataset>_<timestamp>_<save_note>/metric_score.txt`,
 groups by (dataset, variant) using the `save_note` convention
 `search_r1_<variant>_seed<N>`, and reports per-seed scores plus mean over seeds.
+Also surfaces trace-health stats (close-rate, length-truncation rate, mean
+completion tokens) per (dataset, variant) from each run's intermediate_data.json.
 
 Usage:
   scripts/aggregate.py [--output RESULTS.md] [--results-dir DIR]
 """
 from __future__ import annotations
 import argparse
+import json
 import re
 import statistics
 from collections import defaultdict
@@ -36,9 +39,48 @@ def parse_metric_file(path: Path) -> dict[str, float]:
     return out
 
 
+def parse_trace_health(path: Path) -> dict[str, float] | None:
+    """Compute close-rate / length-truncation / mean tokens from intermediate_data.json.
+
+    close-rate: fraction of examples whose `final_response` contains `</answer>`.
+    length-truncated: fraction with stop_reason indicating length cap (anything other
+    than 'stop'/'eos'). Both are in [0,1]; close-rate is what COMPARISON_PLAN_B.md
+    asked to surface per (dataset, variant).
+    """
+    try:
+        with path.open() as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return None
+    if not isinstance(data, list) or not data:
+        return None
+    total = len(data)
+    closed = 0
+    length_trunc = 0
+    completion_tokens: list[int] = []
+    for rec in data:
+        out = rec.get("output") or {}
+        if "</answer>" in (out.get("final_response") or ""):
+            closed += 1
+        # SGLang stop_reason of "stop" / "eos" = clean stop; anything else (e.g. "length") = truncation.
+        sr = out.get("stop_reason")
+        if sr is not None and sr not in ("stop", "eos", "stop_str"):
+            length_trunc += 1
+        ct = out.get("completion_tokens")
+        if isinstance(ct, (int, float)):
+            completion_tokens.append(int(ct))
+    return {
+        "n": total,
+        "close_rate": closed / total,
+        "length_trunc_rate": length_trunc / total,
+        "mean_completion_tokens": statistics.mean(completion_tokens) if completion_tokens else 0.0,
+    }
+
+
 def collect(results_dir: Path):
-    """Return {(dataset, variant, seed): metrics}."""
+    """Return ({(dataset, variant, seed): metrics}, {(dataset, variant, seed): trace_health})."""
     runs: dict[tuple[str, str, int], dict[str, float]] = {}
+    trace: dict[tuple[str, str, int], dict[str, float]] = {}
     for ds_dir in sorted(p for p in results_dir.iterdir() if p.is_dir()):
         ds = ds_dir.name
         if ds not in DATASETS:
@@ -65,9 +107,12 @@ def collect(results_dir: Path):
                 continue
             variant = m.group("variant")
             seed = int(m.group("seed"))
-            metrics = parse_metric_file(metric_file)
-            runs[(ds, variant, seed)] = metrics
-    return runs
+            key = (ds, variant, seed)
+            runs[key] = parse_metric_file(metric_file)
+            health = parse_trace_health(run_dir / "intermediate_data.json")
+            if health is not None:
+                trace[key] = health
+    return runs, trace
 
 
 def fmt(x: float | None) -> str:
@@ -126,13 +171,90 @@ def grand_average(runs, metric: str) -> str:
     return "\n".join(lines)
 
 
+def render_trace_health(trace) -> str:
+    """Markdown table for close-rate, length-truncation, and mean completion tokens."""
+    if not trace:
+        return ""
+    grouped: dict[tuple[str, str], list[tuple[int, dict[str, float]]]] = defaultdict(list)
+    for (ds, variant, seed), h in trace.items():
+        grouped[(ds, variant)].append((seed, h))
+    seeds_present = sorted({seed for v in grouped.values() for seed, _ in v})
+
+    lines = ["## Trace health", ""]
+    lines.append("Close-rate = fraction of examples whose `final_response` contains `</answer>`. ")
+    lines.append("Length-truncated = fraction whose SGLang `stop_reason` was anything other than `stop`/`eos`/`stop_str` (typically the per-step token cap firing).")
+    lines.append("")
+
+    # Table 1: close-rate per (dataset, variant), per seed + mean
+    lines.append("### Close-rate")
+    lines.append("")
+    header = ["Dataset", "Variant", *[f"seed={s}" for s in seeds_present], "mean", "n_examples"]
+    lines.append("| " + " | ".join(header) + " |")
+    lines.append("|" + "|".join(["---"] * len(header)) + "|")
+    for ds in DATASETS:
+        for variant in ("base", "instruct"):
+            scores = {seed: h for seed, h in grouped.get((ds, variant), [])}
+            seed_vals = [scores.get(s, {}).get("close_rate") for s in seeds_present]
+            present = [v for v in seed_vals if v is not None]
+            if not present:
+                continue
+            row = [ds, variant]
+            row.extend(f"{v*100:.1f}%" if v is not None else "—" for v in seed_vals)
+            row.append(f"{statistics.mean(present)*100:.1f}%")
+            n_total = sum(int(scores.get(s, {}).get("n", 0)) for s in seeds_present)
+            row.append(str(n_total))
+            lines.append("| " + " | ".join(row) + " |")
+    lines.append("")
+
+    # Table 2: length-truncation rate
+    lines.append("### Length-truncation rate")
+    lines.append("")
+    lines.append("| " + " | ".join(header) + " |")
+    lines.append("|" + "|".join(["---"] * len(header)) + "|")
+    for ds in DATASETS:
+        for variant in ("base", "instruct"):
+            scores = {seed: h for seed, h in grouped.get((ds, variant), [])}
+            seed_vals = [scores.get(s, {}).get("length_trunc_rate") for s in seeds_present]
+            present = [v for v in seed_vals if v is not None]
+            if not present:
+                continue
+            row = [ds, variant]
+            row.extend(f"{v*100:.1f}%" if v is not None else "—" for v in seed_vals)
+            row.append(f"{statistics.mean(present)*100:.1f}%")
+            n_total = sum(int(scores.get(s, {}).get("n", 0)) for s in seeds_present)
+            row.append(str(n_total))
+            lines.append("| " + " | ".join(row) + " |")
+    lines.append("")
+
+    # Table 3: mean completion tokens
+    lines.append("### Mean completion tokens (whole trace, summed over turns)")
+    lines.append("")
+    lines.append("| " + " | ".join(header) + " |")
+    lines.append("|" + "|".join(["---"] * len(header)) + "|")
+    for ds in DATASETS:
+        for variant in ("base", "instruct"):
+            scores = {seed: h for seed, h in grouped.get((ds, variant), [])}
+            seed_vals = [scores.get(s, {}).get("mean_completion_tokens") for s in seeds_present]
+            present = [v for v in seed_vals if v is not None]
+            if not present:
+                continue
+            row = [ds, variant]
+            row.extend(f"{v:.0f}" if v is not None else "—" for v in seed_vals)
+            row.append(f"{statistics.mean(present):.0f}")
+            n_total = sum(int(scores.get(s, {}).get("n", 0)) for s in seeds_present)
+            row.append(str(n_total))
+            lines.append("| " + " | ".join(row) + " |")
+    lines.append("")
+    return "\n".join(lines)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--results-dir", type=Path, default=DEFAULT_RESULTS)
     ap.add_argument("--output", type=Path, default=REPO_ROOT / "RESULTS.md")
     args = ap.parse_args()
 
-    runs = collect(args.results_dir)
+    runs, trace = collect(args.results_dir)
 
     md = ["# Search-R1 evaluation results", ""]
     md.append(f"_Source: `{args.results_dir}` ({len(runs)} runs)_")
@@ -147,9 +269,12 @@ def main():
         ga = grand_average(runs, metric)
         if ga:
             md.append(ga)
+    th = render_trace_health(trace)
+    if th:
+        md.append(th)
 
     args.output.write_text("\n".join(md))
-    print(f"wrote {args.output} ({len(runs)} runs aggregated)")
+    print(f"wrote {args.output} ({len(runs)} runs aggregated, {len(trace)} with trace health)")
 
 
 if __name__ == "__main__":

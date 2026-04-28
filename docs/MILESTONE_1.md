@@ -125,7 +125,11 @@ TriviaQA is now running (~6%); sweep ETA ~5 h to last dataset.
 
 ## What's left
 
-1. **Tabulate format-validity / length-truncation rate** per (dataset, variant) from the in-flight v1 sweep's JSONs once they land. Extend `aggregate.py` to surface `'</answer>' in final_response` close-rate.
-2. **One-seed full-data runs** for **both base and instruct** (~4 h × 2 on a 4090) to confirm the v1 config converges at scale, not just on 1 k subsamples.
-3. **Plan A on Vast.ai** — 5 seeds × 7 × 2 = 70 runs, ~517 K examples, ≤24 h on a fleet. Instructions for **Jose**: see [VAST_AI_PLAN_A.md](VAST_AI_PLAN_A.md).
-4. **Aggregate, write up, publish**: per-benchmark means + std-dev across the 5 seeds, side-by-side with paper, plus the audit + cost summary.
+- ✅ **Format-validity / length-truncation tabulation** — `aggregate.py` extended to surface `'</answer>' in final_response` close-rate, length-truncation rate (non-`stop` SGLang reasons), and mean completion tokens per (dataset, variant). Output in [RESULTS_PLAN_B.md#trace-health](RESULTS_PLAN_B.md#trace-health). Headlines on current state of `evaluation_search_r1/results/`:
+  - **Bamboogle base v1: 100% close-rate** (vs 84% in v0 — apply_chat fix confirmed at the trace-health level).
+  - **NQ base v1: 99.9% close-rate**.
+  - Length-truncation ≤0.2% across all (dataset, variant) — the per-step cap is not biting.
+  - One soft datapoint: instruct/musique close-rate 91.7% (full data, n=2417) — slightly lower than the 1k-subsample datasets, worth a glance once base/musique completes.
+1. **One-seed full-data runs** for **both base and instruct** (~4 h × 2 on a 4090) to confirm the v1 config converges at scale, not just on 1 k subsamples.
+2. **Plan A on Vast.ai** — 5 seeds × 7 × 2 = 70 runs, ~517 K examples, ≤24 h on a fleet. Instructions for **Jose**: see [VAST_AI_PLAN_A.md](VAST_AI_PLAN_A.md).
+3. **Aggregate, write up, publish**: per-benchmark means + std-dev across the 5 seeds, side-by-side with paper, plus the audit + cost summary.
