@@ -7,6 +7,7 @@ SEARCH_R1_TEMPLATE = (
         "You can search as many times as your want. "
         "If you find no further external knowledge needed, you can directly provide the answer inside "
         "<answer> and </answer>, without detailed illustrations. "
+        "For example, <answer> Beijing </answer>. "
         "Question: {prompt}\n"
         )
 

@@ -32,7 +32,7 @@ esac
 
 case "$variant" in
   base)
-    apply_chat=False
+    apply_chat=True
     generator_model=search_r1_base_model
     ;;
   instruct)

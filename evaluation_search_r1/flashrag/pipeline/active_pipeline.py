@@ -34,12 +34,6 @@ class SearchR1Pipeline(BasicPipeline):
         self.prompt_template = SEARCH_R1_TEMPLATE
 
         self.tokenizer = AutoTokenizer.from_pretrained(config["generator_model_path"])
-        self.tokenizer.add_special_tokens({'additional_special_tokens': ["<search>",
-            "</search>",
-            "<answer>",
-            "</answer>",
-            "<result>",
-            "</result>",]})
 
     def run_item(self, item):
         # Match Search-R1 preprocessing (qa_search_test_merge.py): strip + ensure trailing '?'.

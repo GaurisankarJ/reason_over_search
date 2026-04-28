@@ -4,12 +4,18 @@ End-to-end reproduction of Search-R1's published 3B GRPO results on this codebas
 
 ## Models — confirmed GRPO
 
-Verified from `_name_or_path` in `config.json`:
+Local checkpoints verified against the upstream GRPO releases by **LFS sha256 + shard sizes + `eos_token_id`** (the only fields that are unique to the GRPO upload):
 
-- `PeterJinGo/SearchR1-nq_hotpotqa_train-qwen2.5-3b-em-grpo` — base
-- `PeterJinGo/SearchR1-nq_hotpotqa_train-qwen2.5-3b-it-em-grpo` — instruct
+| | HF repo | shard-1 LFS sha256 | total | eos_token_id |
+|---|---|---|---:|---:|
+| base     | `PeterJinGo/SearchR1-nq_hotpotqa_train-qwen2.5-3b-em-grpo`    | `7ac54e1b…36a9dabf` | 13.6 GB (3 shards) | 151643 (`<\|endoftext\|>`) |
+| instruct | `PeterJinGo/SearchR1-nq_hotpotqa_train-qwen2.5-3b-it-em-grpo` | `3d787062…68ccd35` | 13.6 GB (3 shards) | 151645 (`<\|im_end\|>`)     |
 
-Underlying base: `Qwen/Qwen2.5-3B`.
+Both shard-1 sha256s match the LFS pointers on HF exactly; sizes match all three shards bit-for-bit. Raw `Qwen/Qwen2.5-3B` ships as 2 shards / ~6 GB bf16, so a wrong-download mistake (raw Qwen instead of GRPO) would be obvious from sizes alone — they are not.
+
+Note: `config.json` `_name_or_path` reads `Qwen/Qwen2.5-3B` (and `…-3B-Instruct`) — that's what's stamped on the HF GRPO repo too, because the trainer initialised from the underlying Qwen and saved without overriding the path. It is *not* a usable identity check for the GRPO checkpoint; use the sha256 above instead.
+
+Underlying base for both: `Qwen/Qwen2.5-3B`.
 
 ## Paper numbers we compare against
 
