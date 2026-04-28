@@ -112,15 +112,16 @@ Plan B average EM vs paper (Search-R1 v5 Table 3, Qwen2.5-3B GRPO):
 
 ## What's left
 
-In order, gating Plan A:
+In order, gating Plan A.
 
-1. **Apply the three audit fixes** (free; ~10 min total):
-   - Flip `apply_chat=True` for base in `scripts/run_one.sh:35` (D1, HIGH).
-   - Restore the `For example, <answer> Beijing </answer>.` sentence in `flashrag/search_r1/templates.py` (LOW).
-   - Remove the `add_special_tokens` block in `flashrag/pipeline/active_pipeline.py:37-42` (D8, LOW).
-2. **Re-run base on NQ-1k + TriviaQA-1k** with the fixes; confirm the −10 pp gap closes to ~3 pp.
-3. **Tabulate format-validity / length-truncation rate** from existing Plan B JSONs to find any other silently-truncated runs.
-4. **One-seed full-NQ base run** (~4 h on a 4090) to confirm the gap closes at scale, not just on subsamples.
-5. **Plan A on Vast.ai** — 5 seeds × 7 × 2 = 70 runs, ~517 K examples, ≤24 h on a fleet ([VAST_AI_PLAN_A.md](VAST_AI_PLAN_A.md)).
-6. **Aggregate, write up, publish**: per-benchmark means + std-dev across the 5 seeds, side-by-side with paper, plus the audit + cost summary.
-7. **Code/Docker cleanup** for deliverables (4)–(6) above.
+**Done / in flight**:
+- ✅ All three audit fixes applied: `apply_chat=True` for base ([run_one.sh:35](../scripts/run_one.sh#L35)), `For example, <answer> Beijing </answer>.` restored ([templates.py:10](../evaluation_search_r1/flashrag/search_r1/templates.py#L10)), `add_special_tokens` block removed ([active_pipeline.py](../evaluation_search_r1/flashrag/pipeline/active_pipeline.py)).
+- 🟡 Base sweep with the fixes on all 7 datasets (data_subsample, seed 1) running via `run_variant_sweep.sh` since 2026-04-28 16:35. Bamboogle complete; NQ in progress; 5 more queued.
+
+**Open**:
+1. **Inspect the Bamboogle base regression** from this sweep (EM 0.088 vs the earlier 13:05 probe's 0.128). Likely culprit: `add_special_tokens` removal or template-sentence restore. Diff the intermediate JSONs.
+2. **Tabulate format-validity / length-truncation rate** per (dataset, variant) from the in-flight sweep's JSONs once they land. Extend `aggregate.py` to surface `'</answer>' in final_response` close-rate.
+3. **One-seed full-NQ base run** (~4 h on a 4090) to confirm the gap closes at scale, not just on subsamples.
+4. **Plan A on Vast.ai** — 5 seeds × 7 × 2 = 70 runs, ~517 K examples, ≤24 h on a fleet ([VAST_AI_PLAN_A.md](VAST_AI_PLAN_A.md)).
+5. **Aggregate, write up, publish**: per-benchmark means + std-dev across the 5 seeds, side-by-side with paper, plus the audit + cost summary.
+6. **Code/Docker cleanup** for deliverables (4)–(6) above.
