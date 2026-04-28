@@ -1,8 +1,0 @@
-em: 0.328
-f1: 0.4280666666666666
-acc: 0.344
-precision: 0.4336666666666667
-recall: 0.4296666666666667
-search_r1_reward: 0.328
-search_r1_format_valid_rate: 0.0
-search_r1_retrieval_hit_rate: 0.0
