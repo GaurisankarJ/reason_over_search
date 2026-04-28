@@ -45,7 +45,7 @@ Caveats:
 
 FAISS's `min_points_per_centroid=39` floor needs ≥ 2.55 M training rows for `nlist=65536` but only 160 K for `nlist=4096`. With the 1 M training sample drawn from the existing flat index, 4096 cells is comfortably above the floor; 65 536 would have trained on a thin sample with degraded centroids. Bumping the training sample to ~5 M would unlock the 65k variant for marginally better latency at the same memory cost.
 
-`nprobe` is the dominant accuracy-vs-latency knob on any IVF index. Sweet spot for SQ8 is `nprobe=64` — already wired up in [retriever_config.yaml](retriever_config.yaml) and applied automatically in [`load_index`](flashrag/retriever/retriever.py).
+`nprobe` is the dominant accuracy-vs-latency knob on any IVF index. Sweet spot for SQ8 is `nprobe=64` — already wired up in [retriever_config.yaml](../local_retriever/retriever_config.yaml) and applied automatically in [`load_index`](../local_retriever/flashrag/retriever/retriever.py).
 
 ## Impact on a Search-R1-style RAG pipeline
 

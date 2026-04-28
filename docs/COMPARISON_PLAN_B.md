@@ -71,12 +71,9 @@ Ranked by how much it could explain the −8 pp base-variant gap.
 
 ### High-suspicion (likely material)
 
-1. **Sampling temperature: 0.0 vs paper/upstream.** `flashrag/config/basic_config.yaml:110` sets `temperature: 0.0` (greedy). Direct evidence we are diverging:
-   - **Paper Appendix B.2**: *"The rollout sampling uses a temperature of 1.0 and a top-p value of 1.0."* (training rollouts; eval not separately specified).
-   - **Upstream `verl/trainer/config/ppo_trainer.yaml`** under `actor_rollout_ref.rollout`: `temperature=1.0`, `top_p=0.95`, `top_k=-1`, `do_sample=True`, `n=1`. There is **no separate `val_kwargs`** — validation reuses the training rollout block, so the paper's eval ran at `temperature=1.0, top_p=0.95`.
-   - **`train_grpo.sh`** explicitly passes `actor_rollout_ref.rollout.temperature=1`.
+1. **`apply_chat=False` on base** — the load-bearing miss. [PAPER_VS_OURS_AUDIT.md D1](PAPER_VS_OURS_AUDIT.md#d1-in-detail-the-load-bearing-one) shows verl's `rl_dataset.py:128` applies the chat template unconditionally when the tokenizer has one, and Qwen2.5-3B base ships with a chat template. The paper's reported base GRPO numbers therefore use chat-wrapped prompts. Our `scripts/run_one.sh:35` hard-codes `apply_chat=False` for base. The Bamboogle probe below already confirmed +1.6 pp lift and 84 %→100 % close-rate from flipping this. **In-flight as the next sweep on NQ-1k + TriviaQA-1k.**
 
-   Greedy on a base (non-instruct) model that wasn't RLHF'd to terminate cleanly may be why base length-truncates 17 % on Bamboogle. **Single-line config change to test.** Action: re-run base variant on one dataset (NQ-1k) at `temperature=1.0`, `top_p=0.95` and see whether the −10 pp gap closes.
+   *(Note: an earlier version of this section listed `temperature=1.0, top_p=0.95` as suspect #1, citing the upstream `ppo_trainer.yaml` rollout block. That was incorrect — see [PAPER_VS_OURS_AUDIT.md D3](PAPER_VS_OURS_AUDIT.md): verl's `_validate()` at `ray_trainer.py:478,508` hard-codes `do_sample=False` and `vllm_rollout.py:162-171` overrides to `temperature=0, top_p=1.0`. The paper eval is greedy. Our `temperature: 0.0` is correct. Post-mortem: [docs/archive/TEMPERATURE_HYPOTHESIS_WRONG.md](archive/TEMPERATURE_HYPOTHESIS_WRONG.md).)*
 2. **Base-variant trace hygiene.** Per the smoke profile: instruct hits `</answer>` 125/125, base length-truncates 21/125 on Bamboogle. Plan B does not record `format_valid` / `length_truncated` rates per-dataset — we are blind to whether base is silently failing on NQ/TriviaQA/PopQA/HotpotQA the same way. If `step_limit=500` is biting on factoid prompts, the base variant is being undercounted. Action: pull the `search_r1_format_valid` / `search_r1_extracted_answer` fields out of the existing run JSONs and tabulate truncation rate per (dataset, variant).
 3. **Single seed at greedy.** Greedy decoding makes seed irrelevant in principle, but tokenizer/index nondeterminism + KV-cache effects at temp=0 can still produce ~1–2 pp run-to-run drift on n=1 k. With 5 seeds (Plan A) or 3 seeds (Plan C-lite) the per-dataset SE drops by √5 ≈ 2.2× and ±10 pp gaps stay ±10 pp.
 
@@ -94,7 +91,7 @@ Ranked by how much it could explain the −8 pp base-variant gap.
 
 ## Probe: base + `apply_chat=True` on Bamboogle (2026-04-28)
 
-Hypothesis: the base GRPO checkpoint also benefits from the chat scaffold the instruct variant uses, even though `run_one.sh:35` hard-codes `apply_chat=False` for base. The base model's tokenizer config ([`search_r1_base_model/tokenizer_config.json`](search_r1_base_model/tokenizer_config.json)) ships with a Qwen2.5 chat template (`"You are a helpful assistant."`), so `apply_chat=True` is well-defined for it.
+Hypothesis: the base GRPO checkpoint also benefits from the chat scaffold the instruct variant uses, even though `run_one.sh:35` hard-codes `apply_chat=False` for base. The base model's tokenizer config ([`search_r1_base_model/tokenizer_config.json`](../evaluation_search_r1/search_r1_base_model/tokenizer_config.json)) ships with a Qwen2.5 chat template (`"You are a helpful assistant."`), so `apply_chat=True` is well-defined for it.
 
 Re-ran Bamboogle (test split, n=125, seed=1) with `--apply_chat True --generator_model search_r1_base_model`, save_note `search_r1_base_applychat_seed1`. Everything else unchanged.
 
@@ -118,20 +115,24 @@ Plan A is 17 days of compute. Don't burn it on a setup that has a one-sided 8 pp
 Ordered by cost / information ratio:
 
 1. **(in flight — highest priority, confirmed lift on Bamboogle) Re-run base variant on NQ-1k and TriviaQA-1k with `apply_chat=True`.** Bamboogle probe above closed the gap to paper exactly via this single flag flip and pushed format-validity 84 %→100 %. NQ/TriviaQA are where the −10 to −16 pp gaps live; if the same mechanism is at play, this is the fix. Modify [`scripts/run_one.sh:35`](../scripts/run_one.sh#L35) to set `apply_chat=True` for base, or invoke `run_eval.py` directly with `--apply_chat True --generator_model search_r1_base_model` and a save_note like `search_r1_base_applychat_seedN`.
-2. **(next, after apply_chat finishes — 2 h) Re-run base at `temperature=1.0, top_p=0.95` on NQ-1k and TriviaQA-1k.** Now backed by direct evidence: paper Appendix B.2 (*"temperature of 1.0 and a top-p value of 1.0"*) and upstream `verl/trainer/config/ppo_trainer.yaml` `actor_rollout_ref.rollout` (`temperature=1.0, top_p=0.95, top_k=-1, do_sample=True`) — and verl has no separate `val_kwargs`, so the paper's eval ran at these same values. Two-line change in [`flashrag/config/basic_config.yaml:110-111`](flashrag/config/basic_config.yaml#L110-L111). Compose with apply_chat if (1) helped: `apply_chat=True` + `temperature=1.0` + `top_p=0.95`.
-3. **(30 min, free) Pull format-validity and length-truncation rate from the rest of the existing Plan B base JSONs**, per dataset. Use `'</answer>' in final_response` as the close-rate signal. Anywhere the rate is <90 % is a candidate for the apply_chat fix above.
-4. **(2 h) Re-run base variant on NQ-1k with `step_limit` raised** (500 → 1024) and check whether truncation rate drops and EM rises. Rules in/out the per-step cap as the cause. Only run if (1) and (2) together still leave a gap.
-5. **(4 h) One-seed full-NQ base run** (Plan C slice for one dataset, ~3 h on a 4090 with current flags). If full-NQ base EM is also ~0.32 (vs paper 0.421), the gap is not subsample noise and is reproducible at scale — Plan A on base would just confirm the same wrong number.
-6. **(1 day) Add a 2nd and 3rd seed to Plan B** to bracket per-dataset variance before committing to 5-seed Plan A. Cheap insurance.
-7. **Only after the above resolves the base gap to within ~3 pp on at least one dataset:** launch Plan A. Otherwise launch Plan C (3.4 days, full data, 1 seed) on the *fixed* config and decide based on those numbers whether the 5-seed extra precision is worth 17 days.
+2. **(5 min) Add the missing prompt sentence** `For example, <answer> Beijing </answer>.` back to [`flashrag/search_r1/templates.py`](../evaluation_search_r1/flashrag/search_r1/templates.py) — see [PAPER_VS_OURS_AUDIT.md](PAPER_VS_OURS_AUDIT.md#prompt-template-micro-divergence-negligible). Free; LOW severity.
+3. **(5 min) Remove the `add_special_tokens` block** in [`flashrag/pipeline/active_pipeline.py:37-42`](../evaluation_search_r1/flashrag/pipeline/active_pipeline.py#L37-L42) — see [PAPER_VS_OURS_AUDIT.md D8](PAPER_VS_OURS_AUDIT.md#d8-special-token-additions). Smoke-test that `</search>` still matches as a stop string.
+4. **(30 min, free) Pull format-validity and length-truncation rate from the rest of the existing Plan B base JSONs**, per dataset. Use `'</answer>' in final_response` as the close-rate signal. Anywhere the rate is <90 % is a candidate for the apply_chat fix above.
+5. **(2 h) Re-run base variant on NQ-1k with `step_limit` raised** (500 → 1024) and check whether truncation rate drops and EM rises. Rules in/out the per-step cap as the cause. Only run if (1) leaves a residual gap.
+6. **(4 h) One-seed full-NQ base run** (Plan C slice for one dataset, ~3 h on a 4090 with current flags). If full-NQ base EM is also ~0.32 (vs paper 0.421), the gap is not subsample noise and is reproducible at scale — Plan A on base would just confirm the same wrong number.
+7. **(1 day) Add a 2nd and 3rd seed to Plan B** to bracket per-dataset variance before committing to 5-seed Plan A. Cheap insurance.
+8. **Only after the above resolves the base gap to within ~3 pp on at least one dataset:** launch Plan A. Otherwise launch Plan C (3.4 days, full data, 1 seed) on the *fixed* config and decide based on those numbers whether the 5-seed extra precision is worth 17 days.
+
+Do **not** change `temperature` or `top_p`. Paper eval is greedy ([PAPER_VS_OURS_AUDIT.md D3](PAPER_VS_OURS_AUDIT.md)). Our config is correct on this axis.
 
 ## Concrete next action (after the in-flight apply_chat sweep)
 
 ```bash
-# Edit basic_config.yaml: temperature 0.0 → 1.0, uncomment top_p: 0.95
-# Then on base, NQ-1k and TriviaQA-1k, with apply_chat composed in:
-scripts/run_one.sh base nq 1        # save_note: search_r1_base_applychat_temp1_seed1
+# 1. Apply audit fix #2: edit templates.py to restore "For example, <answer> Beijing </answer>."
+# 2. Apply audit fix #3: remove add_special_tokens block in active_pipeline.py:37-42
+# 3. Re-run base on NQ-1k + TriviaQA-1k with apply_chat=True; compare to paper.
+scripts/run_one.sh base nq 1        # save_note: search_r1_base_applychat_seed1
 scripts/run_one.sh base triviaqa 1
 ```
 
-If base EM jumps ~10 pp on NQ-1k, the temp=0 default is the bug. If it doesn't, fall through to step_limit (#4).
+If base EM closes to within ~3 pp of paper on NQ-1k, the apply_chat flip is the fix. Else fall through to step_limit (#5).

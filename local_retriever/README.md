@@ -1,6 +1,6 @@
 # Retriever
 
-> **How the search actually works + RAM costs + swapping in a quantized index:** see [INDEXING.md](INDEXING.md).
+> **How the search actually works + RAM costs + swapping in a quantized index:** see [docs/RETRIEVER_INDEXING.md](../docs/RETRIEVER_INDEXING.md).
 >
 > TL;DR — defaults are **CPU + flat FAISS** (`~65 GB`, exact float32, runs in the existing `/venv/retriever` faiss-cpu venv). For GPU FAISS, run [`setup_gpu_venv.sh`](setup_gpu_venv.sh) and pass `--gpu --index ./indexes/wiki18_100w_e5_ivf4096_sq8.index` to `retriever_serving.py`. The IVF-SQ8 index is ~16 GB and built by [/workspace/index_creation](../../index_creation/).
 

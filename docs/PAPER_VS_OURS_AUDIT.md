@@ -271,10 +271,10 @@ Ours:
 - `/workspace/reason_over_search/scripts/manage_sglang.sh`
 - `/workspace/reason_over_search/local_retriever/retriever_config.yaml`
 - `/workspace/reason_over_search/local_retriever/retriever_serving.py`
-- `/workspace/reason_over_search/evaluation_search_r1/COMPARISON_PLAN_B.md`
-- `/workspace/reason_over_search/evaluation_search_r1/REPRODUCIBILITY.md`
-- `/workspace/reason_over_search/evaluation_search_r1/RESULTS_PLAN_B.md`
-- `/workspace/reason_over_search/evaluation_search_r1/EVAL_OPS.md`
+- `/workspace/reason_over_search/docs/COMPARISON_PLAN_B.md`
+- `/workspace/reason_over_search/docs/REPRODUCIBILITY.md`
+- `/workspace/reason_over_search/docs/RESULTS_PLAN_B.md`
+- `/workspace/reason_over_search/docs/EVAL_OPS.md`
 
 Upstream (`PeterGriffinJin/Search-R1` @ main, fetched 2026-04-28):
 - `verl/trainer/ppo/ray_trainer.py` (lines 436-547: `_validate()` with `do_sample=False`)

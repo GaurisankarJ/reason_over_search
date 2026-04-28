@@ -1,6 +1,6 @@
 # Evaluation Operations
 
-How to run the Search-R1 evaluation sweeps and where the wall-clock goes. For *what* the sweep validates and the per-dataset numbers, see [REPRODUCIBILITY.md](REPRODUCIBILITY.md) and [RESULTS_PLAN_B.md](RESULTS_PLAN_B.md). Hardware reference is in [/docs/HARDWARE.md](../docs/HARDWARE.md).
+How to run the Search-R1 evaluation sweeps and where the wall-clock goes. For *what* the sweep validates and the per-dataset numbers, see [REPRODUCIBILITY.md](REPRODUCIBILITY.md) and [RESULTS_PLAN_B.md](RESULTS_PLAN_B.md). Hardware reference is in [HARDWARE.md](HARDWARE.md).
 
 ## Three sweep plans
 
@@ -52,7 +52,7 @@ Prereqs:
 nohup scripts/sweep_b_reduced.sh > /tmp/sweep_b.log 2>&1 &
 disown
 tail -f /tmp/sweep_b.log
-# produces evaluation_search_r1/RESULTS_PLAN_B.md
+# produces docs/RESULTS_PLAN_B.md
 
 # Plan C — full datasets, 1 seed (~3.4 days)
 nohup scripts/sweep_c_one_seed.sh > /tmp/sweep_c.log 2>&1 &
@@ -66,7 +66,7 @@ disown
 Aggregate manually any time:
 
 ```bash
-scripts/aggregate.py --output evaluation_search_r1/RESULTS_NOW.md
+scripts/aggregate.py --output docs/RESULTS_NOW.md
 ```
 
 ## Where the wall-clock goes (smoke profile)

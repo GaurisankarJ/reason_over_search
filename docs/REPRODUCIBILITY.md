@@ -47,9 +47,9 @@ Bold rows are the comparison targets.
 | 9 | First-match `<search>` regex (was last-match) | Low |
 | 10 | Per-step token limit 512 → 500 | Negligible |
 
-**Files modified**: [flashrag/pipeline/active_pipeline.py](flashrag/pipeline/active_pipeline.py), [flashrag/search_r1/parser.py](flashrag/search_r1/parser.py), [flashrag/config/basic_config.yaml](flashrag/config/basic_config.yaml), [../local_retriever/flashrag/config/basic_config.yaml](../local_retriever/flashrag/config/basic_config.yaml).
+**Files modified**: [flashrag/pipeline/active_pipeline.py](../evaluation_search_r1/flashrag/pipeline/active_pipeline.py), [flashrag/search_r1/parser.py](../evaluation_search_r1/flashrag/search_r1/parser.py), [flashrag/config/basic_config.yaml](../evaluation_search_r1/flashrag/config/basic_config.yaml), [../local_retriever/flashrag/config/basic_config.yaml](../local_retriever/flashrag/config/basic_config.yaml).
 
-**No changes needed** to: prompt template (already byte-identical to `make_prefix(template_type='base')`), EM scorer (canonical SQuAD normalization in [flashrag/search_r1/answer_utils.py](flashrag/search_r1/answer_utils.py)), FAISS index, encoder, model checkpoints, sampling temperature.
+**No changes needed** to: prompt template (already byte-identical to `make_prefix(template_type='base')`), EM scorer (canonical SQuAD normalization in [flashrag/search_r1/answer_utils.py](../evaluation_search_r1/flashrag/search_r1/answer_utils.py)), FAISS index, encoder, model checkpoints, sampling temperature.
 
 ## Smoke validation
 
