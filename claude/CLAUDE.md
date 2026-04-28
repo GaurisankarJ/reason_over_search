@@ -15,7 +15,7 @@ The Search-R1 setup: a Qwen2.5-3B policy is trained with GRPO to interleave `<se
 
 The official Search-R1 repo is `https://github.com/PeterGriffinJin/Search-R1`. They do not ship an evaluation pipeline, so the one in this repo is adapted from FlashRAG/ReSearch and validated against the paper numbers.
 
-## Phase 1 goal (from [README.md](../README.md))
+## Phase 1 goal (from [docs/MILESTONE_1.md](../docs/MILESTONE_1.md))
 
 Reproduce the Search-R1 3B baseline for both checkpoints (`base` and `instruct`) on 7 benchmarks: Bamboogle, 2WikiMultiHopQA, TriviaQA, PopQA, MuSiQue, NQ, HotpotQA. Run each 5×, report averages. Constraints: reproducible on Vast.ai + in-house GPUs, minimize cost/wall-clock.
 
@@ -51,8 +51,7 @@ Paper targets we compare against (Qwen2.5-3B EM, Search-R1 v5 Table 3):
 - [`docs/HARDWARE.md`](../docs/HARDWARE.md) — this box's specs + accelerator comparison.
 - [`data/`](../data/) — full eval datasets (jsonl, per benchmark).
 - [`data_subsample/`](../data_subsample/) — deterministic 1k subsamples for the fast Plan B sweep.
-- [`program.md`](../program.md) — playbook for the autonomous-research experiment loop on `experiment_ros/<tag>` branches.
-- `results.tsv` — per-experiment EM/F1 log for the autoresearch loop (untracked, do not commit).
+- [`docs/archive/DISCARDED_ABLATIONS.md`](../docs/archive/DISCARDED_ABLATIONS.md) — record of the autoresearch loop's 10 discarded ablations on `experiment_ros/<tag>` (the loop's working files `program.md` and `results.tsv` are no longer tracked).
 
 ## Runtime services (everything must be up before eval)
 
@@ -86,7 +85,7 @@ Phase 1 reproduction is essentially complete on the **instruct** variant; the **
 
 Recommendation: **don't launch Plan A (~17 days) until the base gap closes to ~3 pp on at least one dataset**; otherwise it just buys tighter error bars on a wrong number.
 
-**Autoresearch loop** (see [program.md](../program.md)) — running on branch `experiment_ros/apr27`. Current `results.tsv` shows instruct/Bamboogle baseline at EM 0.336 (greedy, temp=0) with 11 ablations tried; only `temperature=0` (greedy) was kept. Discarded include `topk 3→5`, `max_obs_length 500→750`, `max_search_turns 4→5`, multi-query retrieval, query expansion, dropping the default chat-template system message, repetition_penalty 1.05, and serializing inference. Full log in [`results.tsv`](../results.tsv); per-ablation reasoning in [docs/archive/DISCARDED_ABLATIONS.md](../docs/archive/DISCARDED_ABLATIONS.md).
+**Autoresearch loop** — ran on branch `experiment_ros/apr27`. Instruct/Bamboogle baseline at EM 0.336 (greedy, temp=0); 11 ablations tried, only `temperature=0` (greedy) was kept. Discarded include `topk 3→5`, `max_obs_length 500→750`, `max_search_turns 4→5`, multi-query retrieval, query expansion, dropping the default chat-template system message, repetition_penalty 1.05, and serializing inference. Per-ablation reasoning in [docs/archive/DISCARDED_ABLATIONS.md](../docs/archive/DISCARDED_ABLATIONS.md).
 
 **Plan A prep** — `eval_final` branch (off `experiment_ros/apr27`) is the working branch for the Plan A launch. Cost analysis for Vast.ai in [docs/VAST_AI_PLAN_A.md](../docs/VAST_AI_PLAN_A.md) (cheapest: 8× RTX 4090 marketplace ≈ $58–77; balanced: 3× H100 PCIe ≈ $108).
 
@@ -121,7 +120,7 @@ Single RTX 4090 (24 GB), AMD EPYC 7642 (48c/96t), 503 GB RAM. No NVLink, single 
 - **Default to terse.** State results and decisions directly; skip narration.
 - **Read [REPRODUCIBILITY.md](../docs/REPRODUCIBILITY.md) before touching the eval pipeline.** The 10 fixes are load-bearing and were audited against the official repo.
 - **Don't modify the EM scorer** (`flashrag/search_r1/answer_utils.py`), the model checkpoints, the FAISS index, or the dataset jsonl files. Those are the ground truth for the experiment.
-- **For autoresearch loops** (`experiment_ros/<tag>` branches): the editable surface is `active_pipeline.py`, `parser.py`, `templates.py`, `basic_config.yaml`. See [program.md](../program.md) for the full rules.
+- **For autoresearch loops** (`experiment_ros/<tag>` branches): the editable surface is `active_pipeline.py`, `parser.py`, `templates.py`, `basic_config.yaml`.
 - **Single-run noise is real** (~3 pp at n=125 on Bamboogle when temperature>0). Treat improvements <2 pp EM with skepticism; confirm with a second seed or use temp=0 (greedy).
 - **Cite paper sections by URL** when discussing results, especially `arxiv.org/html/2503.09516v5#A6` (Table 3, the GRPO comparison).
 - When in doubt about a dataset split or a Search-R1 implementation detail, check the official repo (`github.com/PeterGriffinJin/Search-R1`) before guessing — and ask me before invoking AlphaXiv or other web tools that publish content.
@@ -141,4 +140,4 @@ Single RTX 4090 (24 GB), AMD EPYC 7642 (48c/96t), 503 GB RAM. No NVLink, single 
 
 Do **not** change `temperature` or `top_p` — paper eval is greedy. See note above.
 
-**After Phase 1** — ablations on the autoresearch branch (see `program.md`) and starting on **ReSearch** (the second paper). Append to this section as the plan firms up.
+**After Phase 1** — further ablations on the autoresearch branch and starting on **ReSearch** (the second paper). Append to this section as the plan firms up.
