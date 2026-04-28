@@ -85,3 +85,42 @@ Target benchmarks:
 4. Code reviewed and cleaned up for clarity (remove unnecessary complexity/fluff).
 5. Docker setup verified; documentation updated for clear reproduction.
 6. Repository state suitable for easy reproduction and publication submission.
+
+## Status (2026-04-28)
+
+### What was done
+
+- Adapted the FlashRAG/ReSearch eval pipeline to Search-R1 (no official eval pipeline ships upstream).
+- Both GRPO checkpoints (base, instruct) sha256-verified against the upstream HF repos.
+- Wiki-18 corpus + E5-base-v2 encoder + FAISS Flat IP and IVF-SQ8 indexes built.
+- Exhaustive paper-vs-ours audit ([PAPER_VS_OURS_AUDIT.md](PAPER_VS_OURS_AUDIT.md)): 8 divergences catalogued, 10 earlier ones already fixed ([REPRODUCIBILITY.md](REPRODUCIBILITY.md)).
+- Plan B sweep (1 seed × 7 datasets × 2 variants; 1k subsamples for large datasets, full Bamboogle/MuSiQue) — see [RESULTS_PLAN_B.md](RESULTS_PLAN_B.md), [COMPARISON_PLAN_B.md](COMPARISON_PLAN_B.md).
+- Bamboogle apply_chat=True probe on base: closed gap to paper exactly (EM 0.112→0.128, close-rate 84%→100%).
+- Vast.ai Plan-A fleet costing: 8× RTX 4090 ≈ $58–77 / 24 h ([VAST_AI_PLAN_A.md](VAST_AI_PLAN_A.md)).
+
+### Results so far
+
+Plan B average EM vs paper (Search-R1 v5 Table 3, Qwen2.5-3B GRPO):
+
+| Variant  | Plan B | Paper | Δ |
+|---       |---:    |---:   |---:|
+| Instruct | 0.367  | 0.336 | **+3.1 pp** (reproduction-grade) |
+| Base     | 0.229  | 0.312 | **−8.3 pp** (below on all 7 datasets) |
+
+- **Instruct**: within ±5 pp on 6 of 7 datasets; Bamboogle overshoots by +12.8 pp. Reproduction is essentially complete on this variant.
+- **Base**: one-sided gap on every dataset → systematic, not noise. Root cause identified ([PAPER_VS_OURS_AUDIT.md D1](PAPER_VS_OURS_AUDIT.md#d1-in-detail-the-load-bearing-one)): `scripts/run_one.sh:35` hard-codes `apply_chat=False` for base, but the upstream training code applies the chat template unconditionally. Bamboogle probe confirmed the fix; full sweep pending.
+
+## What's left
+
+In order, gating Plan A:
+
+1. **Apply the three audit fixes** (free; ~10 min total):
+   - Flip `apply_chat=True` for base in `scripts/run_one.sh:35` (D1, HIGH).
+   - Restore the `For example, <answer> Beijing </answer>.` sentence in `flashrag/search_r1/templates.py` (LOW).
+   - Remove the `add_special_tokens` block in `flashrag/pipeline/active_pipeline.py:37-42` (D8, LOW).
+2. **Re-run base on NQ-1k + TriviaQA-1k** with the fixes; confirm the −10 pp gap closes to ~3 pp.
+3. **Tabulate format-validity / length-truncation rate** from existing Plan B JSONs to find any other silently-truncated runs.
+4. **One-seed full-NQ base run** (~4 h on a 4090) to confirm the gap closes at scale, not just on subsamples.
+5. **Plan A on Vast.ai** — 5 seeds × 7 × 2 = 70 runs, ~517 K examples, ≤24 h on a fleet ([VAST_AI_PLAN_A.md](VAST_AI_PLAN_A.md)).
+6. **Aggregate, write up, publish**: per-benchmark means + std-dev across the 5 seeds, side-by-side with paper, plus the audit + cost summary.
+7. **Code/Docker cleanup** for deliverables (4)–(6) above.
