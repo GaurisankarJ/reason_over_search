@@ -98,10 +98,10 @@ Caveat: the YES is conditional on instruct v1 also landing within 8 pp of paper.
 
 - **Code (committed)**: `run_one.sh` flips base `apply_chat=False → True`; `templates.py` adds the missing example sentence; `active_pipeline.py` drops the runtime `add_special_tokens` block.
 - **No change**: temperature, top_p, retriever, model checkpoints, prompt template body, max_turns, step_limit, observation truncation, splits, metrics, FAISS index, SGLang flags.
-- **Archived**: v0 base + instruct seed=1 result dirs in [results/_archive_v0/](results/_archive_v0/) for traceability. [RESULTS_PLAN_B_v0.md](RESULTS_PLAN_B_v0.md) is the snapshot of the v0 aggregate.
+- **Archived**: v0 base + instruct seed=1 result dirs at `evaluation_search_r1/results/_archive_v0/` (local-only — gitignored). [archive/RESULTS_PLAN_B_v0.md](archive/RESULTS_PLAN_B_v0.md) is the committed snapshot of the v0 aggregate.
 
 ## Next steps
 
 1. **(in progress)** Instruct v1 sweep — finishes ~12:45 UTC. This file will be updated with the instruct rows.
-2. **Aggregate.py refresh** — once instruct is done, regenerate [RESULTS_PLAN_B.md](RESULTS_PLAN_B.md) with v1 numbers (will overwrite the v0 snapshot's location, but v0 lives in [RESULTS_PLAN_B_v0.md](RESULTS_PLAN_B_v0.md)).
-3. **Plan A on Vast.ai** — 5 seeds × 7 datasets × 2 variants. Per [docs/VAST_AI_PLAN_A.md](../docs/VAST_AI_PLAN_A.md), an 8× RTX 4090 fleet completes in ≤24 h at $58–77. Local 4090 alone would take ~17 days.
+2. **Aggregate.py refresh** — once instruct is done, regenerate [RESULTS_PLAN_B.md](RESULTS_PLAN_B.md) with v1 numbers (the v0 snapshot is preserved at [archive/RESULTS_PLAN_B_v0.md](archive/RESULTS_PLAN_B_v0.md)).
+3. **Plan A on Vast.ai** — 5 seeds × 7 datasets × 2 variants. Per [VAST_AI_PLAN_A.md](VAST_AI_PLAN_A.md), an 8× RTX 4090 fleet completes in ≤24 h at $58–77. Local 4090 alone would take ~17 days.

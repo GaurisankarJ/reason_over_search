@@ -94,9 +94,9 @@ Target benchmarks:
 - Both GRPO checkpoints (base, instruct) sha256-verified against the upstream HF repos.
 - Wiki-18 corpus + E5-base-v2 encoder + FAISS Flat IP and IVF-SQ8 indexes built.
 - Exhaustive paper-vs-ours audit ([PAPER_VS_OURS_AUDIT.md](PAPER_VS_OURS_AUDIT.md)): 8 divergences catalogued, 10 earlier ones already fixed ([REPRODUCIBILITY.md](REPRODUCIBILITY.md)).
-- Plan B v0 sweep — preserved as [RESULTS_PLAN_B_v0.md](../evaluation_search_r1/RESULTS_PLAN_B_v0.md), v0 result dirs archived to [results/_archive_v0/](../evaluation_search_r1/results/_archive_v0/).
+- Plan B v0 sweep — preserved as [archive/RESULTS_PLAN_B_v0.md](archive/RESULTS_PLAN_B_v0.md); v0 result dirs archived locally to `evaluation_search_r1/results/_archive_v0/` (gitignored, so only on the local machine).
 - Three audit fixes applied: `apply_chat=True` for base ([run_one.sh:35](../scripts/run_one.sh#L35)), `For example, <answer> Beijing </answer>.` restored ([templates.py:10](../evaluation_search_r1/flashrag/search_r1/templates.py#L10)), `add_special_tokens` block removed ([active_pipeline.py](../evaluation_search_r1/flashrag/pipeline/active_pipeline.py)). `temperature: 0.0` kept (paper eval is greedy per upstream `verl` `_validate()` override).
-- **Plan B v1 base sweep complete** — full comparison in [COMPARISON_PLAN_B_v1.md](../evaluation_search_r1/COMPARISON_PLAN_B_v1.md).
+- **Plan B v1 base sweep complete** — full comparison in [COMPARISON_PLAN_B_v1.md](COMPARISON_PLAN_B_v1.md).
 - **Plan B v1 instruct sweep in progress** (started 2026-04-29 06:46 UTC, ETA ~6 h).
 - Vast.ai Plan-A fleet costing: 8× RTX 4090 ≈ $58–77 / 24 h ([VAST_AI_PLAN_A.md](VAST_AI_PLAN_A.md)).
 
@@ -121,7 +121,7 @@ All 7 base datasets within 4 pp of paper. Average residual **−2.0 pp** (was �
 
 **Decision criteria** (set before the sweep): all 7 base datasets within 8 pp of paper, no catastrophic divergence, average residual ≤4 pp. **Met.** Max gap 4.0 pp (Bamboogle, n=125 noise), avg −2.0 pp.
 
-The YES is conditional on instruct v1 also landing within 8 pp of paper. Instruct v0 was already +3.1 pp above paper on average and within ±5 pp on 6/7 datasets, so this is highly likely; will be locked when the in-flight instruct sweep completes (~12:45 UTC) and [COMPARISON_PLAN_B_v1.md](../evaluation_search_r1/COMPARISON_PLAN_B_v1.md) is updated.
+The YES is conditional on instruct v1 also landing within 8 pp of paper. Instruct v0 was already +3.1 pp above paper on average and within ±5 pp on 6/7 datasets, so this is highly likely; will be locked when the in-flight instruct sweep completes (~12:45 UTC) and [COMPARISON_PLAN_B_v1.md](COMPARISON_PLAN_B_v1.md) is updated.
 
 ## What's left
 
@@ -131,6 +131,6 @@ The YES is conditional on instruct v1 also landing within 8 pp of paper. Instruc
   - Length-truncation ≤0.2% across all (dataset, variant) — the per-step cap is not biting.
   - One soft datapoint: instruct/musique close-rate 91.7% (full data, n=2417) — slightly lower than the 1k-subsample datasets, worth a glance once base/musique completes.
 - ❎ **One-seed full-data runs** for both base and instruct — **NOT NEEDED.** Plan B v1 base is already within 4 pp / avg −2.0 pp of paper; the residual is consistent with 1 k-subsample SE + single-seed greedy variance. Plan A's first seed runs at full data and provides the same validation, parallelized across the Vast fleet — no reason to spend ~8 local-4090 hours on it first.
-1. **Instruct v1 sweep finishes + [COMPARISON_PLAN_B_v1.md](../evaluation_search_r1/COMPARISON_PLAN_B_v1.md) updated with instruct rows** (~12:45 UTC).
+1. **Instruct v1 sweep finishes + [COMPARISON_PLAN_B_v1.md](COMPARISON_PLAN_B_v1.md) updated with instruct rows** (~12:45 UTC).
 2. **Plan A on Vast.ai** — 5 seeds × 7 × 2 = 70 runs, ~517 K examples, ≤24 h on a fleet. Instructions for **Jose**: see [VAST_AI_PLAN_A.md](VAST_AI_PLAN_A.md).
 3. **Aggregate, write up, publish**: per-benchmark means + std-dev across the 5 seeds, side-by-side with paper, plus the audit + cost summary.
