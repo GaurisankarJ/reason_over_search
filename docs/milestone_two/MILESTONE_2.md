@@ -20,16 +20,31 @@ Create a `training/` folder at the repo root containing the NeMo-RL setup with t
 
 ## Step-by-step
 
-1. **Set up NeMo-RL.** Run [`training/setup.sh`](../../training/setup.sh) — idempotent script that:
+1. **Bake NeMo-RL into the docker image.** Same paradigm as the existing `retriever` and `evaluation_search_r1` conda envs in [`docker/reason-over-search-v1/Dockerfile`](../../docker/reason-over-search-v1/Dockerfile) — *fully self-contained image, zero setup at Vast.ai start*.
+
+   The Dockerfile (extended for Milestone 2):
    - Installs [`uv`](https://docs.astral.sh/uv/) (NeMo-RL's official package manager).
-   - Clones [NVIDIA-NeMo/RL](https://github.com/NVIDIA-NeMo/RL) at the pinned tag (default `v0.6.0`) into `training/nemo_rl/` with submodules (Megatron-LM, Megatron-Bridge, Automodel, Gym).
-   - Removes the cloned `.git` so it's not a nested repo (per Milestone 2 design — local edits get tracked in *this* repo, not upstream's).
-   - Creates a uv venv at `training/nemo_rl/.venv/` (Python 3.13 — uv downloads it itself).
-   - Runs `uv sync --extra vllm` to install all of NeMo-RL's pinned deps + the editable package.
+   - Clones [NVIDIA-NeMo/RL](https://github.com/NVIDIA-NeMo/RL) at the pinned tag (`NEMO_RL_REF`, default `v0.6.0`) with submodules (Megatron-LM, Megatron-Bridge, Automodel, Gym) into `/app/training/nemo_rl/`.
+   - Applies any `*.patch` from `training/patches/` (overlay-style edits).
+   - Strips the cloned `.git` directories so it's not a nested repo.
+   - Runs `uv venv` (Python 3.13) + `uv sync --extra ${UV_EXTRAS}` (default `vllm`).
 
-   **The clone is gitignored** (NeMo-RL + 4 submodules ≈ several hundred MB; reproducibility comes from `NEMO_RL_REF` + `uv.lock`). See [`training/README.md`](../../training/README.md) for setup-script knobs.
+   Build + push:
 
-   **Docker integration**: the `pantomiman/reason-over-search-v1` image now ships `uv` pre-installed and `training/` copied to `/app/training/`. The heavy install is deferred to runtime (avoids freezing a NeMo-RL version into the image). On a fresh container: `bash /app/training/setup.sh` once. The Dockerfile lives at [`docker/reason-over-search-v1/Dockerfile`](../../docker/reason-over-search-v1/Dockerfile); push the rebuilt image after this step.
+   ```bash
+   docker build \
+     --build-arg NEMO_RL_REF=v0.6.0 \
+     --build-arg UV_EXTRAS=vllm \
+     -f docker/reason-over-search-v1/Dockerfile -t reason-over-search-v1:v1 .
+
+   docker tag reason-over-search-v1:v1 pantomiman/reason-over-search-v1:v1
+   docker login
+   docker push pantomiman/reason-over-search-v1:v1
+   ```
+
+   **The host-side clone is gitignored** ([`training/.gitignore`](../../training/.gitignore)) and **excluded from the build context** ([`.dockerignore`](../../.dockerignore)) — the Dockerfile owns the clone, so the image rebuilds cleanly from any checkout.
+
+   For local dev *outside* docker, [`training/setup.sh`](../../training/setup.sh) does the same clone + install. Knobs (`NEMO_RL_REF`, `UV_EXTRAS`, `FORCE_RECLONE`) match the docker build args.
 
 2. **Download and verify the Search-R1 training dataset.** Schema, splits, and a quick-load snippet are in [`docs/training/TRAINING_DATA.md`](../training/TRAINING_DATA.md). Source: [`PeterJinGo/nq_hotpotqa_train`](https://huggingface.co/datasets/PeterJinGo/nq_hotpotqa_train) (170k train + 51.7k test, parquet).
 

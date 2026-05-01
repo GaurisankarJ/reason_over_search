@@ -15,3 +15,8 @@ local_retriever/indexes
 local_retriever/models
 # In case a huge file lives at repo root by mistake
 **/wiki18_100w.jsonl
+
+# Training: never ship a host-side clone into the build context — the Dockerfile
+# clones NeMo-RL itself so the image is self-contained and reproducible.
+training/nemo_rl
+training/.venv

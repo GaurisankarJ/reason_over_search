@@ -4,17 +4,25 @@ NeMo-RL setup for Search-R1-style GRPO training of Qwen3.5-2B (base + hybrid). S
 
 ## Quick start
 
-### 1. Run the setup script (first time, locally or on Vast.ai)
+### Inside the docker image (`pantomiman/reason-over-search-v1`)
+
+NeMo-RL is **already installed** — the venv lives at `/app/training/nemo_rl/.venv/`. Skip straight to step 2.
+
+### Outside docker (local Mac / Linux dev)
+
+#### 1. Run the setup script
 
 ```bash
 bash training/setup.sh
 ```
 
-This installs `uv` (NeMo-RL's official package manager), clones [NVIDIA-NeMo/RL](https://github.com/NVIDIA-NeMo/RL) at the pinned tag (default: `v0.6.0`) into `training/nemo_rl/` with all 4 submodules (Megatron-LM, Megatron-Bridge, Automodel, Gym), removes the cloned `.git` so it's not a nested repo, and runs `uv sync --extra vllm` to install NeMo-RL with the vLLM rollout backend.
+This installs `uv` (NeMo-RL's official package manager), clones [NVIDIA-NeMo/RL](https://github.com/NVIDIA-NeMo/RL) at the pinned tag (default: `v0.6.0`) into `training/nemo_rl/` with all 4 submodules (Megatron-LM, Megatron-Bridge, Automodel, Gym), removes the cloned `.git` so it's not a nested repo, applies any `*.patch` files from `training/patches/`, and runs `uv sync --extra vllm` to install NeMo-RL with the vLLM rollout backend.
 
 The clone is **gitignored** (large; reproducibility comes from the pinned `NEMO_RL_REF` in [`setup.sh`](setup.sh) plus `uv.lock` inside the clone).
 
 The script is idempotent — re-running skips the clone if `nemo_rl/` exists.
+
+`setup.sh` and the Dockerfile use the **same logic** (clone + patches + uv sync); the Dockerfile inlines the steps to keep build layers cohesive, while `setup.sh` is the single-source-of-truth for local dev.
 
 #### Knobs
 
@@ -23,6 +31,15 @@ NEMO_RL_REF=main bash training/setup.sh        # use main branch instead of v0.6
 NEMO_RL_REF=<commit-sha> bash training/setup.sh
 FORCE_RECLONE=1 bash training/setup.sh         # wipe nemo_rl/ and start over
 UV_EXTRAS="vllm,nemo_gym" bash training/setup.sh    # add NeMo Gym for tool integration Path B
+```
+
+For docker builds, the same knobs are exposed as build args:
+
+```bash
+docker build \
+  --build-arg NEMO_RL_REF=v0.6.0 \
+  --build-arg UV_EXTRAS=vllm \
+  -f docker/reason-over-search-v1/Dockerfile -t reason-over-search-v1:v1 .
 ```
 
 ### 2. Activate the env
@@ -72,17 +89,16 @@ Total disk after install: roughly **6–8 GB** (most of it torch + vLLM + cudnn)
 
 ## Running in Docker
 
-The image `pantomiman/reason-over-search-v1` (built from [`docker/reason-over-search-v1/`](../docker/reason-over-search-v1/)) ships `uv` pre-installed and `training/` copied to `/app/training/`. The heavy install (clone + `uv sync`) is **deferred to runtime** to keep the image small and avoid freezing a NeMo-RL version into the image.
-
-Inside a running container:
+The image `pantomiman/reason-over-search-v1` (built from [`docker/reason-over-search-v1/`](../docker/reason-over-search-v1/)) ships **NeMo-RL fully baked** at `/app/training/nemo_rl/` with the `vllm` extra installed. No setup needed at container start — same paradigm as the conda envs for retriever/eval.
 
 ```bash
-bash /app/training/setup.sh
-# then either:
+# From a fresh Vast.ai instance:
 source /app/training/nemo_rl/.venv/bin/activate
-# or:
-cd /app/training/nemo_rl && uv run python ...
+# or use uv directly:
+cd /app/training/nemo_rl && uv run python examples/run_grpo.py --help
 ```
+
+To pin a different version, rebuild with build args (`NEMO_RL_REF`, `UV_EXTRAS`) — see [`docker/reason-over-search-v1/README.md`](../docker/reason-over-search-v1/README.md).
 
 ## See also
 
