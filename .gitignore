@@ -23,8 +23,6 @@ scripts/.env
 data/.cache/
 data/*/*.parquet
 
-# Results (per-run artifacts; aggregated reports live in docs/)
-evaluation_search_r1/results/
 
 # Run logs
 *.log

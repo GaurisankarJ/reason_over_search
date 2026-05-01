@@ -17,6 +17,7 @@ variant="${1:?missing variant (base|instruct)}"
 dataset="${2:?missing dataset}"
 seed="${3:?missing seed}"
 data_dir="${4:-$REPO_ROOT/data}"
+SGL_PORT="${SGL_PORT:-3000}"
 
 # Canonical split per dataset (matches Search-R1: test if exists, else dev).
 case "$dataset" in
@@ -62,7 +63,7 @@ cd "$EVAL_DIR"
   --split "$split" \
   --save_dir "$save_dir" \
   --save_note "$save_note" \
-  --sgl_remote_url 127.0.0.1:3000 \
+  --sgl_remote_url 127.0.0.1:$SGL_PORT \
   --remote_retriever_url 127.0.0.1:3005 \
   --generator_model "$generator_model" \
   --apply_chat "$apply_chat"
