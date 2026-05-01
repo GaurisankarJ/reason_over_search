@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.egg-info/
+**/.DS_Store
+
+# Local Retriever
+local_retriever/corpus/
+local_retriever/indexes/
+local_retriever/models/
+
+# Evaluation
+evaluation_search_r1/search_r1_base_model/
+evaluation_search_r1/search_r1_instruct_model/
+
+# Environment
+/.venv
+local_retriever/.venv
+scripts/.env
+
+# Data: eval jsonls (data/, data_subsample/) are tracked. Keep download cache
+# and any parquet artifacts out (parquet are training-data leftovers from an
+# earlier branch — eval pipeline reads jsonl).
+data/.cache/
+data/*/*.parquet
+
+# Results (per-run artifacts; aggregated reports live in docs/)
+evaluation_search_r1/results/
+
+# Run logs
+*.log
+
+# Autoresearch working log
+results.tsv
