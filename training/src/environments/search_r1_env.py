@@ -35,7 +35,6 @@ the M2 baseline by design.
 """
 from __future__ import annotations
 
-import re
 from typing import Any, Optional, TypedDict
 
 import ray
@@ -46,14 +45,17 @@ from nemo_rl.data.interfaces import LLMMessageLogType
 from nemo_rl.distributed.batched_data_dict import BatchedDataDict
 from nemo_rl.environments.interfaces import EnvironmentInterface, EnvironmentReturn
 
+from training.src.environments.parsers import (
+    VALID_ARMS,
+    format_docs_paper,
+    format_docs_qwen_native,
+    parse_query,
+)
 from training.src.rewards.search_r1 import (
     compute_search_r1_reward,
     em_check,
     extract_solution,
 )
-
-
-VALID_ARMS = ("qwen_native", "paper")
 
 
 class SearchR1EnvConfig(TypedDict, total=False):
@@ -64,66 +66,14 @@ class SearchR1EnvConfig(TypedDict, total=False):
     request_timeout_s: float
 
 
-# Regexes compiled once. DOTALL so newlines inside content blocks match `.`.
-_RE_ANSWER = re.compile(r"<answer>(.*?)</answer>", re.DOTALL)
-_RE_PAPER_SEARCH = re.compile(r"<search>(.*?)</search>", re.DOTALL)
-# Permissive parser for Qwen3.5 tool calls — only the parameter matters.
-_RE_QWEN_QUERY = re.compile(
-    r"<tool_call>.*?<parameter=query>\s*(.*?)\s*</parameter>.*?</tool_call>",
-    re.DOTALL,
-)
+class SearchR1Env(EnvironmentInterface):
+    """Multi-turn search-augmented env for Search-R1 GRPO.
 
-
-def _parse_query(arm: str, assistant_text: str) -> Optional[str]:
-    """Pull the latest search query out of an assistant message; None if absent."""
-    if arm == "qwen_native":
-        m = _RE_QWEN_QUERY.search(assistant_text)
-    elif arm == "paper":
-        m = _RE_PAPER_SEARCH.search(assistant_text)
-    else:
-        raise ValueError(f"unknown arm {arm!r}")
-    if not m:
-        return None
-    q = m.group(1).strip()
-    return q or None
-
-
-def _format_docs_paper(docs: list[str]) -> str:
-    """Wrap retrieved docs in the paper's `<information>` envelope."""
-    body = "\n".join(f"Doc {i + 1}: {d}" for i, d in enumerate(docs))
-    return f"\n<information>\n{body}\n</information>\n"
-
-
-def _format_docs_qwen_native(docs: list[str]) -> str:
-    """Hand-craft the Qwen3.5 chat-template markers for a tool response.
-
-    The previous assistant turn ended at `</tool_call>` (vLLM stop string),
-    no `<|im_end|>` was emitted. We close the assistant turn, open a synthetic
-    user turn carrying `<tool_response>`, close it, and re-open the assistant
-    so the next generation continues in-distribution.
+    Plain class so unit tests can instantiate it without spinning up Ray. The
+    ray-remote-wrapped version exported as `SearchR1Environment` (below) is
+    what `register_env` should point at — that's the FQN consumed by
+    NeMo-RL's `create_env` (environments/utils.py:106-129).
     """
-    body = "\n".join(f"Doc {i + 1}: {d}" for i, d in enumerate(docs))
-    return (
-        "<|im_end|>\n"
-        "<|im_start|>user\n"
-        "<tool_response>\n"
-        f"{body}\n"
-        "</tool_response><|im_end|>\n"
-        "<|im_start|>assistant\n"
-    )
-
-
-def _retriever_failed_message(arm: str, reason: str) -> str:
-    """Wrap a retrieval failure as a tool/info response so the LM can recover."""
-    msg = f"Retriever failed: {reason}"
-    if arm == "qwen_native":
-        return _format_docs_qwen_native([msg])
-    return _format_docs_paper([msg])
-
-
-@ray.remote  # pragma: no cover
-class SearchR1Environment(EnvironmentInterface):
-    """Multi-turn search-augmented env for Search-R1 GRPO."""
 
     def __init__(self, cfg: SearchR1EnvConfig) -> None:
         arm = cfg.get("arm", "qwen_native")
@@ -201,7 +151,7 @@ class SearchR1Environment(EnvironmentInterface):
                 extracted_answers.append(None)
                 continue
 
-            q = _parse_query(self.arm, assistant_text)
+            q = parse_query(self.arm, assistant_text)
             if q is None:
                 # Neither answer nor search — model output is malformed.
                 # Treat as exhausted (no good observation to feed back).
@@ -260,9 +210,9 @@ class SearchR1Environment(EnvironmentInterface):
             else:  # "search"
                 docs = retrieved[i] or [f"Retriever returned no documents for query: {queries[i]}"]
                 content = (
-                    _format_docs_qwen_native(docs)
+                    format_docs_qwen_native(docs)
                     if self.arm == "qwen_native"
-                    else _format_docs_paper(docs)
+                    else format_docs_paper(docs)
                 )
                 observations.append({"role": "tool", "content": content})
                 next_stop_strings.append(self._stop_strings_for_arm())
@@ -294,3 +244,7 @@ class SearchR1Environment(EnvironmentInterface):
         # Surface a few rollout-shape metrics. The rollout loop already tracks
         # turns/tokens in `sample_turn_counts`, so we keep this minimal.
         return batch, {}
+
+
+# Ray-remote-wrapped class. `register_env` should point at this FQN.
+SearchR1Environment = ray.remote(SearchR1Env)  # pragma: no cover
