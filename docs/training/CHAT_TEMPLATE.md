@@ -197,7 +197,7 @@ The chat template is applied at **rollout time** by the training loop (a config 
 - **`qwen_native` (default).** Wrap the bare question with the Qwen3.5 chat template via `tokenizer.apply_chat_template`, registering `search` as an OpenAI-style tool. The system message advertises the tool; the user message is just the question; tool calls / responses follow §2's XML format.
 - **`paper` (ablation arm).** Wrap the bare question with upstream `make_prefix` (the single-template string in [`evaluation_search_r1/flashrag/search_r1/templates.py`](../../evaluation_search_r1/flashrag/search_r1/templates.py)).
 
-Switching arms is a config flip — same dataset, different runtime template. `question`, `golden_answers`, `reward_model.ground_truth.target`, `data_source` are preserved verbatim by the prep script (those drive the EM reward and aren't tied to the prompt format).
+Switching arms is a config flip — same dataset (committed via LFS), different runtime template. `question`, `golden_answers`, `reward_model.ground_truth.target`, `data_source` are preserved verbatim by the prep script (those drive the EM reward and aren't tied to the prompt format).
 
 ---
 

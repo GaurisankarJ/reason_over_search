@@ -33,7 +33,7 @@ The `test` split is the in-loop validation set ([`VALIDATION.md`](VALIDATION.md)
 
 ## Download + prep
 
-[`training/scripts/prepare_dataset.py`](../../training/scripts/prepare_dataset.py) — uv inline-script, idempotent. Pulls the upstream parquets via `hf_hub_download`, strips the prebaked Search-R1 template (replaces `prompt[0].content` with the bare `question`), writes to `data/training/nq_hotpotqa_train/{train,test}.parquet`. Re-runs skip unless `--force`.
+[`training/scripts/prepare_dataset.py`](../../training/scripts/prepare_dataset.py) — uv inline-script, idempotent. Pulls the upstream parquets via `hf_hub_download`, strips the prebaked Search-R1 template (replaces `prompt[0].content` with the bare `question`), writes to `data/training/nq_hotpotqa_train/{train,test}.parquet`. Output is committed via Git LFS ([`.gitattributes`](../../.gitattributes) `data/**/*.parquet`). Re-runs skip unless `--force`.
 
 ```bash
 training/scripts/prepare_dataset.py
