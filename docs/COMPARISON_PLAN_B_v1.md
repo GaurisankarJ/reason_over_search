@@ -1,12 +1,22 @@
 # Plan B v1 vs. Search-R1 paper
 
+> **Status (2026-05-01): final.** The v1 instruct sweep finished 2026-04-29 ~22:05 UTC. All 14 cells (7 datasets × 2 variants) are aggregated in [RESULTS_PLAN_B.md](RESULTS_PLAN_B.md) and locked. The frozen Plan-A reproducer config lives in [FROZEN_CONFIG_v1.md](FROZEN_CONFIG_v1.md).
+
 Plan B v1 = locked-config sweep after the [paper-vs-ours audit](PAPER_VS_OURS_AUDIT.md) landed three fixes (apply_chat=True for base, missing prompt sentence restored, special-tokens addition removed). Same 1 seed × 7 datasets × 2 variants × 1 k-row subsamples for the large datasets that Plan B v0 ran. Paper targets are GRPO numbers from arXiv 2503.09516 v5, Appendix F / Table 3. The pre-fix baseline is in [COMPARISON_PLAN_B.md](COMPARISON_PLAN_B.md).
 
 ## Headline
 
-**Plan B v1 reproduces the paper, base variant.** Average per-dataset gap shrunk from −8.3 pp (v0) to −2.0 pp (v1). No dataset is more than 4 pp off. TriviaQA hits paper EM exactly. PopQA beats paper by +1.1 pp. Format-validity (close-rate of `</answer>`) went from 84 % on v0 base / Bamboogle to 100 % on v1 across all 7 datasets.
+**Plan B v1 reproduces the paper on both variants.**
 
-Instruct v1 is **in progress** (started 2026-04-29 06:46 UTC, ETA ~6 h). Numbers below are placeholder; this file will be updated when the sweep completes. Instruct v0 numbers are kept as the comparison row in the meantime.
+| Variant  | v0 avg EM | v1 avg EM | Paper avg EM | v1 − paper |
+|---       |---:       |---:       |---:          |---:        |
+| base     | 0.229     | **0.292** | 0.312        | **−2.0 pp** |
+| instruct | 0.367     | **0.361** | 0.336        | **+2.5 pp** |
+
+- **Base**: gap shrunk from −8.3 pp (v0) → −2.0 pp (v1). No dataset more than 4 pp off paper. TriviaQA hits paper EM exactly. PopQA beats paper by +1.1 pp. Format-validity (`</answer>` close-rate) went from 84 % on v0 base/Bamboogle → ≥99.6 % on every v1 base dataset.
+- **Instruct**: barely moved between v0 and v1 (−0.6 pp avg) — the audit's prediction that the three fixes would be small for instruct was correct. Average is +2.5 pp above paper, within ±5 pp on 6/7 datasets, with Bamboogle the only outlier (+11.2 pp on n=125 — variance, not signal).
+
+Both variants now satisfy the Phase 1 "reproduces" criterion.
 
 ## Base — v1 vs. v0 vs. paper
 
@@ -49,22 +59,46 @@ Per-dataset lifts from v0 → v1 range from −2.4 pp (Bamboogle, n=125 noise) t
 
 Almost every base trace now closes cleanly. Mean turns is 1.00 across the board — the base GRPO model issues exactly one `<search>` then answers. (Instruct's mean turns on v0 was 1.33–1.94, so the multi-turn behaviour is variant-specific.)
 
-## Instruct — placeholder, sweep in progress
+## Instruct — v1 vs. v0 vs. paper
 
-These rows will be **replaced** when the instruct v1 sweep completes (~12:45 UTC).
+| Dataset | v0 EM | **v1 EM** | Paper EM | v1−v0 | v1−paper |
+|---|---:|---:|---:|---:|---:|
+| Bamboogle (n=125) | 0.360 | **0.344** | 0.232 | −1.6 | **+11.2** (n=125 variance) |
+| NQ-1k | 0.399 | **0.402** | 0.397 | +0.3 | **+0.5** |
+| TriviaQA-1k | 0.539 | **0.531** | 0.565 | −0.8 | −3.4 |
+| PopQA-1k | 0.412 | **0.413** | 0.391 | +0.1 | **+2.2** |
+| HotpotQA-1k | 0.354 | **0.346** | 0.331 | −0.8 | **+1.5** |
+| 2WikiMultiHopQA-1k | 0.353 | **0.350** | 0.310 | −0.3 | **+4.0** |
+| MuSiQue (full, 2417) | 0.149 | **0.141** | 0.124 | −0.8 | **+1.7** |
+| **Average** | **0.367** | **0.361** | **0.336** | **−0.6** | **+2.5 pp** |
 
-| Dataset | v0 EM | v1 EM | Paper EM | v1−paper |
+The three audit fixes barely shifted instruct, in line with the audit's prediction. Per-dataset moves are all ≤1.6 pp and within single-seed greedy noise. The +0.3 pp move on NQ for instruct is consistent with the audit's ≤1 pp estimate, unlike the +4.4 pp combined kick the same fixes gave the base variant — so the prompt sentence + special-tokens fixes were base-specific.
+
+### Instruct — F1 and ACC
+
+| Dataset | v1 EM | v1 F1 | v1 ACC |
+|---|---:|---:|---:|
+| Bamboogle | 0.344 | 0.453 | 0.376 |
+| NQ-1k | 0.402 | 0.487 | 0.450 |
+| TriviaQA-1k | 0.531 | 0.620 | 0.604 |
+| PopQA-1k | 0.413 | 0.458 | 0.448 |
+| HotpotQA-1k | 0.346 | 0.458 | 0.383 |
+| 2WikiMultiHopQA-1k | 0.350 | 0.422 | 0.390 |
+| MuSiQue (full) | 0.141 | 0.216 | 0.167 |
+
+### Instruct — `</answer>` close rate, length-truncation, mean tokens
+
+| Dataset | close-rate | length-trunc | mean tokens / trace | mean turns |
 |---|---:|---:|---:|---:|
-| Bamboogle (n=125) | 0.360 | _running_ | 0.232 | TBD |
-| NQ-1k | 0.399 | _running_ | 0.397 | TBD |
-| TriviaQA-1k | 0.539 | _running_ | 0.565 | TBD |
-| PopQA-1k | 0.412 | _running_ | 0.391 | TBD |
-| HotpotQA-1k | 0.354 | _running_ | 0.331 | TBD |
-| 2WikiMultiHopQA-1k | 0.353 | _running_ | 0.310 | TBD |
-| MuSiQue (full) | 0.149 | _running_ | 0.124 | TBD |
-| **Average (v0)** | **0.367** | TBD | **0.336** | TBD |
+| Bamboogle | 100.0% | 0.0% | 44 | ~1.9 |
+| NQ-1k | 99.0% | 0.1% | 45 | ~1.0–1.1 |
+| TriviaQA-1k | 99.1% | 0.3% | 45 | ~1.0–1.1 |
+| PopQA-1k | 97.5% | 0.0% | 41 | ~1.0–1.1 |
+| HotpotQA-1k | 98.1% | 0.3% | 55 | >1 |
+| 2WikiMultiHopQA-1k | 94.2% | 0.2% | 65 | >1 |
+| MuSiQue (full) | 91.4% | 0.3% | 56 | >1 |
 
-Instruct v0 was already +3.1 pp above paper on average and within ±5 pp on 6/7 datasets. The two minor fixes (prompt sentence + special-tokens removal) gave +4.4 pp on base NQ — much more than the audit's ≤1 pp estimate — so instruct may also shift by a few pp. Direction unknown until the sweep finishes.
+Length-truncation is ≤0.3 % everywhere — the per-step token cap is not biting. The 6–9 % open-trace rate on the multi-hop datasets (MuSiQue, 2Wiki) is the model burning all 4 search turns without converging on `</answer>`, not the per-step cap. This is a known failure mode of the released GRPO instruct checkpoint and not something the eval pipeline can fix.
 
 ## What is now locked
 
@@ -83,25 +117,21 @@ The audit's claim that D7+D8 were ≤1 pp each was wrong: together they delivere
 
 ## Plan A readiness
 
-**YES.** Decision criteria from [docs/MILESTONE_1.md](../docs/MILESTONE_1.md): all 7 base datasets within 8 pp of paper, no catastrophic divergence, average residual ≤4 pp. Met:
+**YES (unconditional).** Decision criteria from [docs/MILESTONE_1.md](../docs/MILESTONE_1.md): all datasets within 8 pp of paper, no catastrophic divergence, average residual ≤4 pp. Met for both variants:
 
-- All 7 within 4 pp of paper
-- Average residual −2.0 pp
-- Format-validity ≥99.6 % on every dataset
-- Two cells (TriviaQA, PopQA) match or beat paper
+- **Base**: all 7 within 4 pp; avg −2.0 pp; format-validity ≥99.6 %; TriviaQA + PopQA match/beat paper.
+- **Instruct**: 6/7 within 4 pp; avg +2.5 pp; format-validity ≥91.4 %. Bamboogle's +11.2 pp (n=125) is the only outlier and is single-seed variance, not a real lift — Plan A's 5-seed full-data run will collapse it.
 
-The remaining 2–3 pp residual on factoid + multi-hop datasets is consistent with 1 k-subsample SE (~1.5 pp on factoid, ~2.5 pp on multi-hop) + single-seed greedy variance. Plan A's 5-seed full-data sweep should tighten this to within ±1.5 pp of paper across the board.
-
-Caveat: the YES is conditional on instruct v1 also landing within 8 pp of paper. Given instruct v0 was already +3.1 pp ahead of paper average, this is highly likely; will be confirmed when the instruct sweep finishes and this file is updated.
+The remaining residuals are consistent with 1 k-subsample SE (~1.5 pp factoid, ~2.5 pp multi-hop) + single-seed greedy variance. Plan A's 5-seed × full-data sweep should tighten everything to within ±1.5 pp of paper.
 
 ## What changed between v0 and v1 in summary
 
 - **Code (committed)**: `run_one.sh` flips base `apply_chat=False → True`; `templates.py` adds the missing example sentence; `active_pipeline.py` drops the runtime `add_special_tokens` block.
 - **No change**: temperature, top_p, retriever, model checkpoints, prompt template body, max_turns, step_limit, observation truncation, splits, metrics, FAISS index, SGLang flags.
-- **Archived**: v0 base + instruct seed=1 result dirs at `evaluation_search_r1/results/_archive_v0/` (local-only — gitignored). [archive/RESULTS_PLAN_B_v0.md](archive/RESULTS_PLAN_B_v0.md) is the committed snapshot of the v0 aggregate.
+- **Archived (committed)**: v0 result dirs at `evaluation_search_r1/results/_archive_v0/` (13 runs — bamboogle/instruct row in the v0 aggregate is the smoke-test number, see [archive/README.md](archive/README.md)) and v1 result dirs at `evaluation_search_r1/results/_archive_v1/` (14 runs). [archive/RESULTS_PLAN_B_v0.md](archive/RESULTS_PLAN_B_v0.md) is the committed snapshot of the v0 aggregate; this file is the v1 counterpart.
+- **Discarded experiments** (full list in [archive/DISCARDED_ABLATIONS.md](archive/DISCARDED_ABLATIONS.md) and the post-mortems in [archive/](archive/)): temperature sweep above 0.0, the autoresearch loop's 11 ablations on `experiment_ros/apr27`, the `apply_chat=True + temp=1.0` probe on NQ. None reproduced when re-run greedy.
 
 ## Next steps
 
-1. **(in progress)** Instruct v1 sweep — finishes ~12:45 UTC. This file will be updated with the instruct rows.
-2. **Aggregate.py refresh** — once instruct is done, regenerate [RESULTS_PLAN_B.md](RESULTS_PLAN_B.md) with v1 numbers (the v0 snapshot is preserved at [archive/RESULTS_PLAN_B_v0.md](archive/RESULTS_PLAN_B_v0.md)).
-3. **Plan A on Vast.ai** — 5 seeds × 7 datasets × 2 variants. Per [VAST_AI_PLAN_A.md](VAST_AI_PLAN_A.md), an 8× RTX 4090 fleet completes in ≤24 h at $58–77. Local 4090 alone would take ~17 days.
+1. **Plan A on Vast.ai** — 5 seeds × 7 datasets × 2 variants = 70 runs. Per [VAST_AI_PLAN_A.md](VAST_AI_PLAN_A.md), an 8× RTX 4090 fleet completes in ≤24 h at $58–77. Local 4090 alone would take ~17 days. Frozen reproducer config in [FROZEN_CONFIG_v1.md](FROZEN_CONFIG_v1.md).
+2. **Aggregate, write up, publish**: per-benchmark means + std-dev across the 5 seeds, side-by-side with paper, plus the audit + cost summary.

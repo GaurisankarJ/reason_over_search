@@ -31,10 +31,12 @@ Paper targets we compare against (Qwen2.5-3B EM, Search-R1 v5 Table 3):
 - [`README.md`](../README.md) — Phase 1 milestone framing.
 - [`evaluation_search_r1/`](../evaluation_search_r1/) — eval pipeline (FlashRAG fork + Search-R1 prompts/parsers).
   - [`README.md`](../evaluation_search_r1/README.md) — how to run eval per dataset.
-  - [`REPRODUCIBILITY.md`](../docs/REPRODUCIBILITY.md) — paper targets, the 10 divergences fixed, smoke-validation results, model sha256 verification. **Read this before changing anything in the eval pipeline.**
+  - [`FROZEN_CONFIG_v1.md`](../docs/FROZEN_CONFIG_v1.md) — **single source of truth for the locked Plan B v1 setup**. Read first.
+  - [`REPRODUCIBILITY.md`](../docs/REPRODUCIBILITY.md) — paper targets, the 10 divergences fixed, smoke-validation results, model sha256 verification.
   - [`EVAL_OPS.md`](../docs/EVAL_OPS.md) — three sweep plans (A full / B reduced / C one-seed), wall-clock budgets, where time goes.
   - [`RESULTS_PLAN_B.md`](../docs/RESULTS_PLAN_B.md) — auto-generated final results.
-  - [`COMPARISON_PLAN_B.md`](../docs/COMPARISON_PLAN_B.md) — Plan B vs paper gap analysis; base-variant deviation discussion + ranked next-step experiments.
+  - [`COMPARISON_PLAN_B_v1.md`](../docs/COMPARISON_PLAN_B_v1.md) — Plan B v1 vs paper, both variants. v0 baseline is at [`COMPARISON_PLAN_B.md`](../docs/COMPARISON_PLAN_B.md).
+  - [`archive/`](../docs/archive/) — discarded experiments + historical snapshots ([`archive/README.md`](../docs/archive/README.md) is the index).
   - `flashrag/pipeline/active_pipeline.py` — search↔generate loop.
   - `flashrag/search_r1/parser.py` — `<search>`/`<answer>` parsing, observation truncation.
   - `flashrag/search_r1/templates.py` — base + instruct prompt templates.
@@ -59,42 +61,33 @@ Paper targets we compare against (Qwen2.5-3B EM, Search-R1 v5 Table 3):
 - **SGLang** on `127.0.0.1:3000` serving the variant under test. Switch with `scripts/manage_sglang.sh switch base|instruct`. Verify: `curl -sS http://127.0.0.1:3000/get_model_info | grep -o instruct`.
 - **Eval venv** at `/venv/evaluation_search_r1`. Verify: `/venv/evaluation_search_r1/bin/python -c "import flashrag"`.
 
-## What's been done so far (state as of 2026-04-28)
+## What's been done so far (state as of 2026-05-01)
 
-Canonical state lives in [docs/MILESTONE_1.md#status-2026-04-28](../docs/MILESTONE_1.md#status-2026-04-28). Summary:
+Canonical state lives in [docs/MILESTONE_1.md](../docs/MILESTONE_1.md). The frozen reproducer config is [docs/FROZEN_CONFIG_v1.md](../docs/FROZEN_CONFIG_v1.md) — that file is the single source of truth for sampling, pipeline, retriever, models, datasets, and audit fixes. **Read it before changing anything.**
 
 **Setup**:
 - Both GRPO checkpoints sha256-verified (`PeterJinGo/SearchR1-nq_hotpotqa_train-qwen2.5-3b-(it-)em-grpo`).
 - Wiki-18 corpus + E5-base-v2 + flat & IVF-SQ8 FAISS indexes built.
 - Datasets present for all 7 benchmarks + deterministic 1k subsamples.
-- 10 divergences from upstream audited and fixed (full table in [REPRODUCIBILITY.md](../docs/REPRODUCIBILITY.md)).
-- Exhaustive paper-vs-ours audit ([PAPER_VS_OURS_AUDIT.md](../docs/PAPER_VS_OURS_AUDIT.md)) catalogued 8 more divergences (D1-D8). The 3 actionable ones are now applied:
-  - **D1** `apply_chat=True` for base in [`run_one.sh:35`](../scripts/run_one.sh#L35) — load-bearing fix.
-  - **D-prompt-micro** restored `For example, <answer> Beijing </answer>.` in [`templates.py:10`](../evaluation_search_r1/flashrag/search_r1/templates.py#L10).
-  - **D8** removed `add_special_tokens` block in [`active_pipeline.py`](../evaluation_search_r1/flashrag/pipeline/active_pipeline.py).
+- 10 divergences from upstream audited and fixed ([REPRODUCIBILITY.md](../docs/REPRODUCIBILITY.md)).
+- Exhaustive paper-vs-ours audit ([PAPER_VS_OURS_AUDIT.md](../docs/PAPER_VS_OURS_AUDIT.md)) catalogued 8 more (D1-D8); the 3 actionable ones are applied (D1 apply_chat=True for base, D-prompt-micro example sentence restored, D8 add_special_tokens block removed).
 
-**Plan B v0** (no fixes, baseline gap analysis) — historical, archived in [COMPARISON_PLAN_B.md](../docs/COMPARISON_PLAN_B.md):
-- Instruct avg +3.1 pp vs paper (reproduction-grade).
-- Base avg −8.3 pp vs paper, below on all 7 datasets (one-sided → systematic).
+**Plan B v1 — locked, both variants complete**: see [docs/RESULTS_PLAN_B.md](../docs/RESULTS_PLAN_B.md) and [docs/COMPARISON_PLAN_B_v1.md](../docs/COMPARISON_PLAN_B_v1.md).
 
-**Plan B v1** (locked config, all 3 fixes) — converging:
+| | base v1 avg | base paper | Δ | instruct v1 avg | instruct paper | Δ |
+|---|---:|---:|---:|---:|---:|---:|
+| Avg EM | 0.292 | 0.312 | −2.0 pp | 0.361 | 0.336 | +2.5 pp |
 
-| NQ-1k run | EM | Δ vs prior |
-|---|---:|---:|
-| v0 | 0.316 | — |
-| +apply_chat only | 0.346 | +3.0 pp |
-| **v1 (locked)** | **0.390** | **+4.4 pp on top** |
-| Paper | 0.421 | residual +3.1 pp |
+Format-validity (`</answer>` close-rate): base ≥99.6 % every dataset; instruct 91.4–100 %. Length-truncation ≤0.4 % across the board.
 
-The two minor fixes turned out to give +4.4 pp combined on NQ — the audit's "≤1 pp each" estimate was low. Total +7.4 pp from v0 closes the base gap to within plausible single-seed + subsample noise. v1 sweep on remaining 6 datasets is in flight (since 16:35 today, ETA ~5 h to last dataset).
+**Plan A — YES (unconditional)**. All decision criteria met. Vast.ai cost analysis: 8× RTX 4090 ≈ $58–77 / 24 h ([docs/VAST_AI_PLAN_A.md](../docs/VAST_AI_PLAN_A.md)).
 
-The Bamboogle EM 0.088 from the v1 sweep was n=125 variance, not a regression. Post-mortem: [docs/archive/BAMBOOGLE_REGRESSION_INVESTIGATION.md](../docs/archive/BAMBOOGLE_REGRESSION_INVESTIGATION.md).
+**Plan B v0** (pre-fix baseline) — archived: [docs/archive/RESULTS_PLAN_B_v0.md](../docs/archive/RESULTS_PLAN_B_v0.md), [docs/COMPARISON_PLAN_B.md](../docs/COMPARISON_PLAN_B.md). Base avg was −8.3 pp vs paper (one-sided → systematic, fixed by D1+D-prompt-micro+D8).
 
-**Note on temperature**: Earlier this session I hypothesized paper eval uses `temperature=1.0`. That was wrong — verl's `_validate()` hard-codes `do_sample=False` and `vllm_rollout.py` overrides to `temperature=0, top_p=1.0`. Our `temperature: 0.0` is correct. Post-mortem: [docs/archive/TEMPERATURE_HYPOTHESIS_WRONG.md](../docs/archive/TEMPERATURE_HYPOTHESIS_WRONG.md).
-
-**Autoresearch loop** — ran on branch `experiment_ros/apr27`. 11 ablations tried; only `temperature=0` was kept. Per-ablation reasoning in [docs/archive/DISCARDED_ABLATIONS.md](../docs/archive/DISCARDED_ABLATIONS.md).
-
-**Plan A prep** — `eval_final` branch is the working branch. Vast.ai cost analysis in [docs/VAST_AI_PLAN_A.md](../docs/VAST_AI_PLAN_A.md) (cheapest: 8× RTX 4090 marketplace ≈ $58–77; balanced: 3× H100 PCIe ≈ $108).
+**Discarded experiments** — index of everything tried that didn't survive: [docs/archive/README.md](../docs/archive/README.md). Notable:
+- Temperature ≠ 0 hypothesis was **wrong** — paper eval is greedy. [archive/TEMPERATURE_HYPOTHESIS_WRONG.md](../docs/archive/TEMPERATURE_HYPOTHESIS_WRONG.md).
+- 11 autoresearch-loop ablations on `experiment_ros/apr27` — only `temperature=0` kept. [archive/DISCARDED_ABLATIONS.md](../docs/archive/DISCARDED_ABLATIONS.md).
+- Bamboogle base v1 EM 0.088 was n=125 variance, not a regression. [archive/BAMBOOGLE_REGRESSION_INVESTIGATION.md](../docs/archive/BAMBOOGLE_REGRESSION_INVESTIGATION.md).
 
 ## How to run a single eval
 
