@@ -17,7 +17,7 @@ See [HARDWARE.md](HARDWARE.md) for the full accelerator comparison.
 
 ## Step 1 — get the image
 
-The published image at [pantomiman/reason-over-search-v1](https://hub.docker.com/r/pantomiman/reason-over-search-v1) bundles two conda envs (`retriever` + `evaluation_search_r1`) with all pip dependencies pre-installed, and the app code under `/app`. Source: [`docker/reason-over-search-v1/`](../docker/reason-over-search-v1/).
+The published image at [pantomiman/reason-over-search-v1](https://hub.docker.com/r/pantomiman/reason-over-search-v1) bundles two conda envs (`retriever` + `evaluation_search_r1`) with all pip dependencies pre-installed, and the app code under `/app`. Source: [`docker/reason-over-search-v1/`](../../docker/reason-over-search-v1/).
 
 ### On Vast.ai
 
@@ -49,7 +49,7 @@ git clone <repo-url> reason_over_search && cd reason_over_search
 docker build -f docker/reason-over-search-v1/Dockerfile -t reason-over-search-v1:v1 .
 ```
 
-See [`docker/reason-over-search-v1/README.md`](../docker/reason-over-search-v1/README.md) for buildx + cross-arch notes.
+See [`docker/reason-over-search-v1/README.md`](../../docker/reason-over-search-v1/README.md) for buildx + cross-arch notes.
 
 ## Step 2 — clone the repo
 
@@ -99,7 +99,7 @@ rm -f indexes/part_aa indexes/part_ab
 huggingface-cli download intfloat/e5-base-v2 --local-dir models/e5-base-v2
 
 # GRPO checkpoints (2 × 13 GB)
-cd ../evaluation_search_r1
+cd ../../evaluation_search_r1
 huggingface-cli download PeterJinGo/SearchR1-nq_hotpotqa_train-qwen2.5-3b-em-grpo \
   --local-dir search_r1_base_model
 huggingface-cli download PeterJinGo/SearchR1-nq_hotpotqa_train-qwen2.5-3b-it-em-grpo \
@@ -116,7 +116,7 @@ sha256sum search_r1_instruct_model/model-00001-of-00003.safetensors
 # Expected: 3d787062256210d1cc6c7c666a0ab0ac83a7a5d0296281b4811df72c968ccd35
 ```
 
-The full identity table (sizes + eos_token_id) is in [REPRODUCIBILITY.md#models—confirmed-grpo](REPRODUCIBILITY.md).
+The full identity table (sizes + eos_token_id) is in [../eval/REPRODUCIBILITY.md#models—confirmed-grpo](../eval/REPRODUCIBILITY.md).
 
 ## Step 5 (optional) — build the IVF-SQ8 index
 
@@ -134,7 +134,7 @@ ln -s /workspace/index_creation/wiki18_100w_e5_ivf4096_sq8.index \
   /workspace/reason_over_search/local_retriever/indexes/
 ```
 
-See [RETRIEVER_INDEXING.md](RETRIEVER_INDEXING.md) for the recall/speed tradeoff.
+See [../retriever/RETRIEVER_INDEXING.md](../retriever/RETRIEVER_INDEXING.md) for the recall/speed tradeoff.
 
 ## Step 6 (optional) — set up the GPU FAISS venv
 
@@ -210,9 +210,9 @@ LATEST=$(ls -dt evaluation_search_r1/results/bamboogle/bamboogle_*_search_r1_ins
 grep -E "^(em|f1):" "$LATEST/metric_score.txt"
 ```
 
-Expected on Bamboogle/instruct (n=125, greedy): EM ≈ 0.36, F1 ≈ 0.45 — see [REPRODUCIBILITY.md#smoke-validation](REPRODUCIBILITY.md). A run takes ~6 min on a 4090, ~2 min on H100 PCIe.
+Expected on Bamboogle/instruct (n=125, greedy): EM ≈ 0.36, F1 ≈ 0.45 — see [../eval/REPRODUCIBILITY.md#smoke-validation](../eval/REPRODUCIBILITY.md). A run takes ~6 min on a 4090, ~2 min on H100 PCIe.
 
-If EM drops to 0.05–0.10 territory the eval is broken — check the `apply_chat`/template/parser surface listed in [PAPER_VS_OURS_AUDIT.md](PAPER_VS_OURS_AUDIT.md) before touching anything else.
+If EM drops to 0.05–0.10 territory the eval is broken — check the `apply_chat`/template/parser surface listed in [../eval/PAPER_VS_OURS_AUDIT.md](../eval/PAPER_VS_OURS_AUDIT.md) before touching anything else.
 
 ## Step 10 (optional) — restore prior results
 

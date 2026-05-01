@@ -2,7 +2,7 @@
 
 > **Status (2026-05-01): final.** The v1 instruct sweep finished 2026-04-29 ~22:05 UTC. All 14 cells (7 datasets × 2 variants) are aggregated in [RESULTS_PLAN_B.md](RESULTS_PLAN_B.md) and locked. The frozen Plan-A reproducer config lives in [FROZEN_CONFIG_v1.md](FROZEN_CONFIG_v1.md).
 
-Plan B v1 = locked-config sweep after the [paper-vs-ours audit](PAPER_VS_OURS_AUDIT.md) landed three fixes (apply_chat=True for base, missing prompt sentence restored, special-tokens addition removed). Same 1 seed × 7 datasets × 2 variants × 1 k-row subsamples for the large datasets that Plan B v0 ran. Paper targets are GRPO numbers from arXiv 2503.09516 v5, Appendix F / Table 3. The pre-fix baseline is in [COMPARISON_PLAN_B.md](COMPARISON_PLAN_B.md).
+Plan B v1 = locked-config sweep after the [paper-vs-ours audit](../eval/PAPER_VS_OURS_AUDIT.md) landed three fixes (apply_chat=True for base, missing prompt sentence restored, special-tokens addition removed). Same 1 seed × 7 datasets × 2 variants × 1 k-row subsamples for the large datasets that Plan B v0 ran. Paper targets are GRPO numbers from arXiv 2503.09516 v5, Appendix F / Table 3. The pre-fix baseline is in [COMPARISON_PLAN_B.md](COMPARISON_PLAN_B.md).
 
 ## Headline
 
@@ -102,11 +102,11 @@ Length-truncation is ≤0.3 % everywhere — the per-step token cap is not bitin
 
 ## What is now locked
 
-The four divergences flagged in [PAPER_VS_OURS_AUDIT.md](PAPER_VS_OURS_AUDIT.md) and applied for v1:
+The four divergences flagged in [../eval/PAPER_VS_OURS_AUDIT.md](../eval/PAPER_VS_OURS_AUDIT.md) and applied for v1:
 
 | # | Fix | File:line | Estimated impact (audit) | Empirical impact (this sweep) |
 |---|---|---|---:|---:|
-| D1 | `apply_chat=True` for base | [scripts/run_one.sh:35](../scripts/run_one.sh#L35) | +5 to +12 pp | +3.0 pp on NQ probe (alone) |
+| D1 | `apply_chat=True` for base | [scripts/run_one.sh:35](../../scripts/run_one.sh#L35) | +5 to +12 pp | +3.0 pp on NQ probe (alone) |
 | D7 | Restore `For example, <answer> Beijing </answer>.` in prompt | [flashrag/search_r1/templates.py:9](flashrag/search_r1/templates.py#L9) | ≤1 pp | combined with D8 below |
 | D8 | Remove runtime `add_special_tokens` block | [flashrag/pipeline/active_pipeline.py:36](flashrag/pipeline/active_pipeline.py#L36) | ≤1 pp | combined with D7: **+4.4 pp** on NQ |
 | D6 | FAISS Flat IP confirmed loaded | retriever runtime | ≤1 pp | verified, no change |
@@ -117,7 +117,7 @@ The audit's claim that D7+D8 were ≤1 pp each was wrong: together they delivere
 
 ## Plan A readiness
 
-**YES (unconditional).** Decision criteria from [docs/MILESTONE_1.md](../docs/MILESTONE_1.md): all datasets within 8 pp of paper, no catastrophic divergence, average residual ≤4 pp. Met for both variants:
+**YES (unconditional).** Decision criteria from [docs/MILESTONE_1.md](MILESTONE_1.md): all datasets within 8 pp of paper, no catastrophic divergence, average residual ≤4 pp. Met for both variants:
 
 - **Base**: all 7 within 4 pp; avg −2.0 pp; format-validity ≥99.6 %; TriviaQA + PopQA match/beat paper.
 - **Instruct**: 6/7 within 4 pp; avg +2.5 pp; format-validity ≥91.4 %. Bamboogle's +11.2 pp (n=125) is the only outlier and is single-seed variance, not a real lift — Plan A's 5-seed full-data run will collapse it.
@@ -128,10 +128,10 @@ The remaining residuals are consistent with 1 k-subsample SE (~1.5 pp factoid, ~
 
 - **Code (committed)**: `run_one.sh` flips base `apply_chat=False → True`; `templates.py` adds the missing example sentence; `active_pipeline.py` drops the runtime `add_special_tokens` block.
 - **No change**: temperature, top_p, retriever, model checkpoints, prompt template body, max_turns, step_limit, observation truncation, splits, metrics, FAISS index, SGLang flags.
-- **Archived (committed)**: v0 result dirs at `evaluation_search_r1/results/_archive_v0/` (13 runs — bamboogle/instruct row in the v0 aggregate is the smoke-test number, see [archive/README.md](archive/README.md)) and v1 result dirs at `evaluation_search_r1/results/_archive_v1/` (14 runs). [archive/RESULTS_PLAN_B_v0.md](archive/RESULTS_PLAN_B_v0.md) is the committed snapshot of the v0 aggregate; this file is the v1 counterpart.
-- **Discarded experiments** (full list in [archive/DISCARDED_ABLATIONS.md](archive/DISCARDED_ABLATIONS.md) and the post-mortems in [archive/](archive/)): temperature sweep above 0.0, the autoresearch loop's 11 ablations on `experiment_ros/apr27`, the `apply_chat=True + temp=1.0` probe on NQ. None reproduced when re-run greedy.
+- **Archived (committed)**: v0 result dirs at `evaluation_search_r1/results/_archive_v0/` (13 runs — bamboogle/instruct row in the v0 aggregate is the smoke-test number, see [../archive/README.md](../archive/README.md)) and v1 result dirs at `evaluation_search_r1/results/_archive_v1/` (14 runs). [../archive/RESULTS_PLAN_B_v0.md](../archive/RESULTS_PLAN_B_v0.md) is the committed snapshot of the v0 aggregate; this file is the v1 counterpart.
+- **Discarded experiments** (full list in [../archive/DISCARDED_ABLATIONS.md](../archive/DISCARDED_ABLATIONS.md) and the post-mortems in [../archive/](../archive/)): temperature sweep above 0.0, the autoresearch loop's 11 ablations on `experiment_ros/apr27`, the `apply_chat=True + temp=1.0` probe on NQ. None reproduced when re-run greedy.
 
 ## Next steps
 
-1. **Plan A on Vast.ai** — 5 seeds × 7 datasets × 2 variants = 70 runs. Per [VAST_AI_PLAN_A.md](VAST_AI_PLAN_A.md), an 8× RTX 4090 fleet completes in ≤24 h at $58–77. Local 4090 alone would take ~17 days. Frozen reproducer config in [FROZEN_CONFIG_v1.md](FROZEN_CONFIG_v1.md).
+1. **Plan A on Vast.ai** — 5 seeds × 7 datasets × 2 variants = 70 runs. Per [../setup/VAST_AI_PLAN_A.md](../setup/VAST_AI_PLAN_A.md), an 8× RTX 4090 fleet completes in ≤24 h at $58–77. Local 4090 alone would take ~17 days. Frozen reproducer config in [FROZEN_CONFIG_v1.md](FROZEN_CONFIG_v1.md).
 2. **Aggregate, write up, publish**: per-benchmark means + std-dev across the 5 seeds, side-by-side with paper, plus the audit + cost summary.

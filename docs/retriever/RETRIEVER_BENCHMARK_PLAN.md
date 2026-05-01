@@ -1,6 +1,6 @@
 # Retriever Benchmark Plan — pre/post concurrency fixes
 
-> **Status (2026-05-01): plan only, not executed.** Written while the Plan B v1 instruct sweep was in flight (now finished — see [COMPARISON_PLAN_B_v1.md](COMPARISON_PLAN_B_v1.md)). The "don't disturb the in-flight sweep" constraint below is no longer active. Re-read before kicking this off so the plan doesn't reference stale runtime state.
+> **Status (2026-05-01): plan only, not executed.** Written while the Plan B v1 instruct sweep was in flight (now finished — see [../milestone_one/COMPARISON_PLAN_B_v1.md](../milestone_one/COMPARISON_PLAN_B_v1.md)). The "don't disturb the in-flight sweep" constraint below is no longer active. Re-read before kicking this off so the plan doesn't reference stale runtime state.
 
 Plan to measure the throughput impact of the [RETRIEVER_CONCURRENCY.md](RETRIEVER_CONCURRENCY.md) fixes (`asyncio.to_thread` wrap + `IO_FLAG_MMAP`). Two runs: one against the current (unfixed) code, one against the fixed code. Same workload, same machine, side-by-side comparison.
 
@@ -155,10 +155,10 @@ Total Phase 1 wall-clock: ~30 min (load index ~2 min × 2 + 6 levels × 35 s × 
 
 Per [RETRIEVER_CONCURRENCY.md "Files to change"](RETRIEVER_CONCURRENCY.md#files-to-change):
 
-1. Edit [`local_retriever/retriever_serving.py`](../local_retriever/retriever_serving.py):
+1. Edit [`local_retriever/retriever_serving.py`](../../local_retriever/retriever_serving.py):
    - Wrap both `retriever.search()` and `retriever.batch_search()` calls in `await asyncio.to_thread(...)`.
    - Add `limit_concurrency=64` to `uvicorn.run(...)`.
-2. Edit [`local_retriever/flashrag/retriever/retriever.py:356`](../local_retriever/flashrag/retriever/retriever.py):
+2. Edit [`local_retriever/flashrag/retriever/retriever.py:356`](../../local_retriever/flashrag/retriever/retriever.py):
    - Change `faiss.read_index(self.index_path)` → `faiss.read_index(self.index_path, faiss.IO_FLAG_MMAP | faiss.IO_FLAG_READ_ONLY)`.
 
 Smoke test before benchmark:

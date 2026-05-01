@@ -1,8 +1,8 @@
 # Plan B v0 vs. Search-R1 paper — gap analysis
 
-> **Status (2026-04-28): resolved.** This document captures the **v0** Plan B numbers and the gap analysis that led to identifying the load-bearing miss (`apply_chat=False` for base, see [PAPER_VS_OURS_AUDIT.md D1](PAPER_VS_OURS_AUDIT.md)). The fix is applied in code; the **v1** sweep is converging (see [MILESTONE_1.md#status-2026-04-28](MILESTONE_1.md#status-2026-04-28)). Sections retained below for the historical baseline + probe evidence; the obsolete suspect-ranking and next-steps moved to [docs/archive/](archive/).
+> **Status (2026-04-28): resolved.** This document captures the **v0** Plan B numbers and the gap analysis that led to identifying the load-bearing miss (`apply_chat=False` for base, see [../eval/PAPER_VS_OURS_AUDIT.md D1](../eval/PAPER_VS_OURS_AUDIT.md)). The fix is applied in code; the **v1** sweep is converging (see [MILESTONE_1.md#status-2026-04-28](MILESTONE_1.md#status-2026-04-28)). Sections retained below for the historical baseline + probe evidence; the obsolete suspect-ranking and next-steps moved to [docs/archive/](../archive/).
 
-Side-by-side of [RESULTS_PLAN_B.md](RESULTS_PLAN_B.md) (1 seed × 7 datasets × 2 variants, factoid/multihop subsampled to 1 k, Bamboogle/MuSiQue full) against the GRPO numbers from Search-R1 v5 (Appendix F / Table 3). Paper targets and the 10 fixes already applied are tracked in [REPRODUCIBILITY.md](REPRODUCIBILITY.md).
+Side-by-side of [RESULTS_PLAN_B.md](RESULTS_PLAN_B.md) (1 seed × 7 datasets × 2 variants, factoid/multihop subsampled to 1 k, Bamboogle/MuSiQue full) against the GRPO numbers from Search-R1 v5 (Appendix F / Table 3). Paper targets and the 10 fixes already applied are tracked in [../eval/REPRODUCIBILITY.md](../eval/REPRODUCIBILITY.md).
 
 ## Per-dataset EM, ours vs paper
 
@@ -35,7 +35,7 @@ Averages:
 The two variants behave very differently against the paper:
 
 - **Base** is below paper on **all 7 datasets** (−1.6 to −16.2 pp). The bias is one-sided and systematic — far beyond the ~1.5 pp subsample SE on 1 k-row factoid samples. Something is wrong with the base run, not just noise.
-- **Instruct** is within ±5 pp on 6 of 7 datasets and overshoots Bamboogle by +12.8 pp. The +3.1 pp average lift is consistent with the Bamboogle smoke observation in [REPRODUCIBILITY.md](REPRODUCIBILITY.md#smoke-validation): instruct cleanly closes `</answer>`, while base length-truncates 17 % of the time and loses those examples.
+- **Instruct** is within ±5 pp on 6 of 7 datasets and overshoots Bamboogle by +12.8 pp. The +3.1 pp average lift is consistent with the Bamboogle smoke observation in [../eval/REPRODUCIBILITY.md](../eval/REPRODUCIBILITY.md#smoke-validation): instruct cleanly closes `</answer>`, while base length-truncates 17 % of the time and loses those examples.
 
 So the instruct→paper gap is plausibly noise + a small systematic edge from cleaner stop behaviour. The base→paper gap is not. Plan A will not fix the base variant — it will just give us tighter error bars on a wrong number.
 
@@ -65,11 +65,11 @@ Confirmed by audit of the codebase against the official `PeterGriffinJin/Search-
 | EM metric | SQuAD-canonical normalize → exact equality (`flashrag/search_r1/answer_utils.py`) | same |
 | F1, ACC | token-level F1, sub-EM | same |
 
-All 10 audit divergences listed in [REPRODUCIBILITY.md](REPRODUCIBILITY.md#divergences-fixed) have been applied.
+All 10 audit divergences listed in [../eval/REPRODUCIBILITY.md](../eval/REPRODUCIBILITY.md#divergences-fixed) have been applied.
 
 ## Resolution (2026-04-28)
 
-The −8.3 pp base-variant gap was the load-bearing question this analysis tried to answer. The audit ([PAPER_VS_OURS_AUDIT.md](PAPER_VS_OURS_AUDIT.md)) traced it to three divergences:
+The −8.3 pp base-variant gap was the load-bearing question this analysis tried to answer. The audit ([../eval/PAPER_VS_OURS_AUDIT.md](../eval/PAPER_VS_OURS_AUDIT.md)) traced it to three divergences:
 
 - **D1 (HIGH)**: `apply_chat=False` for base in `scripts/run_one.sh:35` — fixed.
 - **D-prompt-micro (LOW)**: missing `For example, <answer> Beijing </answer>.` in `templates.py` — fixed.
@@ -77,11 +77,11 @@ The −8.3 pp base-variant gap was the load-bearing question this analysis tried
 
 NQ-1k v1 result (locked config = all three fixes): EM **0.390**, +7.4 pp from v0's 0.316, leaving ~3.1 pp residual to paper. See [MILESTONE_1.md](MILESTONE_1.md) for the converged status.
 
-The earlier suspect ranking and step-by-step next-actions in this document are preserved in [docs/archive/COMPARISON_PLAN_B_SUSPECTS.md](archive/COMPARISON_PLAN_B_SUSPECTS.md) for the historical record.
+The earlier suspect ranking and step-by-step next-actions in this document are preserved in [docs/archive/COMPARISON_PLAN_B_SUSPECTS.md](../archive/COMPARISON_PLAN_B_SUSPECTS.md) for the historical record.
 
 ## Probe: base + `apply_chat=True` on Bamboogle (2026-04-28)
 
-Hypothesis: the base GRPO checkpoint also benefits from the chat scaffold the instruct variant uses, even though `run_one.sh:35` hard-codes `apply_chat=False` for base. The base model's tokenizer config ([`search_r1_base_model/tokenizer_config.json`](../evaluation_search_r1/search_r1_base_model/tokenizer_config.json)) ships with a Qwen2.5 chat template (`"You are a helpful assistant."`), so `apply_chat=True` is well-defined for it.
+Hypothesis: the base GRPO checkpoint also benefits from the chat scaffold the instruct variant uses, even though `run_one.sh:35` hard-codes `apply_chat=False` for base. The base model's tokenizer config ([`search_r1_base_model/tokenizer_config.json`](../../evaluation_search_r1/search_r1_base_model/tokenizer_config.json)) ships with a Qwen2.5 chat template (`"You are a helpful assistant."`), so `apply_chat=True` is well-defined for it.
 
 Re-ran Bamboogle (test split, n=125, seed=1) with `--apply_chat True --generator_model search_r1_base_model`, save_note `search_r1_base_applychat_seed1`. Everything else unchanged.
 

@@ -93,11 +93,11 @@ Target benchmarks:
 - Adapted the FlashRAG/ReSearch eval pipeline to Search-R1 (no official eval pipeline ships upstream).
 - Both GRPO checkpoints (base, instruct) sha256-verified against the upstream HF repos.
 - Wiki-18 corpus + E5-base-v2 encoder + FAISS Flat IP and IVF-SQ8 indexes built.
-- Exhaustive paper-vs-ours audit ([PAPER_VS_OURS_AUDIT.md](PAPER_VS_OURS_AUDIT.md)): 8 divergences catalogued, 10 earlier ones already fixed ([REPRODUCIBILITY.md](REPRODUCIBILITY.md)).
-- Plan B v0 sweep — preserved as [archive/RESULTS_PLAN_B_v0.md](archive/RESULTS_PLAN_B_v0.md); v0 result dirs are committed at `evaluation_search_r1/results/_archive_v0/` (13 runs — bamboogle/instruct in the aggregate is the smoke-test number from REPRODUCIBILITY.md, run dir not preserved).
-- Three audit fixes applied: `apply_chat=True` for base ([run_one.sh:35](../scripts/run_one.sh#L35)), `For example, <answer> Beijing </answer>.` restored ([templates.py:10](../evaluation_search_r1/flashrag/search_r1/templates.py#L10)), `add_special_tokens` block removed ([active_pipeline.py](../evaluation_search_r1/flashrag/pipeline/active_pipeline.py)). `temperature: 0.0` kept (paper eval is greedy per upstream `verl` `_validate()` override).
+- Exhaustive paper-vs-ours audit ([../eval/PAPER_VS_OURS_AUDIT.md](../eval/PAPER_VS_OURS_AUDIT.md)): 8 divergences catalogued, 10 earlier ones already fixed ([../eval/REPRODUCIBILITY.md](../eval/REPRODUCIBILITY.md)).
+- Plan B v0 sweep — preserved as [../archive/RESULTS_PLAN_B_v0.md](../archive/RESULTS_PLAN_B_v0.md); v0 result dirs are committed at `evaluation_search_r1/results/_archive_v0/` (13 runs — bamboogle/instruct in the aggregate is the smoke-test number from ../eval/REPRODUCIBILITY.md, run dir not preserved).
+- Three audit fixes applied: `apply_chat=True` for base ([run_one.sh:35](../../scripts/run_one.sh#L35)), `For example, <answer> Beijing </answer>.` restored ([templates.py:10](../../evaluation_search_r1/flashrag/search_r1/templates.py#L10)), `add_special_tokens` block removed ([active_pipeline.py](../../evaluation_search_r1/flashrag/pipeline/active_pipeline.py)). `temperature: 0.0` kept (paper eval is greedy per upstream `verl` `_validate()` override).
 - **Plan B v1 sweep complete (both variants)** — full comparison in [COMPARISON_PLAN_B_v1.md](COMPARISON_PLAN_B_v1.md), aggregated numbers in [RESULTS_PLAN_B.md](RESULTS_PLAN_B.md), reproducer config locked in [FROZEN_CONFIG_v1.md](FROZEN_CONFIG_v1.md).
-- Vast.ai Plan-A fleet costing: 8× RTX 4090 ≈ $58–77 / 24 h ([VAST_AI_PLAN_A.md](VAST_AI_PLAN_A.md)).
+- Vast.ai Plan-A fleet costing: 8× RTX 4090 ≈ $58–77 / 24 h ([../setup/VAST_AI_PLAN_A.md](../setup/VAST_AI_PLAN_A.md)).
 
 ### Plan B v1 — final results
 
@@ -120,5 +120,5 @@ Format validity (close-rate of `</answer>`): base ≥99.6 % every dataset; instr
 
 ## What's left
 
-1. **Plan A on Vast.ai** — 5 seeds × 7 datasets × 2 variants = 70 runs, ~517 K examples, ≤24 h on a fleet. Reproducer config: [FROZEN_CONFIG_v1.md](FROZEN_CONFIG_v1.md). Instructions for **Jose**: [VAST_AI_PLAN_A.md](VAST_AI_PLAN_A.md).
+1. **Plan A on Vast.ai** — 5 seeds × 7 datasets × 2 variants = 70 runs, ~517 K examples, ≤24 h on a fleet. Reproducer config: [FROZEN_CONFIG_v1.md](FROZEN_CONFIG_v1.md). Instructions for **Jose**: [../setup/VAST_AI_PLAN_A.md](../setup/VAST_AI_PLAN_A.md).
 2. **Aggregate, write up, publish**: per-benchmark means + std-dev across the 5 seeds, side-by-side with paper, plus the audit + cost summary.

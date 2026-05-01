@@ -30,7 +30,7 @@ graph LR
 Three things to know:
 
 1. **One service, N workers, one shared FAISS read path per worker.** `--num_retriever N` instantiates N independent `DenseRetriever` objects, each holding its own encoder + FAISS handle. Read-only, fully parallel-safe.
-2. **The semaphore + deque pattern** in [`retriever_serving.py:14-35`](../local_retriever/retriever_serving.py) hands one worker to one in-flight request. This caps concurrent FAISS searches at N.
+2. **The semaphore + deque pattern** in [`retriever_serving.py:14-35`](../../local_retriever/retriever_serving.py) hands one worker to one in-flight request. This caps concurrent FAISS searches at N.
 3. **Two artifacts are kept row-aligned**: the FAISS index and the corpus jsonl. Row `i` in FAISS = embedding of row `i` in `corpus/wiki18_100w.jsonl`. FAISS returns integer row IDs, the corpus lookup returns the text.
 
 ## Query lifecycle
@@ -60,7 +60,7 @@ sequenceDiagram
     API-->>C: JSON response
 ```
 
-Wall-clock per stage (single 4090, [EVAL_OPS.md](EVAL_OPS.md) profile):
+Wall-clock per stage (single 4090, [../eval/EVAL_OPS.md](../eval/EVAL_OPS.md) profile):
 
 | Stage | Flat IP CPU | IVF-SQ8 CPU | IVF-SQ8 GPU |
 |---|---:|---:|---:|
@@ -94,7 +94,7 @@ flowchart TB
     Flat -.->|default| Service
 ```
 
-Why reconstruct from the flat index instead of re-embedding 21 M passages: re-embedding takes 6–10 hours on a single 4090. The flat index already has every vector at full fp32 precision; reading them back via `faiss.reconstruct_n()` is fast and deterministic. See [/workspace/index_creation/README.md](../../index_creation/README.md) for the build script and [build_ivf_sq8.py](../../index_creation/build_ivf_sq8.py) for the implementation.
+Why reconstruct from the flat index instead of re-embedding 21 M passages: re-embedding takes 6–10 hours on a single 4090. The flat index already has every vector at full fp32 precision; reading them back via `faiss.reconstruct_n()` is fast and deterministic. See [/workspace/index_creation/README.md](../../../index_creation/README.md) for the build script and [build_ivf_sq8.py](../../../index_creation/build_ivf_sq8.py) for the implementation.
 
 `nlist=4096` is constrained by FAISS's `min_points_per_centroid=39` floor: with 1 M training samples, 4096 cells gives ~244 points per centroid. Going to 65 536 cells would need ≥ 2.55 M training samples to clear the floor, so `4096` is the largest viable choice with the current sample size.
 
@@ -155,11 +155,11 @@ Each worker is a thread-isolated `DenseRetriever` instance. FAISS index reads ar
 
 | Path | Role |
 |---|---|
-| [`local_retriever/retriever_serving.py`](../local_retriever/retriever_serving.py) | FastAPI service, semaphore pool, CLI |
-| [`local_retriever/retriever_config.yaml`](../local_retriever/retriever_config.yaml) | Default index path, encoder path, nprobe |
-| [`local_retriever/flashrag/retriever/retriever.py`](../local_retriever/flashrag/retriever/retriever.py) | `DenseRetriever`: index load, search, batch_search |
-| [`local_retriever/flashrag/retriever/encoder.py`](../local_retriever/flashrag/retriever/encoder.py) | E5 encoder: tokenize, forward, pool, normalize |
-| [`local_retriever/indexes/wiki18_100w_e5_flat_inner.index`](../local_retriever/indexes/) | 65 GB Flat IP index (default) |
-| [`local_retriever/indexes/wiki18_100w_e5_ivf4096_sq8.index`](../local_retriever/indexes/) | 16 GB IVF-SQ8 index (faster, opt-in) |
-| [`local_retriever/corpus/wiki18_100w.jsonl`](../local_retriever/corpus/) | Raw passages, mmap'd |
-| [`/workspace/index_creation/build_ivf_sq8.py`](../../index_creation/build_ivf_sq8.py) | IVF-SQ8 build pipeline |
+| [`local_retriever/retriever_serving.py`](../../local_retriever/retriever_serving.py) | FastAPI service, semaphore pool, CLI |
+| [`local_retriever/retriever_config.yaml`](../../local_retriever/retriever_config.yaml) | Default index path, encoder path, nprobe |
+| [`local_retriever/flashrag/retriever/retriever.py`](../../local_retriever/flashrag/retriever/retriever.py) | `DenseRetriever`: index load, search, batch_search |
+| [`local_retriever/flashrag/retriever/encoder.py`](../../local_retriever/flashrag/retriever/encoder.py) | E5 encoder: tokenize, forward, pool, normalize |
+| [`local_retriever/indexes/wiki18_100w_e5_flat_inner.index`](../../local_retriever/indexes/) | 65 GB Flat IP index (default) |
+| [`local_retriever/indexes/wiki18_100w_e5_ivf4096_sq8.index`](../../local_retriever/indexes/) | 16 GB IVF-SQ8 index (faster, opt-in) |
+| [`local_retriever/corpus/wiki18_100w.jsonl`](../../local_retriever/corpus/) | Raw passages, mmap'd |
+| [`/workspace/index_creation/build_ivf_sq8.py`](../../../index_creation/build_ivf_sq8.py) | IVF-SQ8 build pipeline |

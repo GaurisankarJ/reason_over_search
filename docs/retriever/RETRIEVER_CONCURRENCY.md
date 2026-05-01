@@ -1,6 +1,6 @@
 # Retriever Concurrency Audit
 
-Audit of the FastAPI retriever service ([`local_retriever/retriever_serving.py`](../local_retriever/retriever_serving.py)) for concurrent-read correctness and throughput. For the architectural overview see [INDEX_ARCHITECTURE.md](INDEX_ARCHITECTURE.md); for index/RAM/recall tradeoffs see [RETRIEVER_INDEXING.md](RETRIEVER_INDEXING.md).
+Audit of the FastAPI retriever service ([`local_retriever/retriever_serving.py`](../../local_retriever/retriever_serving.py)) for concurrent-read correctness and throughput. For the architectural overview see [INDEX_ARCHITECTURE.md](INDEX_ARCHITECTURE.md); for index/RAM/recall tradeoffs see [RETRIEVER_INDEXING.md](RETRIEVER_INDEXING.md).
 
 **TL;DR**: the semaphore + N-worker pool is correct but provides **no actual parallelism** because both endpoint handlers call blocking sync code from inside `async def`. `--num_retriever 4` is a placebo on the current code. One-line fix per handler. Plus one RAM-duplication issue worth fixing for hosts with <128 GB.
 
@@ -16,7 +16,7 @@ Audit of the FastAPI retriever service ([`local_retriever/retriever_serving.py`]
 
 ## 1. Sync calls inside async handlers serialize the event loop
 
-[`retriever_serving.py:82-101`](../local_retriever/retriever_serving.py#L82):
+[`retriever_serving.py:82-101`](../../local_retriever/retriever_serving.py#L82):
 
 ```python
 @app.post("/search", ...)
@@ -79,11 +79,11 @@ Apply the same pattern to `batch_search`. After the change, `--num_retriever N` 
 
 ### Why this matters for Plan A
 
-The [EVAL_OPS bottleneck note](EVAL_OPS.md#secondary-1-worker-faiss-510-today-more-on-big-datasets) attributes ~5–10% of 4090 wall-clock to single-worker FAISS. On H100 PCIe (3.35× faster GPU decode), that share rises to ~25%. The recommended fix in the H100 setup is `--num_retriever 4` — but **without fix 1, that flag does nothing**. Both fixes are required together.
+The [EVAL_OPS bottleneck note](../eval/EVAL_OPS.md#secondary-1-worker-faiss-510-today-more-on-big-datasets) attributes ~5–10% of 4090 wall-clock to single-worker FAISS. On H100 PCIe (3.35× faster GPU decode), that share rises to ~25%. The recommended fix in the H100 setup is `--num_retriever 4` — but **without fix 1, that flag does nothing**. Both fixes are required together.
 
 ## 2. Per-worker FAISS index duplication
 
-[`flashrag/retriever/retriever.py:356`](../local_retriever/flashrag/retriever/retriever.py#L356):
+[`flashrag/retriever/retriever.py:356`](../../local_retriever/flashrag/retriever/retriever.py#L356):
 
 ```python
 def load_index(self):
@@ -91,7 +91,7 @@ def load_index(self):
     self.index = faiss.read_index(self.index_path)   # full in-memory load, no mmap
 ```
 
-Each `DenseRetriever` instance in [`init_retriever`](../local_retriever/retriever_serving.py#L29-L33) calls this independently, so RAM scales linearly with `--num_retriever`:
+Each `DenseRetriever` instance in [`init_retriever`](../../local_retriever/retriever_serving.py#L29-L33) calls this independently, so RAM scales linearly with `--num_retriever`:
 
 | Index | 1 worker | 4 workers | 8 workers |
 |---|---:|---:|---:|
@@ -129,7 +129,7 @@ After the fix: RAM is constant regardless of `--num_retriever`. Enables the IVF-
 
 ## 3. `/batch_search` holds one worker for the whole batch
 
-[`retriever_serving.py:111-141`](../local_retriever/retriever_serving.py#L111) acquires the semaphore once, runs `retriever.batch_search(K queries)`, and releases. Other workers sit idle while one worker processes K queries sequentially via FAISS's vectorized `batch_search`.
+[`retriever_serving.py:111-141`](../../local_retriever/retriever_serving.py#L111) acquires the semaphore once, runs `retriever.batch_search(K queries)`, and releases. Other workers sit idle while one worker processes K queries sequentially via FAISS's vectorized `batch_search`.
 
 This is correct but inefficient when K > 1 and N > 1. The eval pipeline doesn't hit this path (it fires per-example `/search` calls via its own thread pool), so this is theoretical for the current workload. Worth knowing if anyone reaches for batch endpoints.
 
@@ -137,7 +137,7 @@ A proper fix is non-trivial: split the K-query batch across N workers, then merg
 
 ## 4. No backpressure on uvicorn
 
-[`retriever_serving.py:162`](../local_retriever/retriever_serving.py#L162):
+[`retriever_serving.py:162`](../../local_retriever/retriever_serving.py#L162):
 
 ```python
 uvicorn.run(app, host="0.0.0.0", port=args.port)
@@ -167,7 +167,7 @@ The right scaling axis here is **threads inside one process** (via fix 1), not p
 Apply in order:
 
 1. **Fix 1 (`asyncio.to_thread` wrap)** — load-bearing for the H100 throughput claim. Without it, `--num_retriever 4` is a placebo. **5 min.**
-2. **Fix 2 (`IO_FLAG_MMAP`)** — required for the 8× 4090 marketplace option in [VAST_AI_PLAN_A.md](VAST_AI_PLAN_A.md), where hosts have 64–128 GB RAM. Optional on RunPod H100 PCIe (lots of RAM). **15 min.**
+2. **Fix 2 (`IO_FLAG_MMAP`)** — required for the 8× 4090 marketplace option in [../setup/VAST_AI_PLAN_A.md](../setup/VAST_AI_PLAN_A.md), where hosts have 64–128 GB RAM. Optional on RunPod H100 PCIe (lots of RAM). **15 min.**
 3. **Fix 4 (`limit_concurrency=64`)** — defensive, 1 min, free.
 
 After (1) and (2), the [INDEX_ARCHITECTURE.md concurrency model](INDEX_ARCHITECTURE.md#concurrency-model) actually behaves as drawn. Before, the diagram is aspirational.
@@ -176,7 +176,7 @@ After (1) and (2), the [INDEX_ARCHITECTURE.md concurrency model](INDEX_ARCHITECT
 
 | File | Change |
 |---|---|
-| [`local_retriever/retriever_serving.py`](../local_retriever/retriever_serving.py) | Wrap `.search()` and `.batch_search()` calls in `asyncio.to_thread`; add `limit_concurrency=64` to `uvicorn.run` |
-| [`local_retriever/flashrag/retriever/retriever.py`](../local_retriever/flashrag/retriever/retriever.py) | Change `faiss.read_index(self.index_path)` to `faiss.read_index(self.index_path, faiss.IO_FLAG_MMAP \| faiss.IO_FLAG_READ_ONLY)` |
+| [`local_retriever/retriever_serving.py`](../../local_retriever/retriever_serving.py) | Wrap `.search()` and `.batch_search()` calls in `asyncio.to_thread`; add `limit_concurrency=64` to `uvicorn.run` |
+| [`local_retriever/flashrag/retriever/retriever.py`](../../local_retriever/flashrag/retriever/retriever.py) | Change `faiss.read_index(self.index_path)` to `faiss.read_index(self.index_path, faiss.IO_FLAG_MMAP \| faiss.IO_FLAG_READ_ONLY)` |
 
 After the edits, re-run the parallelism check from §1 and confirm 4 concurrent requests complete in ~1× single-call time, not ~4×.

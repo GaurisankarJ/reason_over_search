@@ -2,7 +2,7 @@
 
 End-to-end walkthrough to bring up a new Vast.ai instance with the corpus, indexes, encoder, GRPO checkpoints, and eval datasets all staged. After this, the box can serve the retriever, run SGLang, and execute `scripts/run_one.sh` for any (variant, dataset, seed) combo.
 
-For *which* Vast configuration to pick for cost-optimal Plan A see [VAST_AI_PLAN_A.md](VAST_AI_PLAN_A.md). For *what* the eval pipeline does see [MILESTONE_1.md](MILESTONE_1.md). For ops once it's running see [EVAL_OPS.md](EVAL_OPS.md).
+For *which* Vast configuration to pick for cost-optimal Plan A see [VAST_AI_PLAN_A.md](VAST_AI_PLAN_A.md). For *what* the eval pipeline does see [../milestone_one/MILESTONE_1.md](../milestone_one/MILESTONE_1.md). For ops once it's running see [../eval/EVAL_OPS.md](../eval/EVAL_OPS.md).
 
 ## 1. Pick the instance
 
@@ -91,7 +91,7 @@ gunzip -f indexes/wiki18_100w_e5_flat_inner.index.gz
 rm -f indexes/part_aa indexes/part_ab
 ```
 
-**Optional: IVF-SQ8 index** (faster, lower RAM — see [RETRIEVER_INDEXING.md](RETRIEVER_INDEXING.md)). Either build it from the flat index in ~10 min:
+**Optional: IVF-SQ8 index** (faster, lower RAM — see [../retriever/RETRIEVER_INDEXING.md](../retriever/RETRIEVER_INDEXING.md)). Either build it from the flat index in ~10 min:
 
 ```bash
 cd /workspace
@@ -121,7 +121,7 @@ huggingface-cli download PeterJinGo/SearchR1-nq_hotpotqa_train-qwen2.5-3b-it-em-
   --local-dir search_r1_instruct_model --local-dir-use-symlinks False
 ```
 
-**Verify sha256s** against [REPRODUCIBILITY.md](REPRODUCIBILITY.md#models--confirmed-grpo). A wrong-download (raw Qwen instead of GRPO) will silently produce wrong eval numbers.
+**Verify sha256s** against [../eval/REPRODUCIBILITY.md](../eval/REPRODUCIBILITY.md#models--confirmed-grpo). A wrong-download (raw Qwen instead of GRPO) will silently produce wrong eval numbers.
 
 ```bash
 # Shard 1 of base GRPO should be 7ac54e1b…36a9dabf
@@ -133,7 +133,7 @@ sha256sum search_r1_base_model/model-00001-of-00003.safetensors | head -c 8 ; ec
 
 Eval splits **ship in the repo** under `data/<dataset>/<split>.jsonl` (~119 MB, full splits) and `data_subsample/<dataset>/<split>.jsonl` (~18 MB, deterministic 1 k subsamples used by the Plan B v1 sweep). A normal clone has them — no download step needed. Source: [`RUC-NLPIR/FlashRAG_datasets`](https://huggingface.co/datasets/RUC-NLPIR/FlashRAG_datasets).
 
-Confirm row counts match [PAPER_VS_OURS_AUDIT.md §G](PAPER_VS_OURS_AUDIT.md#g-datasets--splits):
+Confirm row counts match [../eval/PAPER_VS_OURS_AUDIT.md §G](../eval/PAPER_VS_OURS_AUDIT.md#g-datasets--splits):
 
 ```bash
 for ds in nq:test triviaqa:test popqa:test hotpotqa:dev \
@@ -213,7 +213,7 @@ conda activate evaluation_search_r1
 scripts/run_one.sh instruct bamboogle 1
 ```
 
-Expected EM around **0.36** for instruct/bamboogle ([RESULTS_PLAN_B.md](RESULTS_PLAN_B.md)). If it's wildly off, the GRPO checkpoint is the wrong file or the prompt template drifted — re-check sha256s and `apply_chat=True`.
+Expected EM around **0.36** for instruct/bamboogle ([../milestone_one/RESULTS_PLAN_B.md](../milestone_one/RESULTS_PLAN_B.md)). If it's wildly off, the GRPO checkpoint is the wrong file or the prompt template drifted — re-check sha256s and `apply_chat=True`.
 
 ## 6. Disk usage check after staging
 
@@ -278,10 +278,10 @@ Then destroy the instance from the Vast UI. The persistent volume billing stops 
 |---|---|---|
 | `OSError: model.safetensors not found` from SGLang | GRPO download incomplete | Re-run `huggingface-cli download` for that model; `du -sh search_r1_*_model` should be ~14 GB each |
 | Retriever takes >5 min to load | First-time cold-cache read of 65 GB flat index from disk | Normal on first start; subsequent starts use page cache |
-| `EM` wildly off paper numbers | Wrong checkpoint, or `apply_chat=False` for base | Verify sha256 vs [REPRODUCIBILITY.md](REPRODUCIBILITY.md); check [scripts/run_one.sh:35](../scripts/run_one.sh#L35) |
+| `EM` wildly off paper numbers | Wrong checkpoint, or `apply_chat=False` for base | Verify sha256 vs [../eval/REPRODUCIBILITY.md](../eval/REPRODUCIBILITY.md); check [scripts/run_one.sh:35](../../scripts/run_one.sh#L35) |
 | `bad ownership or modes for file /root/.ssh/authorized_keys` | Boot hook didn't run | See step 3 manual fix |
 | `cuda out of memory` from SGLang | Another process holds VRAM | `nvidia-smi` to find culprit; `pkill -f <name>` |
-| Retriever RSS grows linearly with `--num_retriever` | The duplication issue from [RETRIEVER_CONCURRENCY.md](RETRIEVER_CONCURRENCY.md) | Apply the `IO_FLAG_MMAP` fix or use IVF-SQ8 (smaller index) |
+| Retriever RSS grows linearly with `--num_retriever` | The duplication issue from [../retriever/RETRIEVER_CONCURRENCY.md](../retriever/RETRIEVER_CONCURRENCY.md) | Apply the `IO_FLAG_MMAP` fix or use IVF-SQ8 (smaller index) |
 
 ## Quick reference — paths after setup
 

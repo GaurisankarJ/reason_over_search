@@ -33,14 +33,14 @@ Paper targets: arXiv 2503.09516 v5, Appendix F / Table 3 (`arxiv.org/html/2503.0
 - Encoder: `intfloat/e5-base-v2` (mean pooling, fp16).
 - Corpus: `wiki18_100w` (`local_retriever/corpus/wiki18_100w.jsonl`).
 - Index: **FAISS Flat Inner-Product**, `local_retriever/indexes/wiki18_100w_e5_flat_inner.index` (~65 GB, exact float32). Recall = 100 % by definition.
-- Service: `retriever_serving.py` on `127.0.0.1:3005`. Default config: [`local_retriever/retriever_config.yaml`](../local_retriever/retriever_config.yaml).
+- Service: `retriever_serving.py` on `127.0.0.1:3005`. Default config: [`local_retriever/retriever_config.yaml`](../../local_retriever/retriever_config.yaml).
 - `retrieval_topk: 3`, `retrieval_query_max_length: 256`, `retrieval_use_fp16: True`.
 - Health check: `curl -sS http://127.0.0.1:3005/health` → `"healthy"`.
 - IVF-SQ8 alternative (`wiki18_100w_e5_ivf4096_sq8.index`, ~16 GB, 3–10× faster CPU retrieval) is supported via `--index` but is **NOT** the frozen config — flat IP is the reproducer index.
 
 ## Generator (SGLang)
 
-- Server: `127.0.0.1:3000`, started by [`scripts/manage_sglang.sh switch <variant>`](../scripts/manage_sglang.sh).
+- Server: `127.0.0.1:3000`, started by [`scripts/manage_sglang.sh switch <variant>`](../../scripts/manage_sglang.sh).
 - Flags: `--tp 1 --context-length 8192 --dtype bfloat16 --trust-remote-code`.
 - Verify variant: `curl -sS http://127.0.0.1:3000/get_model_info | grep -o instruct`.
 
@@ -48,41 +48,41 @@ Paper targets: arXiv 2503.09516 v5, Appendix F / Table 3 (`arxiv.org/html/2503.0
 
 | Parameter | Value | Source |
 |---|---:|---|
-| `temperature` | **0.0** | [`basic_config.yaml:110`](../evaluation_search_r1/flashrag/config/basic_config.yaml#L110) |
+| `temperature` | **0.0** | [`basic_config.yaml:110`](../../evaluation_search_r1/flashrag/config/basic_config.yaml#L110) |
 | `top_p` | 1.0 (default) | implicit |
 | `top_k` | -1 (default) | implicit |
 | `do_sample` | implicit False | greedy when temp=0 |
-| `max_tokens` (per step) | 32 (overridden per step in pipeline) | [`basic_config.yaml:109`](../evaluation_search_r1/flashrag/config/basic_config.yaml#L109) |
-| Per-step token cap | 500 | [`active_pipeline.py:58`](../evaluation_search_r1/flashrag/pipeline/active_pipeline.py#L58) (`step_limit`) |
-| Stop tokens | `</search>`, `</answer>`, `<\|im_end\|>`, `<\|endoftext\|>` | [`active_pipeline.py:62`](../evaluation_search_r1/flashrag/pipeline/active_pipeline.py#L62) |
+| `max_tokens` (per step) | 32 (overridden per step in pipeline) | [`basic_config.yaml:109`](../../evaluation_search_r1/flashrag/config/basic_config.yaml#L109) |
+| Per-step token cap | 500 | [`active_pipeline.py:58`](../../evaluation_search_r1/flashrag/pipeline/active_pipeline.py#L58) (`step_limit`) |
+| Stop tokens | `</search>`, `</answer>`, `<\|im_end\|>`, `<\|endoftext\|>` | [`active_pipeline.py:62`](../../evaluation_search_r1/flashrag/pipeline/active_pipeline.py#L62) |
 
-**Do not change `temperature` or `top_p`.** Paper eval is greedy via verl `_validate()` → `vllm_rollout.py:162-171` overrides `do_sample=False` to `(temp=0, top_p=1.0, top_k=-1, n=1)`. See [archive/TEMPERATURE_HYPOTHESIS_WRONG.md](archive/TEMPERATURE_HYPOTHESIS_WRONG.md).
+**Do not change `temperature` or `top_p`.** Paper eval is greedy via verl `_validate()` → `vllm_rollout.py:162-171` overrides `do_sample=False` to `(temp=0, top_p=1.0, top_k=-1, n=1)`. See [../archive/TEMPERATURE_HYPOTHESIS_WRONG.md](../archive/TEMPERATURE_HYPOTHESIS_WRONG.md).
 
 ## Pipeline knobs
 
-In [`evaluation_search_r1/flashrag/pipeline/active_pipeline.py`](../evaluation_search_r1/flashrag/pipeline/active_pipeline.py):
+In [`evaluation_search_r1/flashrag/pipeline/active_pipeline.py`](../../evaluation_search_r1/flashrag/pipeline/active_pipeline.py):
 
 | Knob | Value | Line |
 |---|---:|---|
-| `max_search_turns` | 4 | [`:57`](../evaluation_search_r1/flashrag/pipeline/active_pipeline.py#L57) |
-| `step_limit` (per-step max new tokens) | 500 | [`:58`](../evaluation_search_r1/flashrag/pipeline/active_pipeline.py#L58) |
-| `max_obs_length` (retrieval observation truncation) | 500 tokens | [`:59`](../evaluation_search_r1/flashrag/pipeline/active_pipeline.py#L59) |
-| `generator_max_input_len` | 4096 | [`basic_config.yaml:105`](../evaluation_search_r1/flashrag/config/basic_config.yaml#L105) |
-| Passage formatting | `Doc i(Title: <title>) <text>\n` (then strip + truncate to 500 tok) | [`:111`](../evaluation_search_r1/flashrag/pipeline/active_pipeline.py#L111) |
-| `<information>` whitespace | `\n\n<information>{stripped}</information>\n\n` | [`:120`](../evaluation_search_r1/flashrag/pipeline/active_pipeline.py#L120) |
-| Question normalization | `.strip()` + ensure trailing `?` | [`:40-42`](../evaluation_search_r1/flashrag/pipeline/active_pipeline.py#L40) |
-| `<search>` regex | first-match | [`flashrag/search_r1/parser.py`](../evaluation_search_r1/flashrag/search_r1/parser.py) |
+| `max_search_turns` | 4 | [`:57`](../../evaluation_search_r1/flashrag/pipeline/active_pipeline.py#L57) |
+| `step_limit` (per-step max new tokens) | 500 | [`:58`](../../evaluation_search_r1/flashrag/pipeline/active_pipeline.py#L58) |
+| `max_obs_length` (retrieval observation truncation) | 500 tokens | [`:59`](../../evaluation_search_r1/flashrag/pipeline/active_pipeline.py#L59) |
+| `generator_max_input_len` | 4096 | [`basic_config.yaml:105`](../../evaluation_search_r1/flashrag/config/basic_config.yaml#L105) |
+| Passage formatting | `Doc i(Title: <title>) <text>\n` (then strip + truncate to 500 tok) | [`:111`](../../evaluation_search_r1/flashrag/pipeline/active_pipeline.py#L111) |
+| `<information>` whitespace | `\n\n<information>{stripped}</information>\n\n` | [`:120`](../../evaluation_search_r1/flashrag/pipeline/active_pipeline.py#L120) |
+| Question normalization | `.strip()` + ensure trailing `?` | [`:40-42`](../../evaluation_search_r1/flashrag/pipeline/active_pipeline.py#L40) |
+| `<search>` regex | first-match | [`flashrag/search_r1/parser.py`](../../evaluation_search_r1/flashrag/search_r1/parser.py) |
 | `add_special_tokens` block | **removed** (D8 fix) | not present in pipeline; observation tokens are encoded with `add_special_tokens=False` for length counting only |
 
 ## Prompt
 
-[`evaluation_search_r1/flashrag/search_r1/templates.py`](../evaluation_search_r1/flashrag/search_r1/templates.py) `SEARCH_R1_TEMPLATE`. Byte-identical to upstream `make_prefix(template_type='base')`, including the restored `For example, <answer> Beijing </answer>.` example sentence ([`:10`](../evaluation_search_r1/flashrag/search_r1/templates.py#L10)).
+[`evaluation_search_r1/flashrag/search_r1/templates.py`](../../evaluation_search_r1/flashrag/search_r1/templates.py) `SEARCH_R1_TEMPLATE`. Byte-identical to upstream `make_prefix(template_type='base')`, including the restored `For example, <answer> Beijing </answer>.` example sentence ([`:10`](../../evaluation_search_r1/flashrag/search_r1/templates.py#L10)).
 
-Both variants use this template body. The chat-template wrapper (`tokenizer.apply_chat_template(...)` at [`active_pipeline.py:45`](../evaluation_search_r1/flashrag/pipeline/active_pipeline.py#L45)) is applied **for both base and instruct** (D1 fix; [`run_one.sh:35,39`](../scripts/run_one.sh#L35) hard-codes `apply_chat=True` for both). The base GRPO checkpoint's `tokenizer_config.json` ships with the Qwen2.5 chat template, so this is well-defined.
+Both variants use this template body. The chat-template wrapper (`tokenizer.apply_chat_template(...)` at [`active_pipeline.py:45`](../../evaluation_search_r1/flashrag/pipeline/active_pipeline.py#L45)) is applied **for both base and instruct** (D1 fix; [`run_one.sh:35,39`](../../scripts/run_one.sh#L35) hard-codes `apply_chat=True` for both). The base GRPO checkpoint's `tokenizer_config.json` ships with the Qwen2.5 chat template, so this is well-defined.
 
 ## Datasets and splits
 
-Frozen as a dataset → split mapping in [`scripts/run_one.sh:22-31`](../scripts/run_one.sh#L22):
+Frozen as a dataset → split mapping in [`scripts/run_one.sh:22-31`](../../scripts/run_one.sh#L22):
 
 | Dataset | Split | Subsample? | n |
 |---|---|---|---:|
@@ -98,25 +98,25 @@ Subsamples are deterministic and live at `data_subsample/<dataset>/<split>.jsonl
 
 ## Metrics
 
-- Scorer: [`flashrag/search_r1/answer_utils.py`](../evaluation_search_r1/flashrag/search_r1/answer_utils.py) — SQuAD-canonical normalize → exact equality. **DO NOT modify.**
+- Scorer: [`flashrag/search_r1/answer_utils.py`](../../evaluation_search_r1/flashrag/search_r1/answer_utils.py) — SQuAD-canonical normalize → exact equality. **DO NOT modify.**
 - Reported metrics: `em`, `acc` (sub-EM), `f1` (token-level F1).
-- Trace-health (close-rate / length-truncation / mean tokens) computed by [`scripts/aggregate.py`](../scripts/aggregate.py) from each run's `intermediate_data.json`.
+- Trace-health (close-rate / length-truncation / mean tokens) computed by [`scripts/aggregate.py`](../../scripts/aggregate.py) from each run's `intermediate_data.json`.
 
 ## Audit fixes applied (load-bearing)
 
 | # | Fix | File:line |
 |---|---|---|
-| D1 | `apply_chat=True` for **base** (was False) | [`scripts/run_one.sh:35`](../scripts/run_one.sh#L35) |
-| D-prompt-micro | Restore `For example, <answer> Beijing </answer>.` in prompt | [`templates.py:10`](../evaluation_search_r1/flashrag/search_r1/templates.py#L10) |
-| D8 | Remove runtime `add_special_tokens` block | [`active_pipeline.py`](../evaluation_search_r1/flashrag/pipeline/active_pipeline.py) (block removed) |
+| D1 | `apply_chat=True` for **base** (was False) | [`scripts/run_one.sh:35`](../../scripts/run_one.sh#L35) |
+| D-prompt-micro | Restore `For example, <answer> Beijing </answer>.` in prompt | [`templates.py:10`](../../evaluation_search_r1/flashrag/search_r1/templates.py#L10) |
+| D8 | Remove runtime `add_special_tokens` block | [`active_pipeline.py`](../../evaluation_search_r1/flashrag/pipeline/active_pipeline.py) (block removed) |
 
 D1 alone delivers +3.0 pp on NQ base; D-prompt-micro + D8 together deliver another +4.4 pp on NQ base. On instruct, all three combined moved <1 pp.
 
-The 10 earlier audit fixes are listed in [REPRODUCIBILITY.md](REPRODUCIBILITY.md#divergences-fixed) and summarized as: passage formatting `Doc i(Title: …) <text>`, `retrieval_topk` 5 → 3, `<information>` whitespace `\n\n` outer / none inner, `max_search_turns` 8 → 4, observation truncation 500 tokens, question `.strip()` + trailing `?`, `retrieval_query_max_length` 128 → 256, invalid-search corrective wording, first-match `<search>` regex, per-step token limit 512 → 500.
+The 10 earlier audit fixes are listed in [../eval/REPRODUCIBILITY.md](../eval/REPRODUCIBILITY.md#divergences-fixed) and summarized as: passage formatting `Doc i(Title: …) <text>`, `retrieval_topk` 5 → 3, `<information>` whitespace `\n\n` outer / none inner, `max_search_turns` 8 → 4, observation truncation 500 tokens, question `.strip()` + trailing `?`, `retrieval_query_max_length` 128 → 256, invalid-search corrective wording, first-match `<search>` regex, per-step token limit 512 → 500.
 
 ## Hardware
 
-Single RTX 4090 (24 GB), AMD EPYC 7642 (48 c / 96 t), 503 GB RAM, no NVLink. Full table: [HARDWARE.md](HARDWARE.md). Implications:
+Single RTX 4090 (24 GB), AMD EPYC 7642 (48 c / 96 t), 503 GB RAM, no NVLink. Full table: [../setup/HARDWARE.md](../setup/HARDWARE.md). Implications:
 
 - Qwen2.5-3B in bf16 fits in ~22 GB on the 4090.
 - Flat-IP FAISS lives in host RAM (~65 GB).
@@ -162,7 +162,7 @@ grep -E "^(em|f1|acc):" "$LATEST/metric_score.txt"
 Aggregate after a sweep:
 
 ```bash
-/venv/evaluation_search_r1/bin/python scripts/aggregate.py --output docs/RESULTS_PLAN_B.md
+/venv/evaluation_search_r1/bin/python scripts/aggregate.py --output docs/milestone_one/RESULTS_PLAN_B.md
 ```
 
 ## What is NOT in the frozen config (do not change without a new audit)
@@ -173,4 +173,4 @@ Aggregate after a sweep:
 - Models: the two GRPO checkpoints (sha256-pinned), the `Qwen/Qwen2.5-3B(-Instruct)` underlying base.
 - Metrics: the SQuAD-canonical EM scorer, the F1 / ACC definitions, the gold-answer fields in the dataset jsonl.
 
-Anything you might be tempted to change — see if it's listed in [archive/DISCARDED_ABLATIONS.md](archive/DISCARDED_ABLATIONS.md) first. The autoresearch loop already tried `topk 5`, `max_obs_length 750/833`, `max_search_turns 5`, multi-query retrieval, query expansion, system-message dropout, `repetition_penalty 1.05`, and serialized inference. None of them lifted EM.
+Anything you might be tempted to change — see if it's listed in [../archive/DISCARDED_ABLATIONS.md](../archive/DISCARDED_ABLATIONS.md) first. The autoresearch loop already tried `topk 5`, `max_obs_length 750/833`, `max_search_turns 5`, multi-query retrieval, query expansion, system-message dropout, `repetition_penalty 1.05`, and serialized inference. None of them lifted EM.

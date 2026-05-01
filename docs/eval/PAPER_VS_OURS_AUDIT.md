@@ -4,7 +4,7 @@
 **Scope**: every knob that can move EM on the seven Search-R1 datasets for Qwen2.5-3B GRPO (base + instruct).
 **Sources**: paper [arXiv:2503.09516v5](https://arxiv.org/html/2503.09516v5), official repo [`PeterGriffinJin/Search-R1`](https://github.com/PeterGriffinJin/Search-R1) (default branch `main`, snapshot 2026-04-28), our repo at `/workspace/reason_over_search`.
 
-The comparison answers the four open questions from `COMPARISON_PLAN_B.md` and surfaces three previously-uncatalogued divergences. The earlier audit's headline conclusion ("paper eval = temperature 1.0") is **wrong** — verl's `_validate()` overrides `do_sample=False`, so the paper's reported numbers are GREEDY (temp=0). The actually-load-bearing miss is `apply_chat=False` for the base variant.
+The comparison answers the four open questions from `../milestone_one/COMPARISON_PLAN_B.md` and surfaces three previously-uncatalogued divergences. The earlier audit's headline conclusion ("paper eval = temperature 1.0") is **wrong** — verl's `_validate()` overrides `do_sample=False`, so the paper's reported numbers are GREEDY (temp=0). The actually-load-bearing miss is `apply_chat=False` for the base variant.
 
 ---
 
@@ -73,14 +73,14 @@ else:
 
 `Qwen/Qwen2.5-3B` (the base model the paper trains on) has a non-empty `chat_template` field in `tokenizer_config.json`. We confirmed this on our local checkpoint (`evaluation_search_r1/search_r1_base_model/tokenizer_config.json`) and on the upstream HF repo. So the upstream training code applies the chat template **regardless of base/instruct distinction** — meaning the paper's reported base GRPO numbers were computed with chat-template-wrapped prompts.
 
-Our `scripts/run_one.sh:35` hard-codes `apply_chat=False` for the base variant. `run_eval.py:127` defaults to `apply_chat=True` but the shell script overrides it. The Bamboogle probe in `COMPARISON_PLAN_B.md:96-110` already showed:
+Our `scripts/run_one.sh:35` hard-codes `apply_chat=False` for the base variant. `run_eval.py:127` defaults to `apply_chat=True` but the shell script overrides it. The Bamboogle probe in `../milestone_one/COMPARISON_PLAN_B.md:96-110` already showed:
 
 - Base, `apply_chat=False` (current Plan B): EM 0.112, close-rate 105/125 (84 %).
 - Base, `apply_chat=True`: EM 0.128, close-rate 125/125 (100 %).
 
 The mechanism: without the chat scaffolding, the base model has no `<|im_start|>assistant\n` cue and is more likely to ramble past the 500-token step budget without producing `</answer>`. With the scaffolding, every example closes its `<answer>` cleanly. Magnitude on Bamboogle was small (+1.6 pp) because it only has 125 examples and ~16 % were truncated; on NQ/TriviaQA/PopQA where the −10 to −16 pp gaps live, the truncation rate may be similar or different — we have not measured per-dataset close-rate yet.
 
-Recommended action — **already documented as next step in COMPARISON_PLAN_B.md**: flip `scripts/run_one.sh:35` to `apply_chat=True` for base, re-run NQ-1k and TriviaQA-1k.
+Recommended action — **already documented as next step in ../milestone_one/COMPARISON_PLAN_B.md**: flip `scripts/run_one.sh:35` to `apply_chat=True` for base, re-run NQ-1k and TriviaQA-1k.
 
 ### Prompt template micro-divergence (negligible)
 
@@ -217,20 +217,20 @@ vLLM vs SGLang at greedy temperature 0 should produce identical token streams mo
 
 | Knob | Paper / official | Ours | Source | Status |
 |---|---|---|---|---|
-| Number of seeds | **single seed** per data point in Table 3 (no error bars in paper) | 1 (Plan B), planned 3–5 (Plan A) | paper text "single seed runs" inferred from absence of std-dev columns; ours: `RESULTS_PLAN_B.md` | **MATCH** for Plan B |
+| Number of seeds | **single seed** per data point in Table 3 (no error bars in paper) | 1 (Plan B), planned 3–5 (Plan A) | paper text "single seed runs" inferred from absence of std-dev columns; ours: `../milestone_one/RESULTS_PLAN_B.md` | **MATCH** for Plan B |
 | Validation seed value | not set (greedy → deterministic modulo FP) | `seed: 2024` in yaml; SGLang request body does not include `seed` (see `generator.py:316-365`) | — | **MATCH** (greedy is deterministic in both) |
 | `torch` / `numpy` / `random` seeds | set to 1 by default in verl | not consequential at temp=0 | — | **MATCH** |
 | SGLang seed kwarg behavior | n/a | SGLang ignores absent seed; greedy is deterministic | — | **MATCH** |
 
 ---
 
-## Resolution of the four open questions from `COMPARISON_PLAN_B.md`
+## Resolution of the four open questions from `../milestone_one/COMPARISON_PLAN_B.md`
 
 1. **"Does the paper use top_p=1.0 (Appendix B.2) or top_p=0.95 (upstream verl rollout config)?"**
    → **`top_p=1.0`** for evaluation. Appendix B.2 quote describes the training rollout, but `verl/workers/rollout/vllm_rollout/vllm_rollout.py:166` *overrides* top_p to 1.0 whenever `do_sample=False`, which validation always passes. So eval top_p is 1.0 regardless of the YAML default.
 
 2. **"Does the paper's eval reuse the training rollout config (so do_sample=True, temp=1.0) or use a separate validation block (val_kwargs)?"**
-   → **Neither.** It reuses the same vllm rollout instance, but `_validate()` at `verl/trainer/ppo/ray_trainer.py:478,508` passes `do_sample: False` in `meta_info`, and `vllm_rollout.py:162-171` reads that flag and force-overrides to `temperature=0, top_p=1.0, top_k=-1, n=1`. There is no `val_kwargs` block; the override is hard-coded. **Paper eval is greedy.** Our `temperature: 0.0` is correct. The COMPARISON_PLAN_B.md hypothesis (re-running at temp=1.0) would have **diverged** from the paper, not converged.
+   → **Neither.** It reuses the same vllm rollout instance, but `_validate()` at `verl/trainer/ppo/ray_trainer.py:478,508` passes `do_sample: False` in `meta_info`, and `vllm_rollout.py:162-171` reads that flag and force-overrides to `temperature=0, top_p=1.0, top_k=-1, n=1`. There is no `val_kwargs` block; the override is hard-coded. **Paper eval is greedy.** Our `temperature: 0.0` is correct. The ../milestone_one/COMPARISON_PLAN_B.md hypothesis (re-running at temp=1.0) would have **diverged** from the paper, not converged.
 
 3. **"Does the official Search-R1 eval script set apply_chat_template for the base variant?"**
    → **YES**, unconditionally, via `verl/utils/dataset/rl_dataset.py:128`: `if self.tokenizer.chat_template: apply_chat_template(...)`. Qwen2.5-3B base ships with the chat template, so it gets applied. Our `scripts/run_one.sh:35` setting `apply_chat=False` for base is **wrong**. Bamboogle probe confirmed +1.6 pp lift and 84 %→100 % close-rate fix when flipped.
@@ -253,7 +253,7 @@ Ranked by EM impact estimate.
 4. **Remove the `add_special_tokens` call** in `active_pipeline.py:37-42`. LOW severity, removes a subtle distributional mismatch with upstream tokenization.
 5. **Optional: verify SGLang stop-string semantics on multi-tag chunks** by sampling 50 base traces and counting how many emit a second structural tag inside a single decoded chunk. If <1 %, ignore D2.
 
-Do **not** change `temperature` or `top_p`. The paper is greedy. Our config is correct on this axis. The earlier hypothesis in `COMPARISON_PLAN_B.md` to set `temperature=1.0, top_p=0.95` would have moved us *away* from the paper.
+Do **not** change `temperature` or `top_p`. The paper is greedy. Our config is correct on this axis. The earlier hypothesis in `../milestone_one/COMPARISON_PLAN_B.md` to set `temperature=1.0, top_p=0.95` would have moved us *away* from the paper.
 
 ---
 
@@ -271,10 +271,10 @@ Ours:
 - `/workspace/reason_over_search/scripts/manage_sglang.sh`
 - `/workspace/reason_over_search/local_retriever/retriever_config.yaml`
 - `/workspace/reason_over_search/local_retriever/retriever_serving.py`
-- `/workspace/reason_over_search/docs/COMPARISON_PLAN_B.md`
-- `/workspace/reason_over_search/docs/REPRODUCIBILITY.md`
-- `/workspace/reason_over_search/docs/RESULTS_PLAN_B.md`
-- `/workspace/reason_over_search/docs/EVAL_OPS.md`
+- `/workspace/reason_over_search/docs/milestone_one/COMPARISON_PLAN_B.md`
+- `/workspace/reason_over_search/docs/eval/REPRODUCIBILITY.md`
+- `/workspace/reason_over_search/docs/milestone_one/RESULTS_PLAN_B.md`
+- `/workspace/reason_over_search/docs/eval/EVAL_OPS.md`
 
 Upstream (`PeterGriffinJin/Search-R1` @ main, fetched 2026-04-28):
 - `verl/trainer/ppo/ray_trainer.py` (lines 436-547: `_validate()` with `do_sample=False`)

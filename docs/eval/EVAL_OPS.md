@@ -1,6 +1,6 @@
 # Evaluation Operations
 
-How to run the Search-R1 evaluation sweeps and where the wall-clock goes. For *what* the sweep validates and the per-dataset numbers, see [REPRODUCIBILITY.md](REPRODUCIBILITY.md) and [RESULTS_PLAN_B.md](RESULTS_PLAN_B.md). Hardware reference is in [HARDWARE.md](HARDWARE.md).
+How to run the Search-R1 evaluation sweeps and where the wall-clock goes. For *what* the sweep validates and the per-dataset numbers, see [REPRODUCIBILITY.md](REPRODUCIBILITY.md) and [../milestone_one/RESULTS_PLAN_B.md](../milestone_one/RESULTS_PLAN_B.md). Hardware reference is in [../setup/HARDWARE.md](../setup/HARDWARE.md).
 
 ## Three sweep plans
 
@@ -41,7 +41,7 @@ evaluation_search_r1/results/<dataset>/<dataset>_<YYYY>_<MM>_<DD>_<HH>_<MM>_sear
 
 Prereqs:
 
-- Retriever up on `127.0.0.1:3005` (`curl /health` returns "healthy"). See [/local_retriever/README.md](../local_retriever/README.md).
+- Retriever up on `127.0.0.1:3005` (`curl /health` returns "healthy"). See [/local_retriever/README.md](../../local_retriever/README.md).
 - SGLang launchable on `127.0.0.1:3000`; sweep scripts will switch models as needed.
 - Eval venv at `/venv/evaluation_search_r1` (override with `PY=...`).
 
@@ -52,7 +52,7 @@ Prereqs:
 nohup scripts/sweep_b_reduced.sh > /tmp/sweep_b.log 2>&1 &
 disown
 tail -f /tmp/sweep_b.log
-# produces docs/RESULTS_PLAN_B.md
+# produces docs/milestone_one/RESULTS_PLAN_B.md
 
 # Plan C — full datasets, 1 seed (~3.4 days)
 nohup scripts/sweep_c_one_seed.sh > /tmp/sweep_c.log 2>&1 &
@@ -86,7 +86,7 @@ Matches the observed 2.85 s.
 ### Bottleneck: GPU decode (~70–80 % of wall clock)
 
 - 3B in bf16 on a 4090 ceilings at ~80–120 tok/s single-stream; ~3–5× that with batching. Memory-bandwidth-bound, not compute-bound. Adding more concurrent examples doesn't scale linearly.
-- Original SGLang launch flags `--disable-radix-cache --disable-overlap` (in [/local_retriever/README.md](../local_retriever/README.md)) cost ~50 % of multi-turn prefill (re-prefilling the entire prompt every turn instead of reusing the encoded prefix) and ~10–20 % decode throughput respectively. Worth a controlled A/B to see if our pipeline is OK with them re-enabled.
+- Original SGLang launch flags `--disable-radix-cache --disable-overlap` (in [/local_retriever/README.md](../../local_retriever/README.md)) cost ~50 % of multi-turn prefill (re-prefilling the entire prompt every turn instead of reusing the encoded prefix) and ~10–20 % decode throughput respectively. Worth a controlled A/B to see if our pipeline is OK with them re-enabled.
 
 ### Secondary: 1-worker FAISS (~5–10 % today, more on big datasets)
 
@@ -95,7 +95,7 @@ Matches the observed 2.85 s.
 Mitigations available:
 
 - `--num_retriever 4` for parallel CPU FAISS workers (read-only, fully safe).
-- IVF-SQ8 index — built; lives at [`/local_retriever/indexes/wiki18_100w_e5_ivf4096_sq8.index`](../local_retriever/indexes/) (16 GB, ~3-10× faster than flat, <1 % recall hit). Default in [retriever_config.yaml](../local_retriever/retriever_config.yaml).
+- IVF-SQ8 index — built; lives at [`/local_retriever/indexes/wiki18_100w_e5_ivf4096_sq8.index`](../../local_retriever/indexes/) (16 GB, ~3-10× faster than flat, <1 % recall hit). Default in [retriever_config.yaml](../../local_retriever/retriever_config.yaml).
 - GPU FAISS — wired up in the retriever, but cannot co-exist with SGLang on the same 24 GB 4090 (16 GB index + 22 GB SGLang > 24 GB). Useful only when SGLang is stopped, or for offline batch retrieval.
 
 ### Speedup ranking (no model/data changes)

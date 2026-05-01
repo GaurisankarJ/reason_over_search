@@ -1,13 +1,13 @@
 # Archive — discarded experiments and historical snapshots
 
-Index of everything we tried that did **not** make it into the locked Plan B v1 config (see [../FROZEN_CONFIG_v1.md](../FROZEN_CONFIG_v1.md)) or that is preserved for the historical record.
+Index of everything we tried that did **not** make it into the locked Plan B v1 config (see [../milestone_one/FROZEN_CONFIG_v1.md](../milestone_one/FROZEN_CONFIG_v1.md)) or that is preserved for the historical record.
 
 Treat anything in this directory as **not load-bearing** for current work. None of these settings, hypotheses, or numbers should be used as a reference for new experiments — go to the parent docs/ for the live truth.
 
 ## Pre-v1 historical snapshots
 
-- [RESULTS_PLAN_B_v0.md](RESULTS_PLAN_B_v0.md) — frozen aggregate of the **pre-fix** Plan B sweep (single seed × 7 datasets × 2 variants, before the apply_chat / prompt-sentence / special-tokens fixes). Base avg EM 0.229 (paper 0.312 → −8.3 pp gap), instruct avg 0.367 (paper 0.336 → +3.1 pp). v0 result directories are at `evaluation_search_r1/results/_archive_v0/` (committed in `cf9e2fb`). 13 runs are archived; the bamboogle/instruct row in `RESULTS_PLAN_B_v0.md` (EM 0.360) is the smoke-test number documented in [../REPRODUCIBILITY.md#smoke-validation](../REPRODUCIBILITY.md#smoke-validation), recorded before the formal v0 sweep started — its run dir was not preserved.
-- [COMPARISON_PLAN_B_SUSPECTS.md](COMPARISON_PLAN_B_SUSPECTS.md) — suspect ranking + recommended-next-steps section as it stood **before** the v1 sweep landed. Useful as a record of how we reasoned to the three audit fixes; superseded by [../COMPARISON_PLAN_B_v1.md](../COMPARISON_PLAN_B_v1.md) and [../PAPER_VS_OURS_AUDIT.md](../PAPER_VS_OURS_AUDIT.md).
+- [RESULTS_PLAN_B_v0.md](RESULTS_PLAN_B_v0.md) — frozen aggregate of the **pre-fix** Plan B sweep (single seed × 7 datasets × 2 variants, before the apply_chat / prompt-sentence / special-tokens fixes). Base avg EM 0.229 (paper 0.312 → −8.3 pp gap), instruct avg 0.367 (paper 0.336 → +3.1 pp). v0 result directories are at `evaluation_search_r1/results/_archive_v0/` (committed in `cf9e2fb`). 13 runs are archived; the bamboogle/instruct row in `RESULTS_PLAN_B_v0.md` (EM 0.360) is the smoke-test number documented in [../eval/REPRODUCIBILITY.md#smoke-validation](../eval/REPRODUCIBILITY.md#smoke-validation), recorded before the formal v0 sweep started — its run dir was not preserved.
+- [COMPARISON_PLAN_B_SUSPECTS.md](COMPARISON_PLAN_B_SUSPECTS.md) — suspect ranking + recommended-next-steps section as it stood **before** the v1 sweep landed. Useful as a record of how we reasoned to the three audit fixes; superseded by [../milestone_one/COMPARISON_PLAN_B_v1.md](../milestone_one/COMPARISON_PLAN_B_v1.md) and [../eval/PAPER_VS_OURS_AUDIT.md](../eval/PAPER_VS_OURS_AUDIT.md).
 
 ## Hypotheses that turned out wrong
 
@@ -33,5 +33,5 @@ Treat anything in this directory as **not load-bearing** for current work. None 
 
 ## What is *not* archived (and why)
 
-- Three audit fixes that **were** kept and made it into v1 — see [../PAPER_VS_OURS_AUDIT.md](../PAPER_VS_OURS_AUDIT.md) (D1, D-prompt-micro, D8) and [../FROZEN_CONFIG_v1.md](../FROZEN_CONFIG_v1.md). These are load-bearing.
-- The `apply_chat=True` Bamboogle/NQ probes that led to v1 — captured inline in [../COMPARISON_PLAN_B.md](../COMPARISON_PLAN_B.md) ("Probe" section) and [../COMPARISON_PLAN_B_v1.md](../COMPARISON_PLAN_B_v1.md). Probes that pointed to the right answer aren't "discarded" — they're part of the v1 derivation.
+- Three audit fixes that **were** kept and made it into v1 — see [../eval/PAPER_VS_OURS_AUDIT.md](../eval/PAPER_VS_OURS_AUDIT.md) (D1, D-prompt-micro, D8) and [../milestone_one/FROZEN_CONFIG_v1.md](../milestone_one/FROZEN_CONFIG_v1.md). These are load-bearing.
+- The `apply_chat=True` Bamboogle/NQ probes that led to v1 — captured inline in [../milestone_one/COMPARISON_PLAN_B.md](../milestone_one/COMPARISON_PLAN_B.md) ("Probe" section) and [../milestone_one/COMPARISON_PLAN_B_v1.md](../milestone_one/COMPARISON_PLAN_B_v1.md). Probes that pointed to the right answer aren't "discarded" — they're part of the v1 derivation.

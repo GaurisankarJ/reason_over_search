@@ -30,7 +30,7 @@ What you can swap in via `--index` / yaml. All numbers are for E5-base-v2 at top
 |---|---|---|---|---|---|---|---|
 | `Flat,IP` *(default)* | 65 GB | 100 % | exact | 100–300 ms | n/a — 32.5 GB fp16 > 24 GB | 10–25 ms | 5–12 ms |
 | `HNSW32,Flat` | ~70 GB | 97–99 % | exact | 0.5–3 ms | n/a — no FAISS GPU HNSW | n/a | n/a |
-| `IVF4096,SQ8` *(built — [/workspace/index_creation](../../index_creation/))* | ~16 GB | 96–99 % | very close | 30–100 ms | 5–15 ms | 3–8 ms | 2–6 ms |
+| `IVF4096,SQ8` *(built — [/workspace/index_creation](../../../index_creation/))* | ~16 GB | 96–99 % | very close | 30–100 ms | 5–15 ms | 3–8 ms | 2–6 ms |
 | `IVF65536,SQ8` | ~16 GB | 96–99 % | very close | 20–80 ms | 3–10 ms | 2–6 ms | 1–4 ms |
 | `IVF65536,PQ96` | ~3 GB | 88–95 % | approximate | 5–30 ms | 1–4 ms | 0.5–2 ms | 0.5–1.5 ms |
 | `IVF65536,PQ32` | ~1 GB | 75–88 % | coarse | 2–15 ms | <1–3 ms | <1 ms | <1 ms |
@@ -45,7 +45,7 @@ Caveats:
 
 FAISS's `min_points_per_centroid=39` floor needs ≥ 2.55 M training rows for `nlist=65536` but only 160 K for `nlist=4096`. With the 1 M training sample drawn from the existing flat index, 4096 cells is comfortably above the floor; 65 536 would have trained on a thin sample with degraded centroids. Bumping the training sample to ~5 M would unlock the 65k variant for marginally better latency at the same memory cost.
 
-`nprobe` is the dominant accuracy-vs-latency knob on any IVF index. Sweet spot for SQ8 is `nprobe=64` — already wired up in [retriever_config.yaml](../local_retriever/retriever_config.yaml) and applied automatically in [`load_index`](../local_retriever/flashrag/retriever/retriever.py).
+`nprobe` is the dominant accuracy-vs-latency knob on any IVF index. Sweet spot for SQ8 is `nprobe=64` — already wired up in [retriever_config.yaml](../../local_retriever/retriever_config.yaml) and applied automatically in [`load_index`](../../local_retriever/flashrag/retriever/retriever.py).
 
 ## Impact on a Search-R1-style RAG pipeline
 
@@ -79,7 +79,7 @@ Each question triggers multiple retrieval calls; cumulative latency matters more
 
 ### A. Index quality vs end-to-end answer accuracy
 
-Sweep `index_path` through increasingly lossy indexes; measure downstream QA on Search-o1-style benchmarks via [/evaluation_search_r1/](../evaluation_search_r1/).
+Sweep `index_path` through increasingly lossy indexes; measure downstream QA on Search-o1-style benchmarks via [/evaluation_search_r1/](../../evaluation_search_r1/).
 
 - **Variables:** `Flat,IP` → `HNSW32,Flat` → `IVF4096,SQ8` → `IVF65536,PQ96` → `IVF65536,PQ32`.
 - **Metrics:** EM, F1, passage recall@10, passage recall@5.
