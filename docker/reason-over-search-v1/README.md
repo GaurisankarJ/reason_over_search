@@ -5,13 +5,13 @@
 | Concern | Pattern | Why |
 |---|---|---|
 | `retriever` + `evaluation_search_r1` | **Code + env baked into the image.** | Stable surface; no need to clone the repo on Vast just to run them. |
-| `training` (NeMo-RL) | **Env baked, code cloned at runtime.** Image ships `uv` + a pre-warmed NeMo-RL wheel cache. The repo is `git clone`d onto Vast; `uv sync` materializes the venv from the cached wheels. | Active iteration surface — pushing edits doesn't require rebuilding the image. |
+| `training` (NeMo-RL) | **Code cloned at runtime; env created from `uv sync` on first boot.** Image ships `uv` (no pre-warmed wheel cache yet — see *Build args* below). The repo is `git clone`d onto Vast; `uv sync --extra vllm` downloads ~5 GB of wheels (~10–20 min) on the first run, fast on subsequent runs in the same container. | Active iteration surface — pushing edits doesn't require rebuilding the image. |
 
 ## What's in the image
 
 - **Conda env `retriever`** (Python 3.10) — `local_retriever/requirements.txt` installed; source at `/app/local_retriever/`.
 - **Conda env `evaluation_search_r1`** (Python 3.11) — `evaluation_search_r1/requirements.txt` installed; source at `/app/evaluation_search_r1/`; flashrag editable-installed at build time (`python setup.py develop --no-deps`).
-- **`uv` + pre-warmed wheel cache** at `/root/.cache/uv/` covering NeMo-RL @ `v0.6.0` deps with the `vllm` extra. Running `uv sync` in your cloned `training/nemo_rl/` reuses these cached wheels (seconds-to-minutes instead of 10–20 min download).
+- **`uv` installed globally** (pin: 0.11.8) at `/usr/local/bin/uv`. The wheel cache is **not** pre-warmed in this image — the first `uv sync` on Vast will download ~5 GB of NeMo-RL deps (~10–20 min one-time per container). To enable pre-warming, see *Build args* below.
 - **Vast SSH boot hook** at `/etc/vast_boot.d/10-fix-ssh-perms.sh` — normalizes `/root/.ssh/authorized_keys` perms on startup.
 
 ## Build (from repo root)
@@ -30,23 +30,40 @@ docker buildx build --platform linux/amd64 \
   -t reason-over-search-v1:v1 --load .
 ```
 
-### Build args (training pre-warm)
+### Build args (training)
 
 | Arg | Default | Purpose |
 |---|---|---|
-| `NEMO_RL_REF` | `v0.6.0` | NeMo-RL ref the wheel cache is pre-warmed for. Must match the version committed at `training/nemo_rl/`. Bump both together. |
-| `UV_EXTRAS` | `vllm` | Comma-separated NeMo-RL extras to pre-warm (e.g. `vllm,nemo_gym`). |
+| `NEMO_RL_REF` | `v0.6.0` | NeMo-RL ref. Currently a passthrough — only used when wheel pre-warming is enabled. Bump alongside `training/nemo_rl/`. |
+| `UV_EXTRAS` | `vllm` | NeMo-RL extras (e.g. `vllm,nemo_gym`). Currently a passthrough; controls which extras the wheel cache covers if pre-warming is re-enabled. |
 
 ```bash
 docker build \
   --build-arg NEMO_RL_REF=v0.6.0 \
-  --build-arg UV_EXTRAS=vllm,nemo_gym \
+  --build-arg UV_EXTRAS=vllm \
   -f docker/reason-over-search-v1/Dockerfile -t reason-over-search-v1:v1 .
+```
+
+### Re-enabling the wheel pre-warm
+
+The Dockerfile previously did a `uv venv + uv sync --no-install-project` against a temp NeMo-RL clone, which populated `/root/.cache/uv/` with the wheels and made the on-Vast first `uv sync` near-instant. That step OOMs the build VM on a stock Apple Silicon Mac (Docker Desktop allocates ~58 GB by default; torch's unpack alone needs ~3 GB on top of the conda envs).
+
+To re-enable: bump Docker Desktop disk allocation to ≥120 GB (Settings → Resources → Disk image size), then add the following step to the Dockerfile after the `uv` install:
+
+```dockerfile
+RUN git clone --depth=1 --branch ${NEMO_RL_REF} --recursive \
+        https://github.com/NVIDIA-NeMo/RL.git /tmp/nemo-rl-deps && \
+    cd /tmp/nemo-rl-deps && \
+    EXTRA_FLAGS="" && \
+    for e in $(echo ${UV_EXTRAS} | tr ',' ' '); do EXTRA_FLAGS="${EXTRA_FLAGS} --extra ${e}"; done && \
+    uv venv .venv && \
+    uv sync ${EXTRA_FLAGS} --no-install-project && \
+    rm -rf /tmp/nemo-rl-deps
 ```
 
 ### Build OOMs on pip / conda
 
-Raise Docker / Colima / Desktop **RAM (8G+)** and try again. The uv pre-warm step in particular pulls torch + vLLM + cuDNN — peak memory pressure is similar to the conda env builds.
+Raise Docker / Colima / Desktop **RAM (8G+)** and try again.
 
 ## Push to Docker Hub
 
@@ -118,7 +135,8 @@ git clone https://github.com/<your-user>/reason_over_search.git
 cd reason_over_search
 
 # 2. Materialize the venv against the committed NeMo-RL source.
-#    Fast (~30s-2min) because the wheel cache at /root/.cache/uv/ is pre-warmed.
+#    First run downloads ~5 GB of wheels (~10-20 min on Vast's network).
+#    Subsequent uv syncs in the same container hit /root/.cache/uv/ and finish in seconds.
 cd training/nemo_rl
 uv sync --extra vllm
 

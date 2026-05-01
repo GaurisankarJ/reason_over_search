@@ -49,10 +49,20 @@ COPY evaluation_search_r1 ${APP_ROOT}/evaluation_search_r1
 RUN /opt/miniforge3/bin/conda run -n evaluation_search_r1 \
       /bin/bash -lc "cd /app/evaluation_search_r1 && python setup.py develop --no-deps"
 
-# === 3. Training env: uv + pre-warmed NeMo-RL wheel cache (NO repo code) ===
+# === 3. Training env: uv installed (NO repo code, NO wheel pre-warm) ===
 # The training/nemo_rl/ source is committed to the repo and cloned at runtime
-# on Vast. The image only needs (a) uv installed, and (b) NeMo-RL's wheels
-# pre-downloaded into uv's cache so the on-Vast `uv sync` is fast.
+# on Vast. The image installs uv globally; the user runs `uv sync --extra vllm`
+# on first boot to materialize the venv (downloads ~5GB of wheels — torch,
+# vLLM, cuDNN — taking ~10-20 min on Vast's network).
+#
+# Note: an earlier draft baked a pre-warmed wheel cache into the image to make
+# the first-boot uv sync near-instant. That requires ~15GB of free space in
+# the build VM during torch's unpack. Docker Desktop on Apple Silicon allocates
+# ~58GB by default, with conda envs eating most of it, leaving too little for
+# the unpack. Skipping the pre-warm keeps the image buildable on a stock Mac
+# at the cost of a one-time uv sync per Vast instance. To re-enable: bump
+# Docker Desktop disk allocation to ≥120GB and add a `uv venv + uv sync` step
+# here. Build args NEMO_RL_REF / UV_EXTRAS are kept for future use.
 ARG NEMO_RL_REF=v0.6.0
 ARG UV_EXTRAS=vllm
 
@@ -62,26 +72,6 @@ ARG UV_EXTRAS=vllm
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
     ln -sf /root/.local/bin/uv /usr/local/bin/uv && \
     ln -sf /root/.local/bin/uvx /usr/local/bin/uvx
-
-# Pre-warm uv's wheel cache at /root/.cache/uv/. Subsequent `uv sync` against
-# the user's cloned training/nemo_rl/ on Vast will hit the cache and skip the
-# 5+ GB download. The cache is content-addressed by hash, so it works across
-# project paths.
-#
-# Approach: shallow-clone NeMo-RL, run `uv sync` to populate the cache (this
-# also creates a temp venv we delete afterwards), then drop the clone. Skip
-# building the editable nemo_rl package itself with --no-install-project so
-# we don't waste cycles installing something we'll re-resolve on Vast against
-# the user's clone.
-RUN git clone --depth=1 --branch ${NEMO_RL_REF} --recursive \
-        https://github.com/NVIDIA-NeMo/RL.git /tmp/nemo-rl-deps && \
-    cd /tmp/nemo-rl-deps && \
-    EXTRA_FLAGS="" && \
-    for e in $(echo ${UV_EXTRAS} | tr ',' ' '); do EXTRA_FLAGS="${EXTRA_FLAGS} --extra ${e}"; done && \
-    uv venv .venv && \
-    uv sync ${EXTRA_FLAGS} --no-install-project && \
-    # Keep /root/.cache/uv/ (the goal); drop the temp venv and clone.
-    rm -rf /tmp/nemo-rl-deps
 
 # === 4. Vast boot hook — fix SSH key permissions so OpenSSH accepts auth ===
 COPY docker/reason-over-search-v1/10-fix-ssh-perms.sh /etc/vast_boot.d/10-fix-ssh-perms.sh
