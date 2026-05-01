@@ -56,9 +56,12 @@ RUN /opt/miniforge3/bin/conda run -n evaluation_search_r1 \
 ARG NEMO_RL_REF=v0.6.0
 ARG UV_EXTRAS=vllm
 
+# vastai/base-image already ships a `uv` at /usr/local/bin/uv; we still install
+# our own copy via the Astral installer to pin a known version, then `ln -sf`
+# to make sure the symlinks point at /root/.local/bin/* (not the base image's).
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
-    ln -s /root/.local/bin/uv /usr/local/bin/uv && \
-    ln -s /root/.local/bin/uvx /usr/local/bin/uvx
+    ln -sf /root/.local/bin/uv /usr/local/bin/uv && \
+    ln -sf /root/.local/bin/uvx /usr/local/bin/uvx
 
 # Pre-warm uv's wheel cache: shallow-clone NeMo-RL just to read pyproject.toml +
 # uv.lock, run uv sync against an ephemeral venv to download all wheels into
