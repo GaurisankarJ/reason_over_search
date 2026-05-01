@@ -43,9 +43,14 @@ Reference for the NeMo-RL settings that matter when running GRPO on Qwen3.5-2B o
 |---|---|---|---|
 | `grpo.num_prompts_per_step` | GRPO | `32` (1B example) | Prompts per training step. With `num_generations_per_prompt=16`, that's 32 × 16 = 512 trajectories per step → matches our target global batch. |
 | `grpo.num_generations_per_prompt` | GRPO | `16` (1B example) | Group size G in GRPO. **Search-R1 paper uses `5`** for Qwen2.5-3B. Larger G = lower-variance advantage but more rollouts per step. |
+| `grpo.max_num_steps` | GRPO | varies | Total training steps. **Search-R1 uses `1005`** (verl `total_training_steps=1005` in v0.2; supersedes paper text's "500"). |
+| `grpo.val_period` | GRPO | varies | Validation cadence in steps. **Search-R1 uses `100`** (verl `test_freq=100`). |
+| `grpo.val_at_start` | GRPO | varies | Run validation at step 0 as a baseline. **Search-R1 uses `true`** (verl `val_before_train=true`). |
+| `grpo.max_rollout_turns` | GRPO | `999999` | Hard cap on env-loop iterations per rollout. **Search-R1 uses `4`** (verl `max_turns=4` in v0.2). Our env enforces this internally too. |
 | `grpo.normalize_rewards` | GRPO | `true` | Normalize rewards within each group (standard GRPO behaviour). |
 | `grpo.use_leave_one_out_baseline` | GRPO | `true` | Use leave-one-out baseline for advantage estimation. Standard. |
-| `loss.kl_coef` (β) | Loss | varies | KL penalty against the reference policy. **Search-R1 uses `0.001`** — very weak KL, lets the policy drift. |
+| `loss.reference_policy_kl_penalty` (β) | Loss | varies | KL penalty against the reference policy. **Search-R1 uses `0.001`** — very weak KL, lets the policy drift. |
+| `loss.reference_policy_kl_type` | Loss | `"k3"` | KL estimator. **Default `k3` matches verl's `low_var_kl` byte-identically** — both compute Schulman 2020 k3 (`exp(ref-log) - (ref-log) - 1`). No override needed. See [`VERL_REFERENCE.md`](VERL_REFERENCE.md) §2. |
 | `loss.clip_ratio` (ε) | Loss | varies | PPO-style clip range. **Search-R1 uses `0.2`** (standard). |
 | `policy.max_grad_norm` | Policy | `1.0` | Gradient clipping. Keep at default. |
 
@@ -119,11 +124,16 @@ policy:
 grpo:
   num_prompts_per_step: 102               # 102 * 5 ≈ 512 global batch
   num_generations_per_prompt: 5           # Search-R1 paper group size
+  max_num_steps: 1005                     # verl total_training_steps (v0.2 yaml)
+  val_period: 100                         # verl test_freq
+  val_at_start: true                      # verl val_before_train
+  max_rollout_turns: 4                    # verl max_turns
   normalize_rewards: true
   use_leave_one_out_baseline: true
 
 loss:
-  kl_coef: 0.001                          # Search-R1 paper β
+  reference_policy_kl_penalty: 0.001      # Search-R1 paper β (verl kl_loss_coef)
+  reference_policy_kl_type: "k3"          # ≡ verl low_var_kl (Schulman 2020 k3)
   clip_ratio: 0.2                         # Search-R1 paper ε
 
 optimizer:

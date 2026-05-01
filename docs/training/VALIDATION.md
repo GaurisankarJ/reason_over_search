@@ -4,7 +4,7 @@ In-loop validation during GRPO training. Mirrors Search-R1's validation setup so
 
 Sources: [Search-R1 arXiv 2503.09516](https://arxiv.org/abs/2503.09516), [Search-R1 GitHub](https://github.com/PeterGriffinJin/Search-R1).
 
-> **Status**: paper-side numbers and conventions are settled. The exact verl `test_freq` value (validation cadence in steps) was not visible from the paper or the GitHub README excerpt; **flagged in §6 as a "verify before first run" item.**
+> **Status**: paper-side numbers and conventions are settled. `test_freq=100` and `total_training_steps=1005` are confirmed against upstream [`Search-R1/scripts/nq_hotpotqa/v0.2/train_grpo.sh`](https://github.com/PeterGriffinJin/Search-R1/blob/main/scripts/nq_hotpotqa/v0.2/train_grpo.sh) — the EM-only baseline that produced the published GRPO checkpoints we evaluated in Milestone 1.
 
 ---
 
@@ -12,7 +12,7 @@ Sources: [Search-R1 arXiv 2503.09516](https://arxiv.org/abs/2503.09516), [Search
 
 Search-R1 trains on a **mix of NQ-train and HotpotQA-train**, both from the standard FlashRAG / Search-R1 distribution. We use the same files in [`data/`](../../data/) (already present from Milestone 1).
 
-Total training questions: ~170k. With paper's 500 steps × global batch 512, the loop sees ~256k question instances — i.e., roughly 1.5 epochs over the training mix.
+Total training questions: ~170k. With verl's 1005 steps × global batch 512, the loop sees ~514k question instances — i.e., roughly 3 epochs over the training mix. (Paper text says "500 steps" but the published-checkpoint verl run is 1005 — see [`PAPER_VS_OURS_TRAINING.md`](PAPER_VS_OURS_TRAINING.md) §5.)
 
 ## 2. Validation dataset
 
@@ -27,11 +27,11 @@ These are the in-distribution benchmarks; out-of-distribution datasets (Bamboogl
 
 ## 3. Cadence
 
-**Paper:** model checkpoints saved **every 100 training steps** ([Appendix B.2](https://arxiv.org/html/2503.09516)). Validation appears tied to checkpointing (validate when checkpointing) but the exact `test_freq` value is not stated in the paper text.
+**Paper / verl:** `save_freq=100` and `test_freq=100` (validation co-runs with each checkpoint) — confirmed in [`scripts/nq_hotpotqa/v0.2/train_grpo.sh:68-69`](https://github.com/PeterGriffinJin/Search-R1/blob/main/scripts/nq_hotpotqa/v0.2/train_grpo.sh). Plus `+trainer.val_before_train=true` runs validation at step 0 as a baseline.
 
-**Ours:** match — `checkpointing.save_period: 100` in [`NEMO_RL_KNOBS.md`](NEMO_RL_KNOBS.md). Validation runs alongside each checkpoint (every 100 steps).
+**Ours:** match — `checkpointing.save_period: 100`, `grpo.val_period: 100`, `grpo.val_at_start: true`.
 
-With paper's 500-step training, that gives **5 validation points** per run plus step 0 (sanity baseline) = **6 total**.
+With verl's 1005-step training, that gives **10 validation points** per run plus step 0 = **11 total**.
 
 ## 4. Metrics logged to W&B
 
@@ -55,14 +55,13 @@ Per-step training metrics (already standard in NeMo-RL):
 
 ## 5. Stopping criteria
 
-**Paper:** fixed schedule of 500 steps; no early stopping ([Appendix B.2](https://arxiv.org/html/2503.09516)).
+**Paper / verl:** fixed schedule of 1005 steps (`total_training_steps=1005`, capped before the 15-epoch nominal); no early stopping.
 
-**Ours:** match. Run all 500 steps. Save the best-by-`val/em` checkpoint via NeMo-RL's `keep_top_k: 3` mechanism; that's the candidate we feed into the Milestone 1 eval pipeline.
+**Ours:** match. Run all 1005 steps. Save the best-by-`val/em` checkpoint via NeMo-RL's `keep_top_k: 3` mechanism; that's the candidate we feed into the Milestone 1 eval pipeline.
 
 If reward is collapsing or training is unstable (NaN loss, KL spike), abort manually rather than auto-stop — we want the failure mode visible in W&B for diagnosis, not silently truncated.
 
 ## 6. Open questions
 
-1. **Exact `test_freq` from upstream verl config.** We're matching the paper's 100-step checkpoint cadence and assuming validation runs alongside; verify this against the actual verl yaml in [PeterGriffinJin/Search-R1](https://github.com/PeterGriffinJin/Search-R1) before the first training run. If upstream uses a different `test_freq`, decide whether to match or stick with our checkpoint-aligned cadence.
-2. **Validation subsample size.** 1k per validation point × 6 validations × {NQ, HotpotQA} × 5 GRPO rollouts (group=5) = 60k validation rollouts per run. If this dominates wall-clock, drop to 500-question subsamples.
-3. **Validation rollout sampling.** Paper does not state whether validation rollouts use temp=0 or temp=1. Eval is greedy (Milestone 1 confirmed); training rollouts are temp=1. We default validation to **temp=1, single sample** to match the *training* distribution (the point of in-loop val is to track what the policy actually does during training). Final post-training eval uses the Milestone 1 pipeline at temp=0.
+1. **Validation subsample size.** 1k per validation point × 11 validations × {NQ, HotpotQA} × 5 GRPO rollouts (group=5) = 110k validation rollouts per run. If this dominates wall-clock, drop to 500-question subsamples.
+2. **Validation rollout sampling.** Paper does not state whether validation rollouts use temp=0 or temp=1. Eval is greedy (Milestone 1 confirmed); training rollouts are temp=1. We default validation to **temp=1, single sample** to match the *training* distribution (the point of in-loop val is to track what the policy actually does during training). Final post-training eval uses the Milestone 1 pipeline at temp=0.

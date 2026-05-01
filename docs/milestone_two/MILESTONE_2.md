@@ -71,11 +71,16 @@ Create a `training/` folder at the repo root containing the NeMo-RL setup with t
    - **Chat template, reward function, prompt builder** also live under `training/src/` (overlay, not patches to upstream code).
    - **If a true upstream patch is unavoidable** (e.g. NeMo-RL doesn't expose a hook we need), drop a `.patch` file in `training/patches/` and have `setup.sh` apply it after the clone — that way the patch is tracked in our repo and the gitignored clone stays clean.
 
-5. **Verify the training setup matches the paper.** All confirmed paper hyperparameters are in [`PAPER_VS_OURS_TRAINING.md`](../training/PAPER_VS_OURS_TRAINING.md) §6, cross-checked against the user's verl scripts in [`VERL_REFERENCE.md`](../training/VERL_REFERENCE.md). Open items to verify against the official [Search-R1 GitHub](https://github.com/PeterGriffinJin/Search-R1) verl yaml during step 4:
-   - **Reward function:** Search-R1 baseline reward unchanged (Reward ablation = Milestone 3). The EM scorer must be byte-identical to [`flashrag/search_r1/reward.py`](../../evaluation_search_r1/flashrag/search_r1/reward.py).
-   - **Validation during training:** plan in [`VALIDATION.md`](../training/VALIDATION.md). Match Search-R1's validation cadence — verify `test_freq` against upstream verl yaml.
+5. **Verify the training setup matches the paper.** All paper hyperparameters cross-checked against [`Search-R1/scripts/nq_hotpotqa/v0.2/train_grpo.sh`](https://github.com/PeterGriffinJin/Search-R1/blob/main/scripts/nq_hotpotqa/v0.2/train_grpo.sh) — the EM-only baseline that produced the published GRPO checkpoints we evaluated in Milestone 1. Canonical record: [`PAPER_VS_OURS_TRAINING.md`](../training/PAPER_VS_OURS_TRAINING.md) §6; verl-side mapping: [`VERL_REFERENCE.md`](../training/VERL_REFERENCE.md) §2.
 
-   > **TODO**: confirm `kl_loss_type` (verl uses `low_var_kl`; NeMo-RL's GRPO default may differ — set to match if the option exists, otherwise note the divergence).
+   **Resolved during step 5:**
+   - **Reward function:** byte-identical port at [`training/src/rewards/search_r1.py`](../../training/src/rewards/search_r1.py); 15 parity tests pass ([`training/tests/test_reward_parity.py`](../../training/tests/test_reward_parity.py)).
+   - **`kl_loss_type=low_var_kl` ≡ NeMo-RL `loss.reference_policy_kl_type: k3`** — both compute Schulman 2020 k3 (`exp(ref-log) - (ref-log) - 1`) byte-identically; NeMo-RL's `k3` is the default, no override needed.
+   - **`state_masking=true` ≡ automatic** in NeMo-RL via role-based `token_loss_mask` ([`grpo.py:1685-1693`](../../training/nemo_rl/nemo_rl/algorithms/grpo.py#L1685-L1693)) — assistant tokens get loss=1, env (`role: tool`) tokens get loss=0. No config knob.
+   - **`test_freq=100`, `total_training_steps=1005`, `val_before_train=true`, `max_turns=4`** — confirmed in v0.2 verl yaml. Maps to NeMo-RL `grpo.{val_period, max_num_steps, val_at_start, max_rollout_turns}`.
+
+   **Carried into step 6 as TODOs:**
+   - **`max_obs_length=500`** (verl per-`<information>` block cap on retrieved docs) — not yet enforced in our env; needs truncation in [`training/src/environments/parsers.py`](../../training/src/environments/parsers.py)'s `format_docs_*` helpers.
 
 6. **Write GRPO training scripts** for 1× A100 80GB and 2× A100 80GB.
    - Hyperparameters baked into [`NEMO_RL_KNOBS.md`](../training/NEMO_RL_KNOBS.md) §7 (concrete starting yaml for 1× A100 with paper's β=0.001, lr=1e-6, group=5, etc.).

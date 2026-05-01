@@ -21,17 +21,27 @@ The verl `re_search_agent` rollout loop POSTs to a retriever **base URL** (no `/
 
 The Milestone 1 retriever already implements `/batch_search` — see [`local_retriever/retriever_serving.py`](../../local_retriever/retriever_serving.py). **No changes needed retriever-side.**
 
-## 2. GRPO + KL settings (confirmed on the verl side)
+## 2. GRPO + KL settings (confirmed against upstream Search-R1 verl yaml)
 
-| Knob | verl flag | Value | Maps to NeMo-RL |
-|---|---|---|---|
-| Optimizer LR | `actor_rollout_ref.actor.optim.lr` | `1e-6` | `optimizer.lr` |
-| KL loss coef (β) | `actor_rollout_ref.actor.kl_loss_coef` | `0.001` | `loss.kl_coef` |
-| KL ctrl coef | `algorithm.kl_ctrl.kl_coef` | `0.001` | (single coef in NeMo-RL) |
-| KL loss type | `actor_rollout_ref.actor.kl_loss_type` | `low_var_kl` | TBD — NeMo-RL default may differ; check `loss.kl_estimator` after clone |
-| Use KL loss? | `actor_rollout_ref.actor.use_kl_loss` | `True` | always-on in GRPO |
-| Group size | `actor_rollout_ref.rollout.n` | `5` | `grpo.num_generations_per_prompt` |
-| Critic warmup | `trainer.critic_warmup` | `0` (no warmup) | n/a — GRPO has no critic |
+Cross-checked against `Search-R1/scripts/nq_hotpotqa/v0.2/train_grpo.sh` — the EM-only baseline that produced the published GRPO checkpoints we evaluated in Milestone 1.
+
+| Knob | verl flag | Value | Maps to NeMo-RL | Status |
+|---|---|---|---|---|
+| Optimizer LR | `actor_rollout_ref.actor.optim.lr` | `1e-6` | `optimizer.lr` | match |
+| Warmup ratio | `actor_rollout_ref.actor.optim.lr_warmup_steps_ratio` | `0.285` | `optimizer.warmup_ratio` | match |
+| KL loss coef (β) | `actor_rollout_ref.actor.kl_loss_coef` | `0.001` | `loss.reference_policy_kl_penalty` | match |
+| **KL loss type** | `actor_rollout_ref.actor.kl_loss_type` | `low_var_kl` | `loss.reference_policy_kl_type: k3` | **equivalent** (see below) |
+| Use KL loss? | `actor_rollout_ref.actor.use_kl_loss` | `True` | always-on in GRPO | match |
+| Group size | `actor_rollout_ref.rollout.n_agent` | `5` | `grpo.num_generations_per_prompt` | match |
+| State masking | `actor_rollout_ref.actor.state_masking` | `True` | automatic via role-based `token_loss_mask` | **equivalent, no config needed** (see below) |
+| Train batch size | `data.train_batch_size` | `512` | `policy.train_global_batch_size` | match |
+| PPO mini batch size | `actor_rollout_ref.actor.ppo_mini_batch_size` | `256` | n/a — different abstraction | NeMo-RL uses gradient accumulation differently; tune via `train_micro_batch_size` |
+| PPO micro batch size | `actor_rollout_ref.actor.ppo_micro_batch_size` | `64` | `policy.train_micro_batch_size` | start at 4 (NeMo default), raise post-first-run |
+| Critic warmup | `trainer.critic_warmup` | `0` (no warmup) | n/a — GRPO has no critic | n/a |
+
+**KL loss type — `low_var_kl` ≡ NeMo-RL `k3`.** Both compute the Schulman 2020 k3 estimator: `exp(ref-log) - (ref-log) - 1` (verl: [`core_algos.py:kl_penalty`](https://github.com/PeterGriffinJin/Search-R1/blob/main/verl/trainer/ppo/core_algos.py); NeMo-RL: [`algorithms/utils.py:74-75`](../../training/nemo_rl/nemo_rl/algorithms/utils.py#L74-L75)). NeMo-RL clamps both input log-ratio (±20) and output (±10); verl clamps only output (±10). Functionally identical for normal training values. **NeMo-RL's default `kl_type="k3"` matches verl exactly — no override needed.**
+
+**State masking — equivalent, automatic.** verl's `state_masking=true` opts in to a `loss_mask` that zeroes out gradient on `<information>...</information>` tokens (the retrieved docs the model didn't generate). NeMo-RL achieves the same effect via role-based `token_loss_mask` ([`grpo.py:1685-1693`](../../training/nemo_rl/nemo_rl/algorithms/grpo.py#L1685-L1693)): assistant-role tokens get loss=1, every other role (tool / environment / user) gets loss=0. Zero-config; we only need to ensure our env emits retrieval responses with role≠"assistant" (we use `"role": "tool"`).
 
 These match what we have in [`PAPER_VS_OURS_TRAINING.md`](PAPER_VS_OURS_TRAINING.md) §6 — **so the verl scripts independently confirm the paper's Appendix B.2 numbers.**
 
