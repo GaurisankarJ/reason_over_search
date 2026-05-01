@@ -2,7 +2,7 @@
 
 History of pipeline ablations tried on `experiment_ros/<tag>` branches that did **not** survive the keep/discard threshold (improvement < ~2 pp EM and within single-seed noise on n=125 Bamboogle/instruct).
 
-Source of truth: [`results.tsv`](../../results.tsv) at the repo root. Loop rules in [`program.md`](../../program.md).
+Source of truth at the time the loop ran: `results.tsv` and `program.md` at the repo root. Both files were untracked in commit `3ed0b11` once the loop wound down — the table below is the surviving record.
 
 Baseline used as reference: **instruct / Bamboogle / seed 1 / temp=0**. EM 0.336 (commit `ab0220f`, `temperature=0` was the only change kept on top of `09822ca`).
 

@@ -1,6 +1,6 @@
 # Bootstrap a new instance
 
-Recreate the full `reason_over_search` runtime on a fresh box (Vast.ai, in-house GPU, or anywhere else) from scratch. Companion doc: [EXPORT_TO_LOCAL.md](EXPORT_TO_LOCAL.md) (the inverse — moving state *off* a working box).
+Recreate the full `reason_over_search` runtime on a fresh box (Vast.ai, in-house GPU, or anywhere else) from scratch.
 
 The fastest path is **the prebuilt docker image + HF re-fetch**. Everything below assumes you start with no local state.
 
@@ -216,11 +216,11 @@ If EM drops to 0.05–0.10 territory the eval is broken — check the `apply_cha
 
 ## Step 10 (optional) — restore prior results
 
-If you exported a Tier 1 results bundle from another box per [EXPORT_TO_LOCAL.md](EXPORT_TO_LOCAL.md):
+The Plan B v0 + v1 result archives (`evaluation_search_r1/results/_archive_v0/`, `_archive_v1/`) are tracked in git and present after a normal clone — no separate restore step needed. If you bring a tarball of additional results from another box, untar into `evaluation_search_r1/results/`:
 
 ```bash
 cd /workspace/reason_over_search
-tar --use-compress-program=unzstd -xf /path/to/ros_results_YYYYMMDD.tar.zst
+tar -xf /path/to/results_bundle.tar -C evaluation_search_r1/results/
 ```
 
 `run_one.sh` is resume-aware — any `(variant, dataset, seed)` cell with a `metric_score.txt` will be skipped on the next sweep.
@@ -232,7 +232,7 @@ tar --use-compress-program=unzstd -xf /path/to/ros_results_YYYYMMDD.tar.zst
 - **`huggingface-cli upload` requires login** — the public downloads above don't, but if you ever push artifacts back, run `huggingface-cli login` first.
 - **Datasets ship in the repo** at `data/<dataset>/<split>.jsonl` (full eval splits) and `data_subsample/<dataset>/<split>.jsonl` (deterministic 1 k subsamples used by the v1 sweep). Total ~140 MB, tracked in git (not LFS). A normal clone gets them. Source: [`RUC-NLPIR/FlashRAG_datasets`](https://huggingface.co/datasets/RUC-NLPIR/FlashRAG_datasets); to re-pull, see [`VAST_INSTANCE_SETUP.md`](VAST_INSTANCE_SETUP.md).
 - **SGLang cold start is slow** — first launch JIT-compiles CUDA kernels (~3–5 min). Subsequent launches are ~30 s.
-- **Resume hazard for autoresearch** — see [program.md](../program.md): if you're rerunning the same `(variant, dataset, seed)` triple in an experiment loop, `rm -rf` the prior results dir first, otherwise `run_one.sh` will skip silently.
+- **Resume hazard for re-runs** — `run_one.sh` is resume-aware: if a `metric_score.txt` exists for `(variant, dataset, seed)` it skips silently. To force a re-run, `rm -rf` the matching `evaluation_search_r1/results/<dataset>/<dataset>_*_search_r1_<variant>_seed<N>` dir first.
 
 ## Total bootstrap time
 

@@ -6,7 +6,7 @@ Treat anything in this directory as **not load-bearing** for current work. None 
 
 ## Pre-v1 historical snapshots
 
-- [RESULTS_PLAN_B_v0.md](RESULTS_PLAN_B_v0.md) — frozen aggregate of the **pre-fix** Plan B sweep (single seed × 7 datasets × 2 variants, before the apply_chat / prompt-sentence / special-tokens fixes). Base avg EM 0.229 (paper 0.312 → −8.3 pp gap), instruct avg 0.367 (paper 0.336 → +3.1 pp). v0 result directories themselves are at `evaluation_search_r1/results/_archive_v0/` (gitignored).
+- [RESULTS_PLAN_B_v0.md](RESULTS_PLAN_B_v0.md) — frozen aggregate of the **pre-fix** Plan B sweep (single seed × 7 datasets × 2 variants, before the apply_chat / prompt-sentence / special-tokens fixes). Base avg EM 0.229 (paper 0.312 → −8.3 pp gap), instruct avg 0.367 (paper 0.336 → +3.1 pp). v0 result directories are at `evaluation_search_r1/results/_archive_v0/` (committed in `cf9e2fb`). 13 runs are archived; the bamboogle/instruct row in `RESULTS_PLAN_B_v0.md` (EM 0.360) is the smoke-test number documented in [../REPRODUCIBILITY.md#smoke-validation](../REPRODUCIBILITY.md#smoke-validation), recorded before the formal v0 sweep started — its run dir was not preserved.
 - [COMPARISON_PLAN_B_SUSPECTS.md](COMPARISON_PLAN_B_SUSPECTS.md) — suspect ranking + recommended-next-steps section as it stood **before** the v1 sweep landed. Useful as a record of how we reasoned to the three audit fixes; superseded by [../COMPARISON_PLAN_B_v1.md](../COMPARISON_PLAN_B_v1.md) and [../PAPER_VS_OURS_AUDIT.md](../PAPER_VS_OURS_AUDIT.md).
 
 ## Hypotheses that turned out wrong

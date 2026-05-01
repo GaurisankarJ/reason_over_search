@@ -128,7 +128,7 @@ The remaining residuals are consistent with 1 k-subsample SE (~1.5 pp factoid, ~
 
 - **Code (committed)**: `run_one.sh` flips base `apply_chat=False → True`; `templates.py` adds the missing example sentence; `active_pipeline.py` drops the runtime `add_special_tokens` block.
 - **No change**: temperature, top_p, retriever, model checkpoints, prompt template body, max_turns, step_limit, observation truncation, splits, metrics, FAISS index, SGLang flags.
-- **Archived**: v0 base + instruct seed=1 result dirs at `evaluation_search_r1/results/_archive_v0/` (local-only — gitignored). [archive/RESULTS_PLAN_B_v0.md](archive/RESULTS_PLAN_B_v0.md) is the committed snapshot of the v0 aggregate.
+- **Archived (committed)**: v0 result dirs at `evaluation_search_r1/results/_archive_v0/` (13 runs — bamboogle/instruct row in the v0 aggregate is the smoke-test number, see [archive/README.md](archive/README.md)) and v1 result dirs at `evaluation_search_r1/results/_archive_v1/` (14 runs). [archive/RESULTS_PLAN_B_v0.md](archive/RESULTS_PLAN_B_v0.md) is the committed snapshot of the v0 aggregate; this file is the v1 counterpart.
 - **Discarded experiments** (full list in [archive/DISCARDED_ABLATIONS.md](archive/DISCARDED_ABLATIONS.md) and the post-mortems in [archive/](archive/)): temperature sweep above 0.0, the autoresearch loop's 11 ablations on `experiment_ros/apr27`, the `apply_chat=True + temp=1.0` probe on NQ. None reproduced when re-run greedy.
 
 ## Next steps
