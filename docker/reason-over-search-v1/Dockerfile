@@ -12,7 +12,7 @@ FROM --platform=${TARGETPLATFORM} vastai/base-image:${VAST_BASE_TAG}
 
 LABEL org.opencontainers.image.title="reason-over-search-v1"
 LABEL org.opencontainers.image.version="1"
-LABEL org.opencontainers.image.description="Conda env `reason-over-search` (Python 3.10)"
+LABEL org.opencontainers.image.description="Conda envs (retriever Py3.10, evaluation_search_r1 Py3.11) + uv-managed NeMo-RL training env (Py3.13, deferred to runtime)"
 
 ENV APP_ROOT=/app
 WORKDIR ${APP_ROOT}
@@ -40,6 +40,17 @@ COPY local_retriever ${APP_ROOT}/local_retriever
 COPY evaluation_search_r1 ${APP_ROOT}/evaluation_search_r1
 RUN /opt/miniforge3/bin/conda run -n evaluation_search_r1 \
       /bin/bash -lc "cd /app/evaluation_search_r1 && python setup.py develop --no-deps"
+
+# Training env (Milestone 2): NeMo-RL via uv.
+# We install uv at build time but defer the heavy install (clone NeMo-RL + uv sync,
+# which pulls torch 2.10 + vLLM 0.17 + Megatron) to runtime via training/setup.sh.
+# Rationale: NeMo-RL deps are ~5GB and we iterate on the clone — baking them in
+# bloats the image and freezes the version.
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
+    ln -s /root/.local/bin/uv /usr/local/bin/uv && \
+    ln -s /root/.local/bin/uvx /usr/local/bin/uvx
+COPY training ${APP_ROOT}/training
+RUN chmod +x ${APP_ROOT}/training/setup.sh
 
 # Run on every Vast boot before SSH auth so key perms are accepted.
 COPY docker/reason-over-search-v1/10-fix-ssh-perms.sh /etc/vast_boot.d/10-fix-ssh-perms.sh

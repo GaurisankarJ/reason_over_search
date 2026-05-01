@@ -20,19 +20,27 @@ Create a `training/` folder at the repo root containing the NeMo-RL setup with t
 
 ## Step-by-step
 
-1. **Update the docker image.** Add a `training` env to [pantomiman/reason-over-search-v1](https://hub.docker.com/r/pantomiman/reason-over-search-v1) and push.
+1. **Set up NeMo-RL.** Run [`training/setup.sh`](../../training/setup.sh) — idempotent script that:
+   - Installs [`uv`](https://docs.astral.sh/uv/) (NeMo-RL's official package manager).
+   - Clones [NVIDIA-NeMo/RL](https://github.com/NVIDIA-NeMo/RL) at the pinned tag (default `v0.6.0`) into `training/nemo_rl/` with submodules (Megatron-LM, Megatron-Bridge, Automodel, Gym).
+   - Removes the cloned `.git` so it's not a nested repo (per Milestone 2 design — local edits get tracked in *this* repo, not upstream's).
+   - Creates a uv venv at `training/nemo_rl/.venv/` (Python 3.13 — uv downloads it itself).
+   - Runs `uv sync --extra vllm` to install all of NeMo-RL's pinned deps + the editable package.
+
+   **The clone is gitignored** (NeMo-RL + 4 submodules ≈ several hundred MB; reproducibility comes from `NEMO_RL_REF` + `uv.lock`). See [`training/README.md`](../../training/README.md) for setup-script knobs.
+
+   **Docker integration**: the `pantomiman/reason-over-search-v1` image now ships `uv` pre-installed and `training/` copied to `/app/training/`. The heavy install is deferred to runtime (avoids freezing a NeMo-RL version into the image). On a fresh container: `bash /app/training/setup.sh` once. The Dockerfile lives at [`docker/reason-over-search-v1/Dockerfile`](../../docker/reason-over-search-v1/Dockerfile); push the rebuilt image after this step.
 
 2. **Download and verify the Search-R1 training dataset.** Schema, splits, and a quick-load snippet are in [`docs/training/TRAINING_DATA.md`](../training/TRAINING_DATA.md). Source: [`PeterJinGo/nq_hotpotqa_train`](https://huggingface.co/datasets/PeterJinGo/nq_hotpotqa_train) (170k train + 51.7k test, parquet).
 
-3. **Convert the dataset to NeMo-RL's expected format.** Done *after* (2), once NeMo-RL's input requirements are pinned (step 4 unblocks this). The conversion **must rewrite the dataset's `prompt[0].content`** — the upstream parquet ships with paper's `<search>` template baked in, which clashes with our Qwen3.5 native `<tool_call>` template (rationale in [`CHAT_TEMPLATE.md`](../training/CHAT_TEMPLATE.md) §5; mapping recipe in [`TRAINING_DATA.md`](../training/TRAINING_DATA.md) §"Conversion to NeMo-RL format").
+3. **Convert the dataset to NeMo-RL's expected format.** Done *after* (1) and (2), once NeMo-RL's input requirements are visible inside `training/nemo_rl/examples/`. The conversion **must rewrite the dataset's `prompt[0].content`** — the upstream parquet ships with paper's `<search>` template baked in, which clashes with our Qwen3.5 native `<tool_call>` template (rationale in [`CHAT_TEMPLATE.md`](../training/CHAT_TEMPLATE.md) §5; mapping recipe in [`TRAINING_DATA.md`](../training/TRAINING_DATA.md) §"Conversion to NeMo-RL format").
 
-   > **TODO**: NeMo-RL's exact row-level data schema for GRPO. The example configs reference data sources but don't fully document the row shape. Inspect `examples/` in the cloned NeMo-RL repo (during step 4) and update [`TRAINING_DATA.md`](../training/TRAINING_DATA.md) with the verified mapping before running this step.
+   > **TODO**: NeMo-RL's exact row-level data schema for GRPO. Inspect `examples/configs/` and `examples/run_grpo.py` in the cloned NeMo-RL repo (after step 1) and update [`TRAINING_DATA.md`](../training/TRAINING_DATA.md) with the verified mapping before running this step.
 
-4. **Set up NeMo-RL** in `training/`.
-   - Clone [NVIDIA-NeMo/RL](https://github.com/NVIDIA-NeMo/RL) into `training/nemo_rl/` and install via `setup.py` in editable mode.
-   - **Not** a package, **not** a nested git repo: remove the cloned `.git` directory after pulling so changes are tracked in this repo's history, not upstream's.
-   - Apply Search-R1-style modifications for Qwen3.5-2B locally.
-   - **Wire the retriever as a custom Ray-actor environment** ([`NEMO_RL_KNOBS.md`](../training/NEMO_RL_KNOBS.md) §9 Path A): register `search_r1` env, parse `<tool_call><function=search><parameter=query>...` from rollouts, POST to `{retriever_url}/batch_search`, wrap response as a `tool` message. Falls back to NeMo Gym (Path B) only if Path A blocks on multi-turn intercepts.
+4. **Apply Search-R1-style modifications** as an **overlay** under `training/src/` (NOT inside `training/nemo_rl/`, which is gitignored).
+   - **Wire the retriever as a custom Ray-actor environment** ([`NEMO_RL_KNOBS.md`](../training/NEMO_RL_KNOBS.md) §9 Path A): write `training/src/environments/search_r1_env.py`, register it via NeMo-RL's `register_env` from a launch script. The actor parses `<tool_call><function=search><parameter=query>...` from rollouts, POSTs to `{retriever_url}/batch_search`, wraps the response as a `tool` message. Fall back to NeMo Gym (Path B) only if Path A blocks on multi-turn intercepts.
+   - **Chat template, reward function, prompt builder** also live under `training/src/` (overlay, not patches to upstream code).
+   - **If a true upstream patch is unavoidable** (e.g. NeMo-RL doesn't expose a hook we need), drop a `.patch` file in `training/patches/` and have `setup.sh` apply it after the clone — that way the patch is tracked in our repo and the gitignored clone stays clean.
 
 5. **Verify the training setup matches the paper.** All confirmed paper hyperparameters are in [`PAPER_VS_OURS_TRAINING.md`](../training/PAPER_VS_OURS_TRAINING.md) §6, cross-checked against the user's verl scripts in [`VERL_REFERENCE.md`](../training/VERL_REFERENCE.md). Open items to verify against the official [Search-R1 GitHub](https://github.com/PeterGriffinJin/Search-R1) verl yaml during step 4:
    - **Reward function:** Search-R1 baseline reward unchanged (Reward ablation = Milestone 3). The EM scorer must be byte-identical to [`flashrag/search_r1/reward.py`](../../evaluation_search_r1/flashrag/search_r1/reward.py).

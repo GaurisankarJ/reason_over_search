@@ -1,0 +1,14 @@
+# NeMo-RL clone — too large to vendor (Megatron-LM submodule alone is hundreds of MB).
+# Reproducibility lives in setup.sh's NEMO_RL_REF pin + uv.lock inside the clone.
+nemo_rl/
+
+# Local env file (W&B key, etc.)
+.env
+
+# uv-managed venvs (in case any are created at training/.venv directly)
+.venv/
+
+# Python build artifacts
+__pycache__/
+*.egg-info/
+*.pyc

@@ -6,6 +6,7 @@
 - Conda env `evaluation_search_r1` (Python 3.11) for `evaluation_search_r1/`
 - App code copied to `/app/local_retriever` and `/app/evaluation_search_r1`
 - Eval package installed in editable mode during build: `python setup.py develop --no-deps`
+- **`uv` pre-installed** + `training/` copied to `/app/training/` (Milestone 2). NeMo-RL itself is *not* baked in — run `bash /app/training/setup.sh` inside the container to clone + install it (deferred to keep the image small; ~5GB worth of NeMo-RL deps).
 
 ## Build (from repository root)
 
@@ -107,6 +108,26 @@ python run_eval.py \
   --generator_model search_r1_base_model \
   --apply_chat False
 ```
+
+## Run training env (inside container)
+
+```bash
+# First time on this instance — clones NeMo-RL + installs deps (~10–20 min)
+bash /app/training/setup.sh
+
+# Then either activate the venv:
+source /app/training/nemo_rl/.venv/bin/activate
+cd /app/training/nemo_rl
+python examples/run_grpo.py --help
+
+# Or use uv directly (no activation needed):
+cd /app/training/nemo_rl
+uv run python examples/run_grpo.py --help
+```
+
+The training env coexists with `retriever` and `evaluation_search_r1` because uv manages its own Python 3.13 venv inside `training/nemo_rl/.venv/` — it doesn't conflict with the conda envs.
+
+See [`training/README.md`](../../training/README.md) for setup-script knobs (`NEMO_RL_REF`, `FORCE_RECLONE`, `UV_EXTRAS`) and full layout.
 
 ## Vast SSH troubleshooting
 
