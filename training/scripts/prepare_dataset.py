@@ -6,25 +6,41 @@
 #   "pyarrow>=15",
 # ]
 # ///
-"""Download the Search-R1 RL training corpus and strip the prebaked template.
+"""Download the Search-R1 RL training corpus and reshape it for NeMo-RL.
 
 Source : https://huggingface.co/datasets/PeterJinGo/nq_hotpotqa_train
 Output : data/training/nq_hotpotqa_train/{train,test}.parquet (repo-root relative)
 
-Why we strip: upstream `make_prefix` bakes the paper's `<search>` / `<information>`
-instruction string into `prompt[0].content`. Our Milestone 2 baseline uses
-Qwen3.5's native `<tool_call>` template instead (see docs/training/CHAT_TEMPLATE.md),
-so we keep the dataset template-agnostic and let the training loop apply
-whichever chat template the run config selects at rollout time.
+Two transforms in one pass:
 
-Conversion is a single field rewrite: `prompt[0].content := question`. Everything
-else (`question`, `golden_answers`, `data_source`, `reward_model.ground_truth`,
-`extra_info`) is preserved verbatim.
+1. **Strip the prebaked Search-R1 template.** Upstream `make_prefix` bakes the
+   paper's `<think>`/`<search>`/`<information>`/`<answer>` instruction string
+   into `prompt[0].content`. We keep the dataset template-agnostic so the
+   chat template (Qwen3.5 native `<tool_call>` default vs. the paper's
+   `<search>` ablation arm) is applied at rollout time via run config — see
+   docs/training/CHAT_TEMPLATE.md.
+
+2. **Rename `prompt` → `messages`.** NeMo-RL's ResponseDataset routes on the
+   `messages` column (nemo_rl/data/datasets/response_datasets/response_dataset.py:64):
+   present → preserve all other columns + add `task_name`; absent → drop
+   everything except input/output. We want the preserve branch so
+   `golden_answers`, `data_source`, etc. survive into the processor.
+
+Each output row's `messages` is a length-1 list `[{"role": "user", "content": question}]`.
+We don't add an `assistant` turn — Search-R1 has no reference rollout, only a
+gold-answer list, which we read from the `golden_answers` column directly in
+the M2-step-4 custom processor (rather than encoding it into messages[1]).
+
+We do NOT pre-bake `task_name`. NeMo-RL's ResponseDataset adds it via
+`add_column`, which would conflict if the column already existed. The
+M2-step-4 dataset adapter sets the proper task name.
+
+Preserved verbatim: `id`, `question`, `golden_answers`, `data_source`,
+`reward_model`, `extra_info`, `metadata`, `ability`.
 
 We read the upstream parquets directly with pyarrow rather than via
 `datasets.load_dataset`, because the latter tries to unify the per-row
-`extra_info` schema across the NQ + HotpotQA mixture and fails (the two
-sub-datasets carry different per-row metadata).
+`extra_info`/`metadata` schema across the NQ + HotpotQA mixture and fails.
 
 Idempotent. Re-runs skip if the output parquets exist; pass `--force` to override.
 
@@ -49,12 +65,14 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 OUT_DIR = REPO_ROOT / "data" / "training" / "nq_hotpotqa_train"
 
 
-def rewrite_prompt_column(table: pa.Table) -> pa.Table:
-    """Replace each row's `prompt` with `[{"role": "user", "content": question}]`."""
+def reshape_for_nemo_rl(table: pa.Table) -> pa.Table:
+    """Drop `prompt`, add `messages: [{"role": "user", "content": question}]`."""
     questions = table.column("question").to_pylist()
-    new_prompt = [[{"role": "user", "content": q}] for q in questions]
-    prompt_idx = table.schema.get_field_index("prompt")
-    return table.set_column(prompt_idx, "prompt", pa.array(new_prompt, type=table.schema.field("prompt").type))
+    rows = [[{"role": "user", "content": q}] for q in questions]
+    messages_type = table.schema.field("prompt").type  # list<struct<role, content>>
+    return table.drop_columns(["prompt"]).append_column(
+        "messages", pa.array(rows, type=messages_type)
+    )
 
 
 def main() -> int:
@@ -86,21 +104,22 @@ def main() -> int:
         if split == "train":
             sample_before = table.column("prompt")[0].as_py()[0]["content"]
 
-        rewritten = rewrite_prompt_column(table)
+        reshaped = reshape_for_nemo_rl(table)
 
         if split == "train":
-            sample_after = rewritten.column("prompt")[0].as_py()[0]["content"]
-            sample_question = rewritten.column("question")[0].as_py()
+            sample_after = reshaped.column("messages")[0].as_py()[0]["content"]
+            sample_question = reshaped.column("question")[0].as_py()
+            print(f"[schema] {split} columns: {reshaped.column_names}")
 
-        pq.write_table(rewritten, out_paths[split])
+        pq.write_table(reshaped, out_paths[split])
         print(f"[write] {split}: {out_paths[split]} ({n} rows, {out_paths[split].stat().st_size / 1e6:.1f} MB)")
 
-    print("\n[verify] row 0 prompt[0].content")
-    print(f"  before  : {sample_before[:120]}{'…' if len(sample_before) > 120 else ''}")
-    print(f"  after   : {sample_after!r}")
-    print(f"  question: {sample_question!r}")
+    print("\n[verify] row 0 messages[0].content")
+    print(f"  upstream prompt[0].content: {sample_before[:120]}{'…' if len(sample_before) > 120 else ''}")
+    print(f"  ours messages[0].content  : {sample_after!r}")
+    print(f"  ours question             : {sample_question!r}")
     if sample_after != sample_question:
-        print("[error] post-convert content does not match question", file=sys.stderr)
+        print("[error] post-convert messages content does not match question", file=sys.stderr)
         return 1
     return 0
 
