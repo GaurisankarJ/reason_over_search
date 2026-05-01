@@ -1,38 +1,43 @@
 #!/usr/bin/env bash
-# Set up NeMo-RL for Search-R1-style GRPO training.
-# Idempotent: safe to re-run. Skips clone + install if the venv is already healthy.
+# Set up the NeMo-RL venv after `git clone`-ing this repo.
 #
-# What it does:
-#   1. Installs uv if missing (Astral's Rust-based pip replacement; NeMo-RL's official tooling)
-#   2. Clones NVIDIA-NeMo/RL at a pinned tag with submodules (Megatron-LM, Megatron-Bridge, Automodel, Gym)
-#   3. Removes the cloned .git directory so it's not a nested repo
-#   4. Creates a uv venv inside training/nemo_rl/.venv (Python 3.13)
-#   5. Runs `uv sync` with the vllm extra (rollout backend)
+# Two contexts:
 #
-# Run:
-#   bash training/setup.sh                # default — pins to v0.6.0
-#   NEMO_RL_REF=main bash training/setup.sh   # override with a branch / tag / commit hash
-#   FORCE_RECLONE=1 bash training/setup.sh    # wipe nemo_rl/ and re-clone
+#  1. ON A VAST INSTANCE running `pantomiman/reason-over-search-v1`:
+#     - The image's uv wheel cache is pre-warmed for NeMo-RL @ v0.6.0 with
+#       the `vllm` extra. Running this script creates the .venv at
+#       training/nemo_rl/.venv/ in seconds-to-minutes (no re-download).
 #
-# Reads:
-#   NEMO_RL_REF       — git ref to check out (default: v0.6.0)
-#   FORCE_RECLONE     — if set, delete training/nemo_rl/ before cloning
+#  2. ON A LOCAL MAC / LINUX machine, outside docker:
+#     - First run: downloads ~5GB of wheels (torch 2.10, vLLM 0.17, cuDNN, etc).
+#     - Subsequent runs reuse uv's cache.
+#
+# Knobs:
+#   NEMO_RL_REF       — git ref to re-clone NeMo-RL at; default: "" (use the
+#                       committed source under training/nemo_rl/, no re-clone)
+#                       Set to bump the pinned NeMo-RL version (also requires
+#                       FORCE_RECLONE=1).
+#   FORCE_RECLONE     — wipe training/nemo_rl/ and re-clone from upstream
+#                       at NEMO_RL_REF (or v0.6.0 if NEMO_RL_REF is empty).
+#                       After re-clone you must `git add training/nemo_rl/`
+#                       and commit the new tree.
 #   UV_EXTRAS         — extras passed to uv sync (default: "vllm")
-#                       Common options: "vllm", "vllm,fsdp", "vllm,nemo_gym"
+#                       Common options: "vllm", "vllm,fsdp", "vllm,nemo_gym".
 #
 # Notes:
-#   - The clone is gitignored (training/.gitignore). We don't track NeMo-RL source in this repo;
-#     reproducibility comes from the pinned NEMO_RL_REF + uv.lock inside the clone.
-#   - uv manages Python 3.13 itself — no system Python upgrade needed.
+#   - training/nemo_rl/ is committed to this repo. setup.sh does not touch it
+#     unless FORCE_RECLONE is set.
+#   - Patches in training/patches/*.patch are applied after a re-clone.
 
 set -euo pipefail
 
-NEMO_RL_REF="${NEMO_RL_REF:-v0.6.0}"
+NEMO_RL_REF="${NEMO_RL_REF:-}"
 UV_EXTRAS="${UV_EXTRAS:-vllm}"
 FORCE_RECLONE="${FORCE_RECLONE:-}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NEMO_RL_DIR="${SCRIPT_DIR}/nemo_rl"
+PATCHES_DIR="${SCRIPT_DIR}/patches"
 
 log() { printf '\033[1;34m[setup]\033[0m %s\n' "$*"; }
 
@@ -40,7 +45,6 @@ log() { printf '\033[1;34m[setup]\033[0m %s\n' "$*"; }
 if ! command -v uv >/dev/null 2>&1; then
     log "uv not found — installing via the Astral installer"
     curl -LsSf https://astral.sh/uv/install.sh | sh
-    # The installer drops uv at ~/.local/bin/uv (or ~/.cargo/bin/uv on some setups).
     export PATH="${HOME}/.local/bin:${HOME}/.cargo/bin:${PATH}"
     if ! command -v uv >/dev/null 2>&1; then
         echo "ERROR: uv installed but not on PATH. Add ~/.local/bin (or ~/.cargo/bin) to PATH and re-run."
@@ -49,19 +53,15 @@ if ! command -v uv >/dev/null 2>&1; then
 fi
 log "uv version: $(uv --version)"
 
-# 2. Clone NeMo-RL (or reuse existing clone)
-if [[ -n "${FORCE_RECLONE}" && -d "${NEMO_RL_DIR}" ]]; then
-    log "FORCE_RECLONE set — removing existing ${NEMO_RL_DIR}"
+# 2. Optionally re-clone NeMo-RL (to bump the pinned version)
+if [[ -n "${FORCE_RECLONE}" ]]; then
+    REF="${NEMO_RL_REF:-v0.6.0}"
+    log "FORCE_RECLONE set — wiping ${NEMO_RL_DIR} and re-cloning @ ${REF}"
     rm -rf "${NEMO_RL_DIR}"
-fi
-
-if [[ ! -d "${NEMO_RL_DIR}" ]]; then
-    log "cloning NVIDIA-NeMo/RL @ ${NEMO_RL_REF} into ${NEMO_RL_DIR} (with submodules)"
-    git clone --recursive --branch "${NEMO_RL_REF}" \
+    git clone --recursive --branch "${REF}" \
         https://github.com/NVIDIA-NeMo/RL.git "${NEMO_RL_DIR}"
 
-    # 3. Apply any local patches BEFORE removing .git (git apply is more forgiving inside a repo).
-    PATCHES_DIR="${SCRIPT_DIR}/patches"
+    # Apply local patches (if any) before stripping .git.
     if [[ -d "${PATCHES_DIR}" ]]; then
         shopt -s nullglob
         patches=( "${PATCHES_DIR}"/*.patch )
@@ -71,29 +71,33 @@ if [[ ! -d "${NEMO_RL_DIR}" ]]; then
             for p in "${patches[@]}"; do
                 log "  $(basename "${p}")"
                 ( cd "${NEMO_RL_DIR}" && git apply --3way "${p}" ) || {
-                    echo "ERROR: failed to apply ${p}. Resolve and rerun with FORCE_RECLONE=1."
+                    echo "ERROR: failed to apply ${p}. Resolve manually and re-run."
                     exit 1
                 }
             done
         fi
     fi
 
-    # 4. Remove .git so this isn't a nested repo. Submodule .git dirs go too.
     log "removing .git directories so it's not a nested repo"
     find "${NEMO_RL_DIR}" -name ".git" -prune -exec rm -rf {} + 2>/dev/null || true
-else
-    log "reusing existing ${NEMO_RL_DIR} (set FORCE_RECLONE=1 to start over)"
+    log "remember to commit training/nemo_rl/ after a successful re-clone"
 fi
 
-# 4 + 5. Create uv venv and install
+if [[ ! -d "${NEMO_RL_DIR}" ]]; then
+    echo "ERROR: ${NEMO_RL_DIR} does not exist. The NeMo-RL source is committed to this repo —"
+    echo "       did the git clone of reason_over_search succeed? If you intentionally cleared"
+    echo "       it, set FORCE_RECLONE=1 (with optional NEMO_RL_REF=...) to re-clone upstream."
+    exit 1
+fi
+
+# 3. uv venv + uv sync
 cd "${NEMO_RL_DIR}"
 if [[ ! -d ".venv" ]]; then
-    log "creating uv venv"
+    log "creating uv venv at ${NEMO_RL_DIR}/.venv (Python 3.13)"
     uv venv
 fi
 
-log "installing NeMo-RL with extras: ${UV_EXTRAS}"
-# uv sync respects the lockfile; --extra adds optional dependency groups.
+log "installing NeMo-RL deps with extras: ${UV_EXTRAS}"
 EXTRA_ARGS=()
 IFS=',' read -r -a EXTRAS <<< "${UV_EXTRAS}"
 for e in "${EXTRAS[@]}"; do
@@ -106,6 +110,6 @@ log ""
 log "Activate the env:"
 log "  source ${NEMO_RL_DIR}/.venv/bin/activate"
 log ""
-log "Or run commands via uv directly (recommended):"
+log "Or run via uv (no activation needed):"
 log "  cd ${NEMO_RL_DIR}"
 log "  uv run python examples/run_grpo.py --help"

@@ -12,7 +12,9 @@ Search-R1 invents its own `<search>` / `<information>` tags and teaches the mode
 
 Source: [`evaluation_search_r1/flashrag/search_r1/templates.py`](../../evaluation_search_r1/flashrag/search_r1/templates.py) (canonical, copied from upstream Search-R1).
 
-**Base model — single-turn template:**
+Search-R1 uses **a single prompt template** for both base and instruct variants. Upstream `make_prefix` ([`Search-R1/scripts/data_process/qa_search_test_merge.py:26-39`](https://github.com/PeterGriffinJin/Search-R1/blob/main/scripts/data_process/qa_search_test_merge.py)) only implements `template_type == 'base'` and raises `NotImplementedError` otherwise; the four sibling data-prep scripts (`qa_search_train_merge.py`, `nq_search.py`, `nq_rag.py`) are identical. The same string is fed as a `user`-role message in both cases — for instruct it is additionally rendered through the model's chat template, but no separate system prompt is added.
+
+**Single template (base + instruct):**
 
 ```
 Answer the given question. You must conduct reasoning inside <think> and </think>
@@ -23,21 +25,6 @@ You can search as many times as your want. If you find no further external
 knowledge needed, you can directly provide the answer inside <answer> and
 </answer>, without detailed illustrations. For example, <answer> Beijing </answer>.
 Question: {prompt}
-```
-
-**Instruct model — system prompt:**
-
-```
-You are a helpful assistant that solves the question step by step with a search
-tool.
-
-Use this protocol exactly:
-1) Think with <think>...</think>
-2) Search with <search>query</search> when needed
-3) Consume evidence from <information>...</information>
-4) End with <answer>final answer</answer>
-
-Do not output tool JSON, and do not use <tool_call> or <tool_response> tags.
 ```
 
 **Tag inventory:**
@@ -192,21 +179,25 @@ We use **Qwen3.5's native `<tool_call>` / `<tool_response>` template** as the Mi
 
 1. **In-distribution action format.** Qwen3.5 was post-trained on Hermes-XML tool use. The action format (call the tool, read the response, decide next step) is something the base policy already does competently, so RL can focus on improving the *retrieval policy* — when to search, what to search for, when to stop — rather than on teaching new structural tokens.
 2. **No wasted reward signal on format compliance.** Search-R1 reports format-validity ≥99 % for base after training, but the early-training trajectory pays a tax to *learn* the tag protocol. With Qwen3.5's native tags we expect cleaner format compliance from step 0 (subject to verification — log close-rate from the start).
-3. **Search-R1's own prompt explicitly forbids `<tool_call>`.** That choice made sense for Qwen2.5 where Hermes-style tool use was less mature, but for Qwen3.5 the calculus is reversed: the native tags *are* the path of least resistance.
+3. **Search-R1 invented its own tags before Qwen tool-use matured.** The paper introduces `<search>` / `<information>` and trains Qwen2.5 on them from scratch. That made sense in 2024 when Hermes-style tool use on Qwen was less mature, but for Qwen3.5 the calculus is reversed: the native tags *are* the path of least resistance.
 4. **`<answer>` tag preserved.** The Milestone 1 EM scorer in [`flashrag/search_r1/reward.py`](../../evaluation_search_r1/flashrag/search_r1/reward.py) extracts answers from `<answer>...</answer>`. We keep that tag in the final assistant message so the existing eval pipeline works on the trained checkpoint without modification.
 
 **Risk we are taking on** (track in W&B): if Qwen3.5's strong tool-use prior locks the policy into a behaviour that is hard to update via RL (mode collapse onto its pre-trained tool patterns), reward will plateau early. Mitigation: log per-step retrieval count and answer length distributions; if degenerate, fall back to the paper's `<search>` template as an ablation.
 
 ---
 
-## 5. Dataset implication (read this before writing the conversion script)
+## 5. Dataset implication
 
-The `prompt` field in [`PeterJinGo/nq_hotpotqa_train`](https://huggingface.co/datasets/PeterJinGo/nq_hotpotqa_train) **already contains Search-R1's `<search>`-tag instructions** (verified by inspecting the dataset). If we use Qwen3.5's `<tool_call>` template, we must **rewrite the system prompt during conversion** rather than passing the dataset's prompt through verbatim.
+The `prompt` field in [`PeterJinGo/nq_hotpotqa_train`](https://huggingface.co/datasets/PeterJinGo/nq_hotpotqa_train) **ships with Search-R1's `<search>`-tag instructions baked in**. Passing it through verbatim would force the policy to emit `<search>` tags regardless of which chat template the run config selects, and would require a per-arm dataset re-conversion to swap templates.
 
-Two-step conversion in [`TRAINING_DATA.md`](TRAINING_DATA.md):
+Our prep script ([`training/scripts/prepare_dataset.py`](../../training/scripts/prepare_dataset.py)) **strips the prebaked template** at download time — `prompt[0].content` becomes the bare `question`. The dataset is **template-agnostic**.
 
-1. **Drop or replace the dataset's `prompt[0].content`** with our Qwen3.5-aware prompt (registering `search` as an OpenAI-style tool in a system message).
-2. **Keep `question`, `golden_answers`, `reward_model.ground_truth.target`, `data_source`** as-is — those drive the EM reward and aren't tied to the prompt format.
+The chat template is applied at **rollout time** by the training loop (a config knob, not a dataset transformation):
+
+- **`qwen_native` (default).** Wrap the bare question with the Qwen3.5 chat template via `tokenizer.apply_chat_template`, registering `search` as an OpenAI-style tool. The system message advertises the tool; the user message is just the question; tool calls / responses follow §2's XML format.
+- **`paper` (ablation arm).** Wrap the bare question with upstream `make_prefix` (the single-template string in [`evaluation_search_r1/flashrag/search_r1/templates.py`](../../evaluation_search_r1/flashrag/search_r1/templates.py)).
+
+Switching arms is a config flip — same dataset, different runtime template. `question`, `golden_answers`, `reward_model.ground_truth.target`, `data_source` are preserved verbatim by the prep script (those drive the EM reward and aren't tied to the prompt format).
 
 ---
 

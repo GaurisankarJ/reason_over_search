@@ -1,22 +1,28 @@
 # reason-over-search v1 (Docker)
 
-## What this image contains
+## Hybrid paradigm
 
-- Conda env `retriever` for `local_retriever/`
-- Conda env `evaluation_search_r1` (Python 3.11) for `evaluation_search_r1/`
-- App code copied to `/app/local_retriever` and `/app/evaluation_search_r1`
-- Eval package installed in editable mode during build: `python setup.py develop --no-deps`
-- **`uv` + NeMo-RL @ `v0.6.0` baked in** at `/app/training/nemo_rl/` with the `vllm` extra installed (Milestone 2). Venv at `/app/training/nemo_rl/.venv/` (Python 3.13). No setup needed at runtime.
+| Concern | Pattern | Why |
+|---|---|---|
+| `retriever` + `evaluation_search_r1` | **Code + env baked into the image.** | Stable surface; no need to clone the repo on Vast just to run them. |
+| `training` (NeMo-RL) | **Env baked, code cloned at runtime.** Image ships `uv` + a pre-warmed NeMo-RL wheel cache. The repo is `git clone`d onto Vast; `uv sync` materializes the venv from the cached wheels. | Active iteration surface — pushing edits doesn't require rebuilding the image. |
 
-## Build (from repository root)
+## What's in the image
 
-The `Dockerfile` uses `FROM --platform=linux/amd64` so the result matches **Vast.ai** and typical cloud GPUs (**x86_64**), even when you build on an **Apple Silicon** machine. The first such build on a Mac can be slower (QEMU) while it runs the `RUN` steps.
+- **Conda env `retriever`** (Python 3.10) — `local_retriever/requirements.txt` installed; source at `/app/local_retriever/`.
+- **Conda env `evaluation_search_r1`** (Python 3.11) — `evaluation_search_r1/requirements.txt` installed; source at `/app/evaluation_search_r1/`; flashrag editable-installed at build time (`python setup.py develop --no-deps`).
+- **`uv` + pre-warmed wheel cache** at `/root/.cache/uv/` covering NeMo-RL @ `v0.6.0` deps with the `vllm` extra. Running `uv sync` in your cloned `training/nemo_rl/` reuses these cached wheels (seconds-to-minutes instead of 10–20 min download).
+- **Vast SSH boot hook** at `/etc/vast_boot.d/10-fix-ssh-perms.sh` — normalizes `/root/.ssh/authorized_keys` perms on startup.
+
+## Build (from repo root)
 
 ```bash
 docker build -f docker/reason-over-search-v1/Dockerfile -t reason-over-search-v1:v1 .
 ```
 
-**If a remote builder still complains about base platform**, use Buildx and load into the local engine:
+The `Dockerfile` uses `FROM --platform=linux/amd64` so the result matches **Vast.ai** and typical cloud GPUs (**x86_64**), even when you build on an **Apple Silicon** machine. The first such build on a Mac can be slower (QEMU) while it runs the `RUN` steps.
+
+If a remote builder still complains about base platform, use Buildx and load into the local engine:
 
 ```bash
 docker buildx build --platform linux/amd64 \
@@ -24,14 +30,35 @@ docker buildx build --platform linux/amd64 \
   -t reason-over-search-v1:v1 --load .
 ```
 
-Pushing a previously **arm64-only** image to Hub and reusing it as a base for an **amd64** build causes `InvalidBaseImagePlatform`. Rebuild with `linux/amd64` and push that tag.
+### Build args (training pre-warm)
 
-This image also includes a Vast boot hook that normalizes `/root/.ssh/authorized_keys` permissions on startup to avoid OpenSSH rejecting key auth with:
-`Authentication refused: bad ownership or modes for file /root/.ssh/authorized_keys`.
+| Arg | Default | Purpose |
+|---|---|---|
+| `NEMO_RL_REF` | `v0.6.0` | NeMo-RL ref the wheel cache is pre-warmed for. Must match the version committed at `training/nemo_rl/`. Bump both together. |
+| `UV_EXTRAS` | `vllm` | Comma-separated NeMo-RL extras to pre-warm (e.g. `vllm,nemo_gym`). |
+
+```bash
+docker build \
+  --build-arg NEMO_RL_REF=v0.6.0 \
+  --build-arg UV_EXTRAS=vllm,nemo_gym \
+  -f docker/reason-over-search-v1/Dockerfile -t reason-over-search-v1:v1 .
+```
+
+### Build OOMs on pip / conda
+
+Raise Docker / Colima / Desktop **RAM (8G+)** and try again. The uv pre-warm step in particular pulls torch + vLLM + cuDNN — peak memory pressure is similar to the conda env builds.
+
+## Push to Docker Hub
+
+```bash
+docker tag reason-over-search-v1:v1 pantomiman/reason-over-search-v1:v1
+docker login
+docker push pantomiman/reason-over-search-v1:v1
+```
 
 ## Run an interactive shell
 
-The Vast base image has its own `ENTRYPOINT`. For a normal shell, override it, then use conda and your app from `/app`.
+The Vast base image has its own `ENTRYPOINT`. For a normal shell, override it:
 
 ```bash
 docker run --rm -it --entrypoint /bin/bash \
@@ -42,12 +69,10 @@ docker run --rm -it --entrypoint /bin/bash \
   reason-over-search-v1:v1
 ```
 
-Inside the container:
+## Run retriever (inside container)
 
 ```bash
 source /opt/miniforge3/etc/profile.d/conda.sh
-
-# Retriever env
 conda activate retriever
 cd /app/local_retriever
 
@@ -60,34 +85,7 @@ In another shell on the host, check health:
 curl -sS http://127.0.0.1:3005/health
 ```
 
-## One-liner (no shell session)
-
-```bash
-docker run --rm -it -p 3005:3005 \
-  -v "$(pwd)/local_retriever/models":/app/local_retriever/models:ro \
-  -v "$(pwd)/local_retriever/indexes":/app/local_retriever/indexes:ro \
-  -v "$(pwd)/local_retriever/corpus":/app/local_retriever/corpus:ro \
-  --entrypoint /opt/miniforge3/bin/conda \
-  reason-over-search-v1:v1 \
-  run --no-capture-output -n retriever python /app/local_retriever/retriever_serving.py \
-  --config /app/local_retriever/retriever_config_mini.yaml --port 3005 --num_retriever 4
-```
-
-## Build OOMs on pip/conda
-
-Raise Docker / Colima / Desktop **RAM (8G+)** and try again.
-
-## Push (e.g. Vast or Hub)
-
-```bash
-docker tag reason-over-search-v1:v1 pantomiman/reason-over-search-v1:v1
-docker login
-docker push pantomiman/reason-over-search-v1:v1
-```
-
-On Vast, you can `ssh` in or use their terminal, `conda activate retriever`, and run the same `python` command as above.
-
-## Run evaluation env (inside container)
+## Run evaluation (inside container)
 
 ```bash
 source /opt/miniforge3/etc/profile.d/conda.sh
@@ -109,36 +107,39 @@ python run_eval.py \
   --apply_chat False
 ```
 
-## Run training env (inside container)
+## Run training (inside container, after cloning the repo on Vast)
 
-NeMo-RL is **already installed and ready** — the venv lives at `/app/training/nemo_rl/.venv/` (Python 3.13).
+The training env is **not** baked with code. On a fresh Vast.ai instance:
 
 ```bash
-# Option A — activate explicitly
-source /app/training/nemo_rl/.venv/bin/activate
-cd /app/training/nemo_rl
-python examples/run_grpo.py --help
+# 1. Clone the repo (once per instance)
+cd /workspace
+git clone https://github.com/<your-user>/reason_over_search.git
+cd reason_over_search
 
-# Option B — uv (no activation needed)
-cd /app/training/nemo_rl
+# 2. Materialize the venv against the committed NeMo-RL source.
+#    Fast (~30s-2min) because the wheel cache at /root/.cache/uv/ is pre-warmed.
+cd training/nemo_rl
+uv sync --extra vllm
+
+# 3. Activate
+source .venv/bin/activate
+
+# 4. Sanity check
+python -c "import nemo_rl; print(nemo_rl.__version__)"   # 0.6.0
+
+# 5. Run an example
+python examples/run_grpo.py --config=examples/configs/grpo_math_1B.yaml
+```
+
+Or use `uv` directly (no activation):
+
+```bash
+cd /workspace/reason_over_search/training/nemo_rl
 uv run python examples/run_grpo.py --help
 ```
 
-The training env coexists with `retriever` and `evaluation_search_r1` because uv manages its own Python 3.13 venv inside `training/nemo_rl/.venv/` — it doesn't conflict with the conda envs.
-
-### Pinning a different NeMo-RL version
-
-The Dockerfile pins via build args. To rebuild against a different ref or with extra optional deps:
-
-```bash
-docker build \
-  --build-arg NEMO_RL_REF=main \
-  --build-arg UV_EXTRAS=vllm,nemo_gym \
-  -f docker/reason-over-search-v1/Dockerfile \
-  -t reason-over-search-v1:v1 .
-```
-
-For local dev *outside* docker, see [`training/README.md`](../../training/README.md) — `training/setup.sh` does the same clone + install and is the path to use on a Mac without Docker.
+See [`training/README.md`](../../training/README.md) for setup-script knobs and bumping the pinned NeMo-RL version.
 
 ## Vast SSH troubleshooting
 

@@ -1,11 +1,20 @@
-# NeMo-RL clone — too large to vendor (Megatron-LM submodule alone is hundreds of MB).
-# Reproducibility lives in setup.sh's NEMO_RL_REF pin + uv.lock inside the clone.
-nemo_rl/
+# NeMo-RL source IS committed (training/nemo_rl/ tracked) — so local edits land
+# in this repo's git history. Pinned via setup.sh's NEMO_RL_REF (re-clone with
+# FORCE_RECLONE=1 to bump). Only the deps + caches stay out:
+nemo_rl/.venv/
+nemo_rl/wandb/
+nemo_rl/results/
+nemo_rl/.pytest_cache/
+nemo_rl/.ruff_cache/
+nemo_rl/**/__pycache__/
+nemo_rl/**/*.egg-info/
+nemo_rl/build/
+nemo_rl/dist/
 
 # Local env file (W&B key, etc.)
 .env
 
-# uv-managed venvs (in case any are created at training/.venv directly)
+# uv-managed venvs at the training/ level (in case any are created here)
 .venv/
 
 # Python build artifacts

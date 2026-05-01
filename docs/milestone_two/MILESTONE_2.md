@@ -20,14 +20,16 @@ Create a `training/` folder at the repo root containing the NeMo-RL setup with t
 
 ## Step-by-step
 
-1. **Bake NeMo-RL into the docker image.** Same paradigm as the existing `retriever` and `evaluation_search_r1` conda envs in [`docker/reason-over-search-v1/Dockerfile`](../../docker/reason-over-search-v1/Dockerfile) — *fully self-contained image, zero setup at Vast.ai start*.
+1. **Set up the training env in docker (hybrid paradigm).** The image at [`docker/reason-over-search-v1/Dockerfile`](../../docker/reason-over-search-v1/Dockerfile) splits two concerns:
+   - **Stable surfaces (`retriever`, `evaluation_search_r1`)**: code + conda env baked in, **as before**. No change.
+   - **Active surface (`training` / NeMo-RL)**: env baked, code cloned at runtime. Image ships `uv` + a pre-warmed wheel cache for NeMo-RL. The repo gets `git clone`d on Vast; `uv sync` materializes the venv from the cached wheels in seconds-to-minutes.
 
-   The Dockerfile (extended for Milestone 2):
+   **Source layout**: NeMo-RL @ `v0.6.0` is **committed to this repo** at [`training/nemo_rl/`](../../training/nemo_rl/) with submodules (Megatron-LM, Megatron-Bridge, Automodel, Gym; `.git` stripped so it's not a nested repo). Local edits land in this repo's git history. Bump via [`training/setup.sh`](../../training/setup.sh) with `NEMO_RL_REF=<ref> FORCE_RECLONE=1`, commit the new tree, and rebuild the image with `--build-arg NEMO_RL_REF=<ref>` so the wheel cache matches.
+
+   **Dockerfile** additions for Milestone 2:
    - Installs [`uv`](https://docs.astral.sh/uv/) (NeMo-RL's official package manager).
-   - Clones [NVIDIA-NeMo/RL](https://github.com/NVIDIA-NeMo/RL) at the pinned tag (`NEMO_RL_REF`, default `v0.6.0`) with submodules (Megatron-LM, Megatron-Bridge, Automodel, Gym) into `/app/training/nemo_rl/`.
-   - Applies any `*.patch` from `training/patches/` (overlay-style edits).
-   - Strips the cloned `.git` directories so it's not a nested repo.
-   - Runs `uv venv` (Python 3.13) + `uv sync --extra ${UV_EXTRAS}` (default `vllm`).
+   - **Pre-warms `/root/.cache/uv/`** by shallow-cloning NeMo-RL @ `${NEMO_RL_REF}` into `/tmp`, running `uv sync --extra ${UV_EXTRAS} --no-install-project` to download all wheels, then deleting the temp clone. The wheels stay in the cache.
+   - **Does not COPY `training/`** — the source comes from `git clone` on Vast. `.dockerignore` excludes `training/nemo_rl/` from the build context to keep `docker build` fast.
 
    Build + push:
 
@@ -42,13 +44,23 @@ Create a `training/` folder at the repo root containing the NeMo-RL setup with t
    docker push pantomiman/reason-over-search-v1:v1
    ```
 
-   **The host-side clone is gitignored** ([`training/.gitignore`](../../training/.gitignore)) and **excluded from the build context** ([`.dockerignore`](../../.dockerignore)) — the Dockerfile owns the clone, so the image rebuilds cleanly from any checkout.
+   **On Vast** (per fresh instance):
 
-   For local dev *outside* docker, [`training/setup.sh`](../../training/setup.sh) does the same clone + install. Knobs (`NEMO_RL_REF`, `UV_EXTRAS`, `FORCE_RECLONE`) match the docker build args.
+   ```bash
+   cd /workspace
+   git clone https://github.com/<your-user>/reason_over_search.git
+   cd reason_over_search/training/nemo_rl
+   uv sync --extra vllm                  # fast — wheel cache pre-warmed in image
+   source .venv/bin/activate
+   ```
 
-2. **Download and verify the Search-R1 training dataset.** Schema, splits, and a quick-load snippet are in [`docs/training/TRAINING_DATA.md`](../training/TRAINING_DATA.md). Source: [`PeterJinGo/nq_hotpotqa_train`](https://huggingface.co/datasets/PeterJinGo/nq_hotpotqa_train) (170k train + 51.7k test, parquet).
+   For local dev *outside* docker, [`training/setup.sh`](../../training/setup.sh) does the same `uv sync` (first run downloads ~5 GB; subsequent runs hit uv's local cache).
 
-3. **Convert the dataset to NeMo-RL's expected format.** Done *after* (1) and (2), once NeMo-RL's input requirements are visible inside `training/nemo_rl/examples/`. The conversion **must rewrite the dataset's `prompt[0].content`** — the upstream parquet ships with paper's `<search>` template baked in, which clashes with our Qwen3.5 native `<tool_call>` template (rationale in [`CHAT_TEMPLATE.md`](../training/CHAT_TEMPLATE.md) §5; mapping recipe in [`TRAINING_DATA.md`](../training/TRAINING_DATA.md) §"Conversion to NeMo-RL format").
+2. **Download and prep the Search-R1 training dataset.** Run [`training/scripts/prepare_dataset.py`](../../training/scripts/prepare_dataset.py) — uv inline-script, idempotent. It pulls [`PeterJinGo/nq_hotpotqa_train`](https://huggingface.co/datasets/PeterJinGo/nq_hotpotqa_train) (169,615 train + 51,713 test, parquet) and **strips the prebaked Search-R1 template**, replacing each row's `prompt[0].content` with the bare `question`. Output: `data/training/nq_hotpotqa_train/{train,test}.parquet` (gitignored). Schema details in [`docs/training/TRAINING_DATA.md`](../training/TRAINING_DATA.md).
+
+   Stripping keeps the dataset **template-agnostic** so the chat template (Qwen3.5 native `<tool_call>` default vs. the paper's `<search>` ablation arm) is applied at **rollout time** via run config — not baked into the dataset. Rationale: [`CHAT_TEMPLATE.md`](../training/CHAT_TEMPLATE.md) §5.
+
+3. **Map to NeMo-RL's expected row schema.** Done *after* (1), once NeMo-RL's data-loader requirements are visible inside `training/nemo_rl/examples/`. The current `prompt: [{role,content}]` shape may already be enough; if NeMo-RL expects `messages` or another shape, add a final reshape pass to [`prepare_dataset.py`](../../training/scripts/prepare_dataset.py) rather than introducing a second conversion script.
 
    > **TODO**: NeMo-RL's exact row-level data schema for GRPO. Inspect `examples/configs/` and `examples/run_grpo.py` in the cloned NeMo-RL repo (after step 1) and update [`TRAINING_DATA.md`](../training/TRAINING_DATA.md) with the verified mapping before running this step.
 
