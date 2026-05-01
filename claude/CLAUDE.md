@@ -136,4 +136,6 @@ Canonical list in [docs/MILESTONE_1.md#whats-left](../docs/milestone_one/MILESTO
 
 Do **not** change `temperature` or `top_p` — paper eval is greedy. See note above.
 
-**After Phase 1** — further ablations on the autoresearch branch and starting on **ReSearch** (the second paper). Append to this section as the plan firms up.
+**Milestone 2 — training Search-R1 on Qwen3 via NeMo-RL**: scoped in [docs/milestone_two/MILESTONE_2.md](../docs/milestone_two/MILESTONE_2.md). Work happens on the `training-setup` branch. Verl does not support Qwen3, so we port the Search-R1-style GRPO loop to NeMo-RL. Reward function and chat template are decoupled as ablation surfaces; baseline uses Qwen3's native `<tool_call>` / `<tool_response>` template instead of the paper's `<search>` / `<information>`.
+
+**After Milestone 2** — further ablations on the autoresearch branch and starting on **ReSearch** (the second paper). Append to this section as the plan firms up.
