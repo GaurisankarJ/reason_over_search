@@ -63,32 +63,25 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
     ln -sf /root/.local/bin/uv /usr/local/bin/uv && \
     ln -sf /root/.local/bin/uvx /usr/local/bin/uvx
 
-# Pre-warm wheels for NeMo-RL. We download every wheel that an
-# `uv sync --extra vllm` would need into a flat directory at /opt/uv-wheels/,
-# then set UV_FIND_LINKS so any subsequent `uv sync` (on Vast, against the
-# user's cloned training/nemo_rl/) picks them up locally instead of going to
-# PyPI.
+# Pre-warm uv's wheel cache at /root/.cache/uv/. Subsequent `uv sync` against
+# the user's cloned training/nemo_rl/ on Vast will hit the cache and skip the
+# 5+ GB download. The cache is content-addressed by hash, so it works across
+# project paths.
 #
-# Why download (no install) — the install path would extract wheels into a
-# temporary venv (~3GB unpack of torch alone) inside the build container's
-# writable layer, which OOMs the Docker VM on Apple Silicon under QEMU.
-# Download-only never extracts; it just persists ~5GB of .whl files.
+# Approach: shallow-clone NeMo-RL, run `uv sync` to populate the cache (this
+# also creates a temp venv we delete afterwards), then drop the clone. Skip
+# building the editable nemo_rl package itself with --no-install-project so
+# we don't waste cycles installing something we'll re-resolve on Vast against
+# the user's clone.
 RUN git clone --depth=1 --branch ${NEMO_RL_REF} --recursive \
         https://github.com/NVIDIA-NeMo/RL.git /tmp/nemo-rl-deps && \
     cd /tmp/nemo-rl-deps && \
     EXTRA_FLAGS="" && \
     for e in $(echo ${UV_EXTRAS} | tr ',' ' '); do EXTRA_FLAGS="${EXTRA_FLAGS} --extra ${e}"; done && \
-    # Resolve the lockfile to a flat requirements.txt with all transitive deps pinned.
-    uv export ${EXTRA_FLAGS} --no-dev --no-emit-project --format requirements-txt -o /tmp/nemo-rl-reqs.txt && \
-    # Download every wheel to /opt/uv-wheels/ (no extraction, no venv).
-    mkdir -p /opt/uv-wheels && \
-    uv pip download --python-version 3.13 --no-deps -r /tmp/nemo-rl-reqs.txt -d /opt/uv-wheels && \
-    rm -rf /tmp/nemo-rl-deps /tmp/nemo-rl-reqs.txt
-
-# Tell uv to look in /opt/uv-wheels/ before going to PyPI. On Vast, when the
-# user runs `cd training/nemo_rl && uv sync --extra vllm`, uv will resolve
-# every dep against this directory and skip PyPI for anything found.
-ENV UV_FIND_LINKS=/opt/uv-wheels
+    uv venv .venv && \
+    uv sync ${EXTRA_FLAGS} --no-install-project && \
+    # Keep /root/.cache/uv/ (the goal); drop the temp venv and clone.
+    rm -rf /tmp/nemo-rl-deps
 
 # === 4. Vast boot hook — fix SSH key permissions so OpenSSH accepts auth ===
 COPY docker/reason-over-search-v1/10-fix-ssh-perms.sh /etc/vast_boot.d/10-fix-ssh-perms.sh
