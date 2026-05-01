@@ -46,6 +46,7 @@ from nemo_rl.distributed.batched_data_dict import BatchedDataDict
 from nemo_rl.environments.interfaces import EnvironmentInterface, EnvironmentReturn
 
 from training.src.environments.parsers import (
+    DEFAULT_MAX_OBS_CHARS,
     VALID_ARMS,
     format_docs_paper,
     format_docs_qwen_native,
@@ -63,6 +64,7 @@ class SearchR1EnvConfig(TypedDict, total=False):
     retriever_url: str
     top_n: int
     max_turns: int
+    max_obs_chars: int  # per-observation char cap (verl's max_obs_length=500 tokens, char proxy)
     request_timeout_s: float
 
 
@@ -83,6 +85,7 @@ class SearchR1Env(EnvironmentInterface):
         self.retriever_url = cfg.get("retriever_url", "http://127.0.0.1:3005").rstrip("/")
         self.top_n = int(cfg.get("top_n", 3))
         self.max_turns = int(cfg.get("max_turns", 4))
+        self.max_obs_chars = int(cfg.get("max_obs_chars", DEFAULT_MAX_OBS_CHARS))
         self.request_timeout_s = float(cfg.get("request_timeout_s", 30.0))
 
     # ----- retrieval -----
@@ -210,9 +213,9 @@ class SearchR1Env(EnvironmentInterface):
             else:  # "search"
                 docs = retrieved[i] or [f"Retriever returned no documents for query: {queries[i]}"]
                 content = (
-                    format_docs_qwen_native(docs)
+                    format_docs_qwen_native(docs, max_chars=self.max_obs_chars)
                     if self.arm == "qwen_native"
-                    else format_docs_paper(docs)
+                    else format_docs_paper(docs, max_chars=self.max_obs_chars)
                 )
                 observations.append({"role": "tool", "content": content})
                 next_stop_strings.append(self._stop_strings_for_arm())
