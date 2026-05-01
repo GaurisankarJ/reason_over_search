@@ -101,8 +101,6 @@ source training/.env
 
 ## Run Training
 
-> **Status (2026-05-01)**: NeMo-RL env + dataset prep are wired up. Concrete launch scripts are pending — Milestone 2 step 6. The runs below are sketches; final commands will live in `training/scripts/`.
-
 ### Sanity check the env
 
 ```bash
@@ -120,39 +118,56 @@ cd training/nemo_rl
 uv run python examples/run_grpo.py --config=examples/configs/grpo_math_1B.yaml
 ```
 
-### Run Search-R1 GRPO (TBD)
+### Run Search-R1 GRPO
 
-Will live at `training/scripts/run_grpo_qwen3.5_2b_{base,hybrid}_{1,2}_a100_80gb.sh`. Each script:
+Launch scripts at [`training/scripts/run_grpo_{1,2}xa100.sh`](scripts/) take `--variant {base,hybrid} --seed N --arm {qwen_native,paper}`. Both invoke [`training/scripts/run_grpo.py`](scripts/run_grpo.py) — a thin overlay launcher that imports [`training.src.registry`](src/registry.py) (populates DATASET / PROCESSOR / ENV registries) and then hands off to NeMo-RL's `examples.run_grpo.main()`. Configs at [`training/configs/grpo_qwen3.5_2b_{1,2}xa100.yaml`](configs/) — full standalone YAMLs, no Hydra defaults composition.
 
-1. Reads `training/.env` for W&B keys.
-2. Loads `training/configs/grpo_qwen3.5_2b_{base,hybrid}.yaml` (concrete starting yaml in [docs/training/NEMO_RL_KNOBS.md](../docs/training/NEMO_RL_KNOBS.md) §7).
-3. Registers the Search-R1 retrieval env (`training/src/environments/search_r1_env.py`) via NeMo-RL's `register_env` (see [docs/training/NEMO_RL_KNOBS.md](../docs/training/NEMO_RL_KNOBS.md) §9).
-4. Invokes `uv run python examples/run_grpo.py --config=...`.
+```bash
+# 1× A100 80GB, qwen_native baseline, base model, seed 42
+bash training/scripts/run_grpo_1xa100.sh --variant base --seed 42
 
-Before launching, the retriever must be live (`local_retriever/README.md`, port 3005); the rollout env POSTs to `/batch_search`.
+# 2× A100 80GB, paper-template ablation arm, hybrid model, seed 7
+bash training/scripts/run_grpo_2xa100.sh --variant hybrid --seed 7 --arm paper
+```
+
+Before launching, the **retriever must be live** at `127.0.0.1:3005` ([`local_retriever/README.md`](../local_retriever/README.md)); the rollout env POSTs to `/batch_search`. W&B key in [`training/.env`](.env) (gitignored).
+
+Per-knob rationale + the verified mapping vs the upstream verl yaml: [docs/training/](../docs/training/) (start at the [README](../docs/training/README.md)).
 
 ## Folder layout
 
 ```
 training/
-├── README.md                    # this file
+├── README.md                    # this file (operational; how to run things)
 ├── setup.sh                     # installs uv + runs uv sync (local dev / docker fallback)
+├── .env                         # W&B key (gitignored)
 ├── nemo_rl/                     # vendored NeMo-RL source @ v0.6.0 (committed)
 │   └── .venv/                   # uv-managed Python 3.13 venv (gitignored, materialized on Vast)
-├── scripts/
-│   └── prepare_dataset.py       # download + strip Search-R1 template
 ├── patches/                     # optional *.patch overlays for nemo_rl/ (applied by setup.sh)
-├── configs/                     # GRPO + memory configs (TBD — Milestone 2 step 6)
-├── src/                         # Search-R1 chat template, reward, retrieval env (TBD — Milestone 2 step 4)
-└── .env                         # W&B key (gitignored)
+├── configs/                     # full GRPO YAMLs per GPU layout
+│   ├── grpo_qwen3.5_2b_1xa100.yaml
+│   └── grpo_qwen3.5_2b_2xa100.yaml
+├── scripts/
+│   ├── prepare_dataset.py       # download + strip + reshape training data
+│   ├── run_grpo.py              # overlay launcher: register + hand off to NeMo-RL main()
+│   ├── run_grpo_1xa100.sh       # bash wrapper (variant, seed, arm)
+│   └── run_grpo_2xa100.sh       # bash wrapper (variant, seed, arm)
+├── src/                         # Search-R1 overlay — registered into NeMo-RL at launch
+│   ├── chat_template/tools.py
+│   ├── datasets/search_r1.py
+│   ├── environments/parsers.py
+│   ├── environments/search_r1_env.py
+│   ├── processors/search_r1.py
+│   ├── prompts/search_r1_paper.txt
+│   ├── rewards/search_r1.py
+│   └── registry.py              # populates registries on import (side effect)
+└── tests/                       # pytest — reward parity, parser dispatch, env step (mocked retriever)
 ```
 
 ## See also
 
-- [docs/training/NEMO_RL_KNOBS.md](../docs/training/NEMO_RL_KNOBS.md) — config knobs + concrete starting yaml for 1× A100 80GB
-- [docs/training/CHAT_TEMPLATE.md](../docs/training/CHAT_TEMPLATE.md) — Qwen3.5 native tool-call template (the baseline)
-- [docs/training/TRAINING_DATA.md](../docs/training/TRAINING_DATA.md) — `PeterJinGo/nq_hotpotqa_train` schema + conversion recipe
-- [docs/training/PAPER_VS_OURS_TRAINING.md](../docs/training/PAPER_VS_OURS_TRAINING.md) — divergences from paper, with rationale
-- [docs/training/VERL_REFERENCE.md](../docs/training/VERL_REFERENCE.md) — porting reference distilled from verl-tested scripts
-- [docs/training/VALIDATION.md](../docs/training/VALIDATION.md) — in-loop validation plan
+Operational guide is here. The **why** lives in [docs/training/](../docs/training/) — start there:
+
+- [docs/training/README.md](../docs/training/README.md) — landing page, end-to-end view, step-5 audit summary, overlay architecture
+- Per-topic deep dives: [TRAINING_DATA.md](../docs/training/TRAINING_DATA.md), [CHAT_TEMPLATE.md](../docs/training/CHAT_TEMPLATE.md), [PAPER_VS_OURS_TRAINING.md](../docs/training/PAPER_VS_OURS_TRAINING.md), [VERL_REFERENCE.md](../docs/training/VERL_REFERENCE.md), [VALIDATION.md](../docs/training/VALIDATION.md), [NEMO_RL_KNOBS.md](../docs/training/NEMO_RL_KNOBS.md)
 - [docs/milestone_two/MILESTONE_2.md](../docs/milestone_two/MILESTONE_2.md) — overall milestone scope
