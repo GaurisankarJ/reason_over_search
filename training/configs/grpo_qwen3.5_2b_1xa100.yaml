@@ -1,38 +1,37 @@
-# GRPO training config — Search-R1 on Qwen3.5-2B, single A100 80GB.
+# GRPO training config — Search-R1 on Qwen3.5-2B, 1× A100 80GB.
 #
-# Two concerns are kept distinct:
-#   - "[paper]" comments mark Search-R1-specific values cross-checked against
-#     Search-R1/scripts/nq_hotpotqa/v0.2/train_grpo.sh (the verl yaml that
-#     produced the published GRPO checkpoints we evaluated in M1). DO NOT
-#     change without updating docs/training/PAPER_VS_OURS_TRAINING.md.
-#   - "[memory]" comments mark hardware-tuning knobs. Free to retune after
-#     observing actual VRAM / throughput on the first run.
+# Two concerns are tagged distinctly throughout:
+#   [paper]  : Search-R1 hyperparameter, cross-checked against
+#              Search-R1/scripts/nq_hotpotqa/v0.2/train_grpo.sh — the EM-only
+#              baseline that produced the published GRPO checkpoints we eval'd
+#              in M1. Identical between 1× and 2× A100 configs.
+#   [memory] : hardware-tuning knob. Differs between 1× and 2× A100 layouts;
+#              free to retune after the first run on real hardware.
 #
-# Defaults to qwen_native chat-template arm + Qwen3.5-2B-Base. Override on the
-# command line for hybrid / paper / different seeds:
-#   policy.model_name=Qwen/Qwen3.5-2B  (hybrid variant)
-#   data.default.arm=paper data.default.prompt_file=training/src/prompts/search_r1_paper.txt
-#   grpo.seed=7
-#
-# Audit landing page: docs/training/README.md.
+# Default flavour: qwen_native chat template + Qwen3.5-2B-Base. The bash
+# wrappers (training/scripts/run_grpo_1xa100.sh) override model + arm + seed
+# via Hydra. Audit landing page: docs/training/README.md.
 
 # =============================================================================
 # GRPO algorithm
 # =============================================================================
 grpo:
-  # [paper] verl `n_agent=5` (group size G).
+  # [paper] verl `n_agent=5` (GRPO group size G).
   num_generations_per_prompt: 5
-  # 102 * 5 ≈ 510 → matches verl's train_global_batch_size=512.
+  # [paper] 102 prompts × 5 generations = 510 trajectories per step (≈ verl's
+  # train_batch_size=512). Matches train_global_batch_size below exactly so
+  # NeMo-RL's per-step trajectory budget == gradient batch size (upstream
+  # convention; see grpo_math_1B.yaml's 32×16=512).
   num_prompts_per_step: 102
   # [paper] verl total_training_steps=1005 (supersedes paper text's "500"; the
-  # published checkpoints came from 1005-step runs).
+  # published checkpoints we evaluated in M1 came from 1005-step runs).
   max_num_steps: 1005
   max_num_epochs: 1   # capped by max_num_steps anyway
   # [paper] verl test_freq=100 + val_before_train=true.
   val_period: 100
   val_at_start: true
   val_at_end: true
-  # Cap validation rollouts per period — see docs/training/VALIDATION.md.
+  # Cap validation rollouts per period (see docs/training/VALIDATION.md §6).
   max_val_samples: 1000
   val_batch_size: 256
   # [paper] verl max_turns=4 (per-rollout search-tool call cap).
@@ -62,7 +61,7 @@ grpo:
     target_min: 0.0
     target_max: 1.0
   seq_logprob_error_threshold: null
-  seed: 42   # override on the cli per run
+  seed: 42   # overridden by --seed in the bash wrapper
   async_grpo:
     enabled: false
     max_trajectory_age_steps: 1
@@ -123,10 +122,17 @@ policy:
     chat_template_kwargs: null
   hf_config_overrides: {}
 
-  # [paper] global batch 512.
-  train_global_batch_size: 512
-  # [memory] verl ppo_micro_batch_size=64 (8× H100). On 1× A100 80GB at 4k
-  # seq + group=5 we start at 4 and tune up after observing VRAM headroom.
+  # [paper] 510 trajectories per gradient update (matches num_prompts_per_step
+  # × num_generations_per_prompt above — upstream convention). Verl uses
+  # train_batch_size=512; the 2-trajectory delta is rounding from the 5×102
+  # factorization and is harmless because force_on_policy_ratio is off.
+  train_global_batch_size: 510
+  # [memory] Upstream NeMo-RL anchors:
+  #   - 1.5B@seq=512@micro=4 (grpo_math_1B.yaml, no activation_checkpointing) → tested OK
+  #   - 8B@seq=4096@micro=1 (grpo_math_8B.yaml) → tested OK
+  # Our 2B@seq=4096@micro=4 with activation_checkpointing=true sits between
+  # these — should fit comfortably. Drop to 2 if OOM on first run; verify
+  # `dtensor_cfg.activation_checkpointing: true` is on (it is).
   train_micro_batch_size: 4
   generation_batch_size: 32
   logprob_batch_size: ${policy.train_micro_batch_size}
@@ -318,9 +324,11 @@ policy:
       tensor_parallel_size: 1
       pipeline_parallel_size: 1
       expert_parallel_size: 1
-      # [memory] 0.6 in upstream; 0.8 for 80 GB / 2B headroom — drop to 0.7 if
-      # rollouts OOM under group=5 + 4k seq.
-      gpu_memory_utilization: 0.8
+      # [memory] 0.6 is upstream's tested-safe default across every example
+      # config (1.5B math, 8B math, 70B math). Conservative for first run on
+      # an 80 GB A100; raise to 0.75 once we've seen the actual VRAM profile
+      # in W&B (`gpu_monitoring`).
+      gpu_memory_utilization: 0.6
       max_model_len: ${policy.max_total_sequence_length}
       enforce_eager: false
       use_deep_gemm: false

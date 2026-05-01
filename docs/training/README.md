@@ -63,26 +63,27 @@ Lock-in mapping between [`Search-R1/scripts/nq_hotpotqa/v0.2/train_grpo.sh`](htt
 
 | Knob | verl value (v0.2 yaml) | NeMo-RL key | Our value | Status |
 |---|---|---|---|---|
-| Optimizer LR | `1e-6` | `optimizer.kwargs.lr` | `1e-6` | match |
-| Warmup ratio | `0.285` | `optimizer` LinearLR `total_iters` | computed from `0.285 × 1005 ≈ 286` | match |
-| Total steps | `total_training_steps=1005` | `grpo.max_num_steps` | `1005` | match (paper text says 500; verl says 1005 — published checkpoints came from 1005-step runs) |
+| Optimizer LR | `1e-6` | `policy.optimizer.kwargs.lr` | `1e-6` | match |
+| Warmup ratio | `0.285` | `policy.scheduler` LinearLR `total_iters` | `286` (= 0.285 × 1005) | match |
+| Total steps | `total_training_steps=1005` | `grpo.max_num_steps` | `1005` | match — paper text says 500; verl yaml + published checkpoints are 1005 |
 | Save cadence | `save_freq=100` | `checkpointing.save_period` | `100` | match |
 | Val cadence | `test_freq=100` | `grpo.val_period` | `100` | match |
 | Val at start | `val_before_train=true` | `grpo.val_at_start` | `true` | match |
 | KL coef (β) | `kl_loss_coef=0.001` | `loss_fn.reference_policy_kl_penalty` | `0.001` | match |
-| **KL estimator** | `kl_loss_type=low_var_kl` | `loss_fn.reference_policy_kl_type=k3` | NeMo-RL default | **byte-identical** — both compute Schulman 2020 k3 |
-| **State masking** | `state_masking=true` (mask `<information>` from policy gradient) | role-based `token_loss_mask` ([grpo.py:1685-1693](../../training/nemo_rl/nemo_rl/algorithms/grpo.py#L1685-L1693)) | automatic | **equivalent, no config knob** — env emits `role: tool`, gradient zero-masks it |
+| **KL estimator** | `kl_loss_type=low_var_kl` | `loss_fn.reference_policy_kl_type` | `k3` (NeMo-RL default) | **byte-identical** — both compute Schulman 2020 k3 |
+| **State masking** | `state_masking=true` (`<information>` zero-masked) | role-based `token_loss_mask` ([grpo.py:1685-1693](../../training/nemo_rl/nemo_rl/algorithms/grpo.py#L1685-L1693)) | automatic | **equivalent**, no config knob — env emits `role: tool`, gradient masks it |
 | Clip ratio (ε) | `0.2` | `loss_fn.ratio_clip_min` / `ratio_clip_max` | `0.2` | match |
 | Group size G | `n_agent=5` | `grpo.num_generations_per_prompt` | `5` | match |
-| Train batch | `train_batch_size=512` | `policy.train_global_batch_size` | `512` | match |
+| Trajectories / step | 512 (`train_batch_size=512`) | `num_prompts_per_step × num_generations_per_prompt` | `102 × 5 = 510` | 2-traj rounding; harmless with `force_on_policy_ratio: false` |
+| Train global batch | n/a | `policy.train_global_batch_size` | `510` | matches the trajectories-per-step (upstream convention) |
+| Train micro batch | `ppo_micro_batch_size=64` (verl-only) | `policy.train_micro_batch_size` | `4` (1× and 2× A100) | conservative for 2B@seq=4096 with `activation_checkpointing: true` |
 | Max prompt len | `4096` | `policy.max_total_sequence_length` | `4096` | match |
 | Max response len | `500` | `policy.generation.max_new_tokens` | `500` | match |
-| Max search turns | `max_turns=4` | `env.search_r1.max_turns` (overlay) | `4` | match |
-| Topk retrieved | `retriever.topk=3` | `env.search_r1.top_n` (overlay) | `3` | match |
-| Rollout temp | `1.0` | `policy.generation.temperature` | `1.0` | match |
-| Rollout top_p | `1.0` | `policy.generation.top_p` | `1.0` | match |
-| **Max obs len** | `max_obs_length=500` (per-`<information>` block tokens) | `env.search_r1.max_obs_chars` (overlay; ~4 char/tok proxy) | `2000` | **char-proxy** (no tokenizer in env actor by design) |
-| Reward function | EM-based (`flashrag/search_r1/reward.py`) | byte-identical port at `training/src/rewards/search_r1.py` | match | verified by 15 tests |
+| Max search turns | `max_turns=4` | `env.search_r1.max_turns` + `grpo.max_rollout_turns` | `4` | match |
+| Topk retrieved | `retriever.topk=3` | `env.search_r1.top_n` | `3` | match |
+| Rollout temp / top_p | `1.0` / `1.0` | `policy.generation.{temperature, top_p}` | `1.0` / `1.0` | match |
+| **Max obs len** | `max_obs_length=500` tokens | `env.search_r1.max_obs_chars` | `2000` chars | **char proxy** (~4 char/token; pure-Python parsers, no tokenizer) |
+| Reward function | EM-based (`flashrag/search_r1/reward.py`) | `training/src/rewards/search_r1.py` | byte-identical port | verified by 15 parity tests |
 
 **Knowing divergences from the paper** (recorded in [PAPER_VS_OURS_TRAINING.md §9](PAPER_VS_OURS_TRAINING.md#9-divergence-summary-one-place-to-glance)): model family (Qwen3.5-2B vs Qwen2.5-3B), chat template (qwen_native vs paper), variant naming (hybrid vs instruct), hardware (1×–2× A100 vs 8× H100), framework (NeMo-RL vs verl). Everything else matches.
 
@@ -119,18 +120,18 @@ After that, the training loop sees `dataset_name: search_r1`, `processor: search
 
 ## Hardware + runtime expectations
 
-Per [PAPER_VS_OURS_TRAINING.md §7](PAPER_VS_OURS_TRAINING.md#7-compute) — projected:
-- 1× A100 80GB: ~30–50 h / run, $30–100 / run.
-- 2× A100 80GB: ~18–28 h / run, $36–112 / run.
-- Total Phase 2 budget for 6 runs (3 seeds × {base, hybrid}): ~$180–600 on 1× A100.
+Projected (high uncertainty until first run; see [`PAPER_VS_OURS_TRAINING.md §7`](PAPER_VS_OURS_TRAINING.md#7-compute) for derivation):
+
+- **1× A100 80GB**: 50–150 h / run → **$50–300 / run**
+- **2× A100 80GB**: 30–90 h / run → **$60–360 / run** (faster wall-clock, higher GPU-hours)
+- **Phase 2 total** (3 seeds × {base, hybrid} = 6 runs): **$300–1800** on 1× A100
+
+**First-run gate** ([§7 Derivation](PAPER_VS_OURS_TRAINING.md#first-run-gate)): run one seed on 1× A100; at step 100 (~1 h in if going well, much later if not), project end-to-end wall-clock and decide whether to commit to the full 6-run plan or scale up to 2× A100.
 
 Retriever: separate process on `127.0.0.1:3005`, ~65 GB host RAM (Wiki-18 FAISS-flat). See [`local_retriever/README.md`](../../local_retriever/README.md).
 
-Concrete configs + launch scripts: [`training/configs/`](../../training/configs/) and [`training/scripts/`](../../training/scripts/).
-
 ## Running training
 
-The how-to-launch view:
-- **Operator-side** (what to run): [`training/README.md`](../../training/README.md)
-- **Phase 2 runbook** (Vast.ai sequence, smoke run, monitoring, eval gate): [`../milestone_two/PHASE_2_RUNBOOK.md`](../milestone_two/PHASE_2_RUNBOOK.md)
+- **What to run** (commands, args, env vars): [`training/README.md`](../../training/README.md)
+- **Vast.ai sequence** (boot, retriever setup, smoke run, monitoring, eval gate): [`../milestone_two/PHASE_2_RUNBOOK.md`](../milestone_two/PHASE_2_RUNBOOK.md)
 - **Milestone scope + status**: [`../milestone_two/MILESTONE_2.md`](../milestone_two/MILESTONE_2.md)

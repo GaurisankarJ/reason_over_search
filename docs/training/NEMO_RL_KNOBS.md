@@ -95,73 +95,34 @@ Reference for the NeMo-RL settings that matter when running GRPO on Qwen3.5-2B o
 
 ---
 
-## 7. Recommended starting values for 1× A100 80GB on Qwen3.5-2B
+## 7. Recommended starting values for Qwen3.5-2B on A100 80GB
 
-```yaml
-policy:
-  model_name: "Qwen/Qwen3.5-2B-Base"  # or Qwen3.5-2B for the hybrid variant
-  precision: "bfloat16"
-  max_total_sequence_length: 4096
-  train_global_batch_size: 512
-  train_micro_batch_size: 4               # raise if memory allows
-  generation_batch_size: 32
-  max_grad_norm: 1.0
-  dtensor_cfg:
-    enabled: true
-    tensor_parallel_size: 1
-    sequence_parallel: false
-    activation_checkpointing: true        # ON — bf16 + 4k seq + GRPO group=5 will pressure memory
-  generation:
-    backend: "vllm"
-    max_new_tokens: 500
-    temperature: 1.0
-    top_p: 1.0
-    vllm_cfg:
-      tensor_parallel_size: 1
-      gpu_memory_utilization: 0.8         # raise from default 0.6 for 80GB card
-      enforce_eager: false
+The actual configs live at [`training/configs/grpo_qwen3.5_2b_{1,2}xa100.yaml`](../../training/configs/) — full standalone YAMLs. Below is just the diff vs upstream's `grpo_math_1B.yaml` defaults so you can see what we tuned and why; for the canonical values open the configs.
 
-grpo:
-  num_prompts_per_step: 102               # 102 * 5 ≈ 512 global batch
-  num_generations_per_prompt: 5           # Search-R1 paper group size
-  max_num_steps: 1005                     # verl total_training_steps (v0.2 yaml)
-  val_period: 100                         # verl test_freq
-  val_at_start: true                      # verl val_before_train
-  max_rollout_turns: 4                    # verl max_turns
-  normalize_rewards: true
-  use_leave_one_out_baseline: true
-
-loss:
-  reference_policy_kl_penalty: 0.001      # Search-R1 paper β (verl kl_loss_coef)
-  reference_policy_kl_type: "k3"          # ≡ verl low_var_kl (Schulman 2020 k3)
-  clip_ratio: 0.2                         # Search-R1 paper ε
-
-optimizer:
-  optimizer: "adam"
-  lr: 1.0e-6                              # Search-R1 paper LR
-  min_lr: 1.0e-7
-  weight_decay: 0.01
-  adam_beta1: 0.9
-  adam_beta2: 0.999
-  warmup_ratio: 0.285                     # Search-R1 paper warmup
-
-cluster:
-  gpus_per_node: 1
-  num_nodes: 1
-
-checkpointing:
-  enabled: true
-  checkpoint_dir: "/workspace/persistent/checkpoints/qwen3.5-2b-base/seed1"
-  metric_name: "val:accuracy"
-  keep_top_k: 3
-  save_period: 100                        # Search-R1 cadence
-
-logger:
-  wandb_enabled: true
-  num_val_samples_to_print: 5
-```
-
-For **2× A100 80GB**: set `cluster.gpus_per_node: 2`, `policy.generation.vllm_cfg.tensor_parallel_size: 2`, leave `policy.dtensor_cfg.tensor_parallel_size` at `1` (use DDP across the two GPUs for training, TP=2 for rollouts only). Halve `generation_batch_size` if rollout memory is tight.
+| Knob | Upstream `grpo_math_1B.yaml` | Ours, 1× A100 | Ours, 2× A100 | Reason |
+|---|---|---|---|---|
+| `policy.model_name` | `Qwen/Qwen2.5-1.5B` | `Qwen/Qwen3.5-2B-Base` | same | M2 target |
+| `policy.max_total_sequence_length` | `512` | `4096` | same | [paper] verl `max_prompt_length=4096` |
+| `policy.train_global_batch_size` | `512` | `510` | same | matches `num_prompts_per_step × num_generations_per_prompt` |
+| `policy.train_micro_batch_size` | `4` | `4` | `4` | identical (DDP doesn't reduce per-GPU memory) |
+| `policy.dtensor_cfg.activation_checkpointing` | `false` | `true` | `true` | [memory] bf16 + 4k seq + group=5 pressures activations |
+| `policy.generation.max_new_tokens` | `512` (≈ max_seq) | `500` | same | [paper] verl `max_response_length=500` |
+| `policy.generation.vllm_cfg.tensor_parallel_size` | `1` | `1` | `2` | [memory] split rollout weights on 2× A100 |
+| `policy.generation.vllm_cfg.gpu_memory_utilization` | `0.6` | `0.6` | `0.7` | conservative defaults; raise after observing W&B `gpu_monitoring` |
+| `grpo.num_prompts_per_step` | `32` | `102` | same | [paper] 102 × 5 = 510 ≈ verl's 512 trajectories |
+| `grpo.num_generations_per_prompt` | `16` | `5` | same | [paper] verl `n_agent=5` |
+| `grpo.max_num_steps` | `1000000` | `1005` | same | [paper] verl `total_training_steps=1005` |
+| `grpo.val_period` | `10` | `100` | same | [paper] verl `test_freq=100` |
+| `grpo.max_rollout_turns` | `1` | `4` | same | [paper] verl `max_turns=4` (multi-turn search) |
+| `loss_fn.reference_policy_kl_penalty` | `0.01` | `0.001` | same | [paper] verl `kl_loss_coef=0.001` |
+| `loss_fn.reference_policy_kl_type` | `"k3"` | `"k3"` | same | upstream default = verl `low_var_kl` (byte-identical) |
+| `loss_fn.ratio_clip_min` / `ratio_clip_max` | `0.2` / `0.2` | same | same | [paper] PPO ε=0.2 |
+| `policy.optimizer.kwargs.lr` | `5.0e-6` | `1.0e-6` | same | [paper] verl LR |
+| `policy.scheduler` LinearLR `total_iters` | `50` | `286` | same | [paper] 0.285 × 1005 |
+| `cluster.gpus_per_node` | `1` | `1` | `2` | hardware target |
+| `data.train.dataset_name` | `OpenMathInstruct-2` | `search_r1` | same | our overlay |
+| `env_name` | `math` | `search_r1` | same | our overlay |
+| `checkpointing.metric_name` | `val:accuracy` | same | same | [`SearchR1Env.global_post_process_and_metrics`](../../training/src/environments/search_r1_env.py) emits `accuracy` |
 
 ---
 

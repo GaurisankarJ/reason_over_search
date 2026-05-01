@@ -59,11 +59,10 @@ cd reason_over_search
 git lfs install
 git lfs pull
 
-# Materialize the NeMo-RL venv. First run downloads ~5 GB of wheels — torch,
-# vLLM, cuDNN — taking ~10–20 min on Vast's network. The image's uv install
-# does NOT carry a pre-warmed wheel cache (see docker/reason-over-search-v1/
-# README.md "Build args" for why); subsequent runs in the same container are
-# fast since uv keeps the cache at /root/.cache/uv/.
+# Materialize the NeMo-RL venv. The docker image carries a pre-warmed uv
+# wheel cache (~5 GB at /root/.cache/uv/), so this completes in ~30s–2min
+# rather than re-downloading. If you build the image without the wheel
+# pre-warm step, expect ~10–20 min on Vast's network.
 cd training/nemo_rl
 uv sync --extra vllm
 cd ../..
@@ -201,9 +200,11 @@ bash training/scripts/run_grpo_1xa100.sh --variant hybrid --seed 1337
 ```
 
 Each run:
-- 1005 steps, ~30–50 h projected on 1× A100 ([PAPER_VS_OURS_TRAINING.md §7](../training/PAPER_VS_OURS_TRAINING.md#7-compute)).
+- 1005 steps, **~50–150 h projected on 1× A100** (high uncertainty — see [`PAPER_VS_OURS_TRAINING.md §7`](../training/PAPER_VS_OURS_TRAINING.md#7-compute) and the first-run gate below).
 - 11 validation points (step 0 + every 100 steps).
 - Top-3 checkpoints kept by `val:accuracy`, plus `latest`.
+
+> **First-run gate**: launch ONE seed first (`--variant base --seed 42`). At step 100 (~1 h in if going well, much longer if not), check the W&B `gpu_monitoring` panel and the wall-clock so far. If projecting to land under 50 h end-to-end, commit to the 6-run plan on 1× A100. If 50–150 h, weigh cost-vs-time and consider switching the remaining 5 runs to 2× A100. If >150 h or `val/accuracy = 0` after step 100 (model not learning the format), abort and debug.
 
 ### 2× A100 (faster; if 1× takes too long)
 
@@ -212,7 +213,9 @@ bash training/scripts/run_grpo_2xa100.sh --variant base --seed 42
 # ...etc.
 ```
 
-Wall-clock ~1.7× faster, total GPU-hours slightly higher (see [PAPER_VS_OURS_TRAINING.md §7](../training/PAPER_VS_OURS_TRAINING.md#7-compute)).
+Wall-clock ~1.7× faster than 1× A100 (~30–90 h / run), total GPU-hours ~20% higher per run (see [PAPER_VS_OURS_TRAINING.md §7](../training/PAPER_VS_OURS_TRAINING.md#7-compute)).
+
+**Training params are byte-identical between 1× and 2× configs** — only `cluster.gpus_per_node`, `vllm.tensor_parallel_size`, and `gpu_memory_utilization` differ ([diff](../../training/configs/)). So switching from 1× to 2× mid-experiment doesn't change the GRPO trajectory; you'd just resume from a checkpoint with a different config.
 
 ### Sequential vs concurrent
 
@@ -244,13 +247,17 @@ CPU saturation on the retriever node is the most likely throughput bottleneck. I
 
 ### Failure modes + recovery
 
-| Symptom | Likely cause | Fix |
+Configs ship with conservative defaults (`train_micro_batch_size=4`, `gpu_memory_utilization=0.6` on 1× A100 / `0.7` on 2× A100, `activation_checkpointing=true`) to make the first-run launch survivable. If something still goes wrong:
+
+| Symptom | Likely cause | Fix (override on the CLI) |
 |---|---|---|
-| OOM in policy forward | `train_micro_batch_size` too high | Drop to 2; or enable `dtensor_cfg.cpu_offload=true` |
-| OOM in vLLM rollout | `vllm_cfg.gpu_memory_utilization` too high | Drop to 0.7 |
-| Retriever HTTP timeout | retriever overloaded | Increase `env.search_r1.request_timeout_s` to 60; reduce `grpo.num_generations_per_prompt` to 4 temporarily |
-| `val:accuracy` stays at 0 | format-validity ≈ 0 (model not emitting `<answer>`) | Inspect a few val rollouts in W&B. Likely needs more warmup or a higher LR. |
-| KL explodes (> 5) | LR too high or KL coef too low | Check `loss_fn.reference_policy_kl_penalty=0.001` is set |
+| OOM in policy forward / backward | `train_micro_batch_size` too high for activations | `policy.train_micro_batch_size=2` (and `policy.logprob_batch_size=2` follows automatically). If still OOM: `policy.dtensor_cfg.cpu_offload=true` |
+| OOM at vLLM init or first rollout | `gpu_memory_utilization` reserves more than the policy + adam + grad + ref leaves free | Drop by 0.05: `policy.generation.vllm_cfg.gpu_memory_utilization=0.55` (1× A100) or `0.65` (2× A100) |
+| Retriever HTTP timeout / connection errors | retriever overloaded (CPU pegged) or down | Check `tmux attach -t retriever`. Bump `env.search_r1.request_timeout_s=60`. If retriever is healthy but slow, drop concurrent rollout pressure: `grpo.num_prompts_per_step=64` (lower trajectories/step temporarily). |
+| `val/accuracy` stays at 0 after step 100 | format-validity ≈ 0 (model not emitting `<answer>`) | Inspect a few val rollouts in W&B (`logger.num_val_samples_to_print: 5`). Likely needs longer warmup or a slightly higher LR (`policy.optimizer.kwargs.lr=2.0e-6`). |
+| KL explodes (>5) | LR too high or KL coef too low | Verify `loss_fn.reference_policy_kl_penalty=0.001`. If correct, halve LR. |
+| `val:accuracy` checkpoint metric "missing" | env's `global_post_process_and_metrics` not registered | Verify `import training.src.registry` at top of `run_grpo.py` runs before `main()`. The metric key must be `accuracy` (env emits it) and `metric_name` must be `val:accuracy` (config sets it). |
+| Hybrid variant emits `<think>` blocks but no `<answer>` | enable_thinking=true broke the chat-template termination | Verify the bash wrapper added `++policy.tokenizer.chat_template_kwargs.enable_thinking=true`. Inspect a few val traces; if the model loops in `<think>...</think>` blocks without converging, raise `policy.generation.max_new_tokens` from 500 to 750 or 1000 for the hybrid runs. |
 
 ---
 

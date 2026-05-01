@@ -73,50 +73,61 @@ Paper values from Appendix B.2; verl values from [`Search-R1/scripts/nq_hotpotqa
 | Hyperparameter | Paper / verl | Ours | Notes |
 |---|---|---|---|
 | Learning rate | `1e-6` | `1e-6` | match |
-| Warmup ratio | `0.285` | `0.285` | match (unusually high; revisit after first run) |
-| **Total training steps** | **`1005`** (verl `total_training_steps=1005`; supersedes paper text's "500") | **`1005`** | match — see §5 note |
-| Global batch size | `512` | `512` | match |
-| PPO mini-batch | `256` | n/a in NeMo-RL — different abstraction | NeMo-RL uses gradient accumulation differently |
-| PPO micro-batch | `64` | `train_micro_batch_size: 4` (NeMo default) — raise post-first-run | tune for memory |
-| GRPO group size | `5` | `5` | match (`grpo.num_generations_per_prompt: 5`) |
-| KL coef (β) | `0.001` | `0.001` | match (`loss.reference_policy_kl_penalty`) |
-| **KL estimator** | **`low_var_kl`** (Schulman 2020 k3) | **`k3`** (NeMo-RL default; identical formula) | see [`VERL_REFERENCE.md`](VERL_REFERENCE.md) §2 |
-| Clip ratio (ε) | `0.2` | `0.2` | match (`loss.clip_ratio`) |
-| Max sequence length | `4096` | `4096` | match (`policy.max_total_sequence_length`) |
-| Max response length | `500` | `500` | match (`policy.generation.max_new_tokens`) |
-| **Max retrieved content length** | **`500`** (verl `max_obs_length=500`, per-`<information>` block) | **must enforce in env** | **TODO step 6**: cap retrieval response in `format_docs_*` (currently uncapped). |
-| Max start length | `2048` (verl `max_start_length`) | n/a — NeMo-RL composes max_seq from prompt + completions | verl-specific composition |
-| Rollout temperature | `1.0` | `1.0` | match |
-| Rollout top-p | `1.0` | `1.0` | match |
-| Max search turns | `4` (verl `max_turns=4` in v0.2) | `4` (`env.search_r1.max_turns: 4`) | match (set in step 4 env config) |
-| **State masking** | **`True`** (verl) — mask `<information>` blocks from policy gradient | **automatic** in NeMo-RL via role-based `token_loss_mask` | see [`VERL_REFERENCE.md`](VERL_REFERENCE.md) §2 |
-| GAE λ | `1` | n/a — GRPO uses leave-one-out, not GAE | (paper Appendix lists λ=1, γ=1 but those are PPO-only) |
-| GAE γ | `1` | n/a — same as above |
-| Optimizer | Adam | Adam | match |
-| Precision | bf16 | bf16 | match |
+| Warmup ratio | `0.285` | `0.285` (286 LinearLR iters of 1005) | match (unusually high; revisit after first run) |
+| **Total training steps** | **`1005`** (verl `total_training_steps=1005`; supersedes paper text's "500") | **`1005`** | match — see §5 |
+| Trajectories per step | `512` (`train_batch_size=512` × n_agent=1 prompt-traj? — verl semantics; we use 510) | `510` (102 prompts × 5 generations) | **2-traj rounding** from `5 × 102 = 510` factorization. Harmless: `force_on_policy_ratio: false`, mismatch isn't asserted. |
+| PPO mini/micro batch | `256` / `64` (verl-specific abstraction) | n/a in NeMo-RL | NeMo-RL uses one gradient update per step over `train_global_batch_size` trajectories (with grad accumulation across `train_micro_batch_size`-sized chunks) |
+| `train_global_batch_size` | n/a | `510` | matches `num_prompts_per_step × num_generations_per_prompt` (upstream convention; see grpo_math_1B.yaml's `32×16=512`) |
+| `train_micro_batch_size` | n/a | `4` (1× and 2× A100 — same; DDP doesn't reduce per-GPU memory) | between upstream's tested `1.5B@seq=512@micro=4` and `8B@seq=4096@micro=1`; with `activation_checkpointing: true` should fit. Drop to 2 if OOM. |
+| GRPO group size G | `5` | `5` (`num_generations_per_prompt`) | match |
+| KL coef (β) | `0.001` | `0.001` (`reference_policy_kl_penalty`) | match |
+| **KL estimator** | `low_var_kl` (Schulman 2020 k3) | `k3` (NeMo-RL default) | **byte-identical formula**; see [`VERL_REFERENCE.md`](VERL_REFERENCE.md) §2 |
+| Clip ratio (ε) | `0.2` | `0.2` (`ratio_clip_min=ratio_clip_max=0.2`) | match |
+| Max sequence length | `4096` | `4096` (`max_total_sequence_length`) | match |
+| Max response length | `500` | `500` (`generation.max_new_tokens`) | match |
+| **Max obs length** | `500` tokens per `<information>` block | `2000` chars (`env.search_r1.max_obs_chars`) | **char proxy** — pure-Python parsers, no tokenizer; ~4 char/token for English Wiki text |
+| Rollout temperature / top-p | `1.0` / `1.0` | `1.0` / `1.0` | match |
+| Max search turns | `4` (`max_turns=4`) | `4` (`env.search_r1.max_turns`, `grpo.max_rollout_turns`) | match |
+| **State masking** | `True` — mask `<information>` from policy gradient | automatic via role-based `token_loss_mask` ([grpo.py:1685-1693](../../training/nemo_rl/nemo_rl/algorithms/grpo.py#L1685-L1693)) | **equivalent**, no config knob; env emits `role: tool` → loss=0 |
+| GAE λ / γ | `1` / `1` | n/a — GRPO uses leave-one-out, not GAE | paper Appendix lists these but PPO-only |
+| Optimizer / Precision | Adam / bf16 | AdamW / bf16 | match (AdamW = Adam with decoupled weight decay; same gradient direction) |
 | Gradient checkpointing | enabled | enabled (`activation_checkpointing: true`) | match |
-| FSDP CPU offload | enabled | n/a — using DTensor | DTensor handles memory differently; revisit if OOM |
+| FSDP CPU offload | enabled (verl-side memory budget tight on 8× H100) | off (`dtensor_cfg.cpu_offload: false`) | DTensor on A100 80GB has more headroom; flip to `true` if OOM persists |
+| GPU memory utilization | `0.6` (verl) | `0.6` on 1× A100 / `0.7` on 2× A100 | conservative first-run defaults; raise after observing W&B `gpu_monitoring` |
 
 ## 7. Compute
 
+> **High uncertainty until first run.** The projections below are derived from upstream NeMo-RL math benchmarks scaled by model-size + sequence-length + multi-turn factors, with a wide range to reflect the unknowns (retrieval HTTP latency, DTensor-vs-FSDP throughput, multi-turn batched generation efficiency). **Replace with observed numbers after the first 100 training steps complete on real Vast.ai hardware** — that's enough signal to project accurately.
+
 | | Paper | Ours — projected (1× A100) | Ours — projected (2× A100) | Ours — observed |
 |---|---|---|---|---|
-| Hardware | 1 node × 8× H100 | 1× A100 80GB | 2× A100 80GB | — |
-| Training steps | 1005 (verl `total_training_steps`) | 1005 | 1005 | TBD |
-| Wall-clock estimate | not stated explicitly | **~30–50 h** (see derivation below) | **~18–28 h** | **TBD — record on first run** |
-| GPU-hours / run | ~24 h × 8 ≈ 192 GPU-h (rough) | 30–50 GPU-h | 36–56 GPU-h | TBD |
-| Vast.ai A100 80GB rate | n/a | ~$1–2 / GPU-h | ~$1–2 / GPU-h | check at launch time |
-| Estimated $/run | n/a | **~$30–100** | **~$36–112** | TBD |
-| Multi-seed plan | single-seed | **3 seeds × {base, hybrid} = 6 runs** | same | — |
-| Total Phase-2 budget | n/a | **~$180–600** (6 runs × $30–100) | ~$216–672 | — |
+| Hardware | 1 node × 8× H100 | 1× A100 80GB | 2× A100 80GB | TBD |
+| Training steps | 1005 | 1005 | 1005 | TBD |
+| Trajectories / step | 512 (verl) | 510 (102 × 5) | 510 | — |
+| Total trajectories | ~515k | ~513k | ~513k | — |
+| **Wall-clock / run** | ~24 h | **~50–150 h** | **~30–90 h** | **TBD** |
+| GPU-hours / run | ~192 GPU-h | 50–150 GPU-h | 60–180 GPU-h | TBD |
+| Vast.ai A100 80GB rate | n/a | ~$1–2 / GPU-h | ~$1–2 / GPU-h | check at launch |
+| **$ / run** | n/a | **$50–300** | **$60–360** | TBD |
+| Multi-seed plan | single-seed | 3 seeds × {base, hybrid} = 6 runs | same | — |
+| **Total Phase-2 budget** | n/a | **$300–1800** | **$360–2160** | — |
 
-**Wall-clock derivation (1× A100, projected).** Paper's 8× H100 setup runs ~24 h to do 1005 steps (rough estimate from training-dynamics plot in [arXiv 2503.09516 Fig. 4](https://arxiv.org/html/2503.09516v5)). Throughput delta: H100 ≈ 1.6× A100 (bf16); 8 GPUs / 1 GPU = 8×. So 1× A100 is **~12–13× slower** than the paper's hardware, projecting to **~30–50 h** for the same 1005 steps. The range covers (a) network/IO overhead from rollout retrieval calls, which gets amortized differently across hardware, and (b) DTensor (ours) vs. FSDP-CPU-offload (theirs) memory-vs-throughput trade-offs.
+### Derivation
 
-**2× A100 cuts wall-clock but raises GPU-hours.** With DDP for training + TP=2 for vLLM rollouts, we expect ~1.7× speedup (rollouts amortize TP overhead well; training DDP scales near-linearly at this size). So 2× A100 should land at **~18–28 h × 2 GPUs = 36–56 GPU-h** — slightly more total compute than 1× A100 at lower wall-clock.
+**Paper baseline.** 8× H100 takes ~24 h to do 1005 steps with 512 trajectories per step (≈ 24 GPU-h × 8 = 192 GPU-h, rough estimate from arXiv Fig. 4). Per trajectory: ~1.3 GPU-sec.
 
-**Phase-2 milestone gate.** First run is on **1× A100** (cheapest, simplest). If wall-clock projects under 50 h and reward dynamics look sane at the first checkpoint (step 100), commit to the 6-run plan. If it's 50+ h or unstable, switch to 2× A100 (or H100 if pricing favors it).
+**1× A100 scaling.** A100 bf16 is ~1.6× slower than H100. Single-GPU loses parallelism vs the paper's 8 GPUs but doesn't pay communication overhead. Net: **~10–12× slower per trajectory**. 1005 steps × 510 trajectories × ~13 sec/traj ≈ 1.8M GPU-sec ≈ 500 GPU-h … but that's worst-case. Realistic with vLLM batched generation + sequence packing: **50–150 h**. The wide range covers retrieval HTTP latency (CPU-bound on the same instance) and rollout-generation efficiency for the multi-turn loop.
 
-> **Filled in post-Phase-2.** All "TBD" cells become observed numbers from the first successful run, then averaged across the 3 seeds × 2 variants.
+**2× A100 scaling.** DDP across 2 GPUs cuts per-step train time ~2×; TP=2 vLLM rollout cuts per-step rollout ~1.5–2×. Net: ~1.7× wall-clock speedup over 1× A100, but 2× GPU-hours per wall-clock hour. Projection: **30–90 h × 2 = 60–180 GPU-h**.
+
+### First-run gate
+
+Run **one seed on 1× A100** first. After step 100 (first validation point):
+- If wall-clock so far ≤ 5 h → projects ~50 h end-to-end, proceed with 6-run plan on 1× A100.
+- If wall-clock 5–15 h → projects 50–150 h, evaluate cost-vs-time trade-off; consider 2× A100 for the remaining 5 runs.
+- If > 15 h or `val/accuracy = 0` (model not learning the format) → abort, debug.
+
+Update this table from the W&B run summary once the first run completes.
 
 **Throughput delta:** the paper's 8× H100 setup is roughly 4–6× our 1× A100 (rough rule of thumb: H100 ≈ 1.6× A100 for bf16, × 8 GPUs / 1 GPU). Expect our wall-clock per run to be ~4–6× the paper's. The 500-step training is short enough that this is acceptable; if it's not, we'll move to 2× A100 or rent H100 fleet on Vast.ai.
 

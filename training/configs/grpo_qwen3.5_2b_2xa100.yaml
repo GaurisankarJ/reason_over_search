@@ -1,27 +1,34 @@
 # GRPO training config — Search-R1 on Qwen3.5-2B, 2× A100 80GB.
 #
-# Identical to grpo_qwen3.5_2b_1xa100.yaml except for the [memory]/cluster
-# knobs called out below. Same Search-R1 paper params (lr, β, ε, group=5,
-# max_turns=4, etc.) — those don't change with GPU count.
+# **Training setup is identical to grpo_qwen3.5_2b_1xa100.yaml.** Every
+# [paper]-tagged value is the same. Only [memory]/cluster knobs differ:
 #
-# Strategy: DDP across the two GPUs for training (default DTensor),
-# tensor-parallel for the rollout vLLM workers (TP=2). This lets the rollout
-# fit a larger KV cache while training stays cleanly data-parallel — the
-# pattern recommended in NEMO_RL_KNOBS.md §5.
+#   - cluster.gpus_per_node : 2 (was 1)
+#   - vllm.tensor_parallel_size : 2 (splits rollout-side weights, frees KV cache budget)
+#   - gpu_memory_utilization : 0.7 (was 0.6 — TP=2 means each GPU holds half the vLLM weights)
+#
+# DTensor backend stays at TP=1 → DDP across the two GPUs for training.
+# train_micro_batch_size stays at 4 (DDP doesn't reduce per-GPU memory).
+# Pattern recommended in docs/training/NEMO_RL_KNOBS.md §5.
 
 # =============================================================================
 # GRPO algorithm — same as 1xa100
 # =============================================================================
 grpo:
+  # [paper] verl `n_agent=5` (GRPO group size G).
   num_generations_per_prompt: 5
+  # [paper] 102 × 5 = 510 trajectories per step. Identical to 1× A100 config.
   num_prompts_per_step: 102
+  # [paper] verl total_training_steps=1005.
   max_num_steps: 1005
   max_num_epochs: 1
+  # [paper] verl test_freq=100.
   val_period: 100
   val_at_start: true
   val_at_end: true
   max_val_samples: 1000
   val_batch_size: 256
+  # [paper] verl max_turns=4.
   max_rollout_turns: 4
   normalize_rewards: true
   use_leave_one_out_baseline: true
@@ -100,10 +107,13 @@ policy:
     chat_template_kwargs: null
   hf_config_overrides: {}
 
-  train_global_batch_size: 512
-  # [memory] With 2 GPUs we can afford a larger micro batch per device — 8 on
-  # 80GB. Tune up further if VRAM headroom remains; drop to 4 if OOM.
-  train_micro_batch_size: 8
+  # [paper] 510 trajectories — matches 102 × 5 above. Identical to 1× A100.
+  train_global_batch_size: 510
+  # [memory] Same as 1× A100. DDP doesn't reduce per-GPU policy memory, so
+  # train_micro_batch_size stays at 4 (each GPU still has the full model
+  # weights + adam state + grads + ref). The 2× A100 win comes from rollout
+  # TP=2 (below) and DDP halving the per-GPU prompt count per gradient update.
+  train_micro_batch_size: 4
   generation_batch_size: 32
   logprob_batch_size: ${policy.train_micro_batch_size}
   max_total_sequence_length: 4096
@@ -278,14 +288,15 @@ policy:
       async_engine: false
       precision: ${policy.precision}
       kv_cache_dtype: "auto"
-      # [memory] TP across the 2 GPUs for the vLLM rollout — gives larger KV
-      # cache + faster prefill. Training stays DDP (dtensor.tensor_parallel_size=1).
+      # [memory] TP=2 splits rollout weights across the two GPUs, halving
+      # per-GPU vLLM weight footprint. Training stays DDP at TP=1 (above).
       tensor_parallel_size: 2
       pipeline_parallel_size: 1
       expert_parallel_size: 1
-      # [memory] Slightly higher than the 1xa100 0.8 — TP=2 spreads KV across
-      # both cards, leaving more single-GPU budget for the policy weights.
-      gpu_memory_utilization: 0.85
+      # [memory] 0.7 (vs 0.6 on 1× A100) — TP=2 frees up per-GPU KV-cache
+      # budget since each card now holds half the vLLM weights. Conservative
+      # first-run value; raise to 0.8 after observing VRAM headroom.
+      gpu_memory_utilization: 0.7
       max_model_len: ${policy.max_total_sequence_length}
       enforce_eager: false
       use_deep_gemm: false

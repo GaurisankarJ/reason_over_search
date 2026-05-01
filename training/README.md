@@ -122,19 +122,43 @@ uv run python examples/run_grpo.py --config=examples/configs/grpo_math_1B.yaml
 
 ### Run Search-R1 GRPO
 
-Launch scripts at [`training/scripts/run_grpo_{1,2}xa100.sh`](scripts/) take `--variant {base,hybrid} --seed N --arm {qwen_native,paper}`. Both invoke [`training/scripts/run_grpo.py`](scripts/run_grpo.py) — a thin overlay launcher that imports [`training.src.registry`](src/registry.py) (populates DATASET / PROCESSOR / ENV registries) and then hands off to NeMo-RL's `examples.run_grpo.main()`. Configs at [`training/configs/grpo_qwen3.5_2b_{1,2}xa100.yaml`](configs/) — full standalone YAMLs, no Hydra defaults composition.
+**Pre-flight (one-time per Vast instance):**
+
+1. Retriever live at `127.0.0.1:3005` (see [`local_retriever/README.md`](../local_retriever/README.md)). Verify: `curl -sS http://127.0.0.1:3005/health` → `"healthy"`.
+2. `training/.env` populated (`cp training/.env.example training/.env`, then fill `WANDB_API_KEY`). Optional: `CHECKPOINT_DIR_BASE=/workspace/persistent/checkpoints` for survival across instance restarts.
+3. Training venv materialized at `training/nemo_rl/.venv/` (run `bash training/setup.sh` if not).
+4. Datasets pulled: `data/training/nq_hotpotqa_train/{train,test}.parquet` present (Git LFS — `git lfs pull`).
+
+**Launch (each command runs one seed of one variant):**
 
 ```bash
-# 1× A100 80GB, qwen_native baseline, base model, seed 42
-bash training/scripts/run_grpo_1xa100.sh --variant base --seed 42
+# 1× A100 80GB
+bash training/scripts/run_grpo_1xa100.sh --variant {base|hybrid} --seed N [--arm {qwen_native|paper}]
 
-# 2× A100 80GB, paper-template ablation arm, hybrid model, seed 7
-bash training/scripts/run_grpo_2xa100.sh --variant hybrid --seed 7 --arm paper
+# 2× A100 80GB
+bash training/scripts/run_grpo_2xa100.sh --variant {base|hybrid} --seed N [--arm {qwen_native|paper}]
 ```
 
-Before launching, the **retriever must be live** at `127.0.0.1:3005` ([`local_retriever/README.md`](../local_retriever/README.md)); the rollout env POSTs to `/batch_search`. W&B key in [`training/.env`](.env) (gitignored).
+| Arg | Values | Default | Effect |
+|---|---|---|---|
+| `--variant` | `base`, `hybrid` | `base` | Selects `Qwen/Qwen3.5-2B-Base` or `Qwen/Qwen3.5-2B`; `hybrid` adds `enable_thinking=true`. |
+| `--seed` | int | `42` | Sets `grpo.seed`; goes into the W&B run name and checkpoint dir. |
+| `--arm` | `qwen_native`, `paper` | `qwen_native` | Chat-template arm. `paper` wires [`training/src/prompts/search_r1_paper.txt`](src/prompts/search_r1_paper.txt); `qwen_native` registers the `search` tool via `tokenizer.apply_chat_template`. |
 
-Per-knob rationale + the verified mapping vs the upstream verl yaml: [docs/training/](../docs/training/) (start at the [README](../docs/training/README.md)).
+**6-run plan** (matches Phase-2 success criteria — 3 seeds × 2 variants):
+
+```bash
+for v in base hybrid; do
+  for s in 42 7 1337; do
+    bash training/scripts/run_grpo_1xa100.sh --variant $v --seed $s
+  done
+done
+```
+
+**Under the hood:** the bash wrapper sources `training/.env`, picks the config at [`training/configs/grpo_qwen3.5_2b_{1,2}xa100.yaml`](configs/), assembles Hydra overrides (model name, seed, arm, W&B run name, checkpoint dir, plus hybrid `enable_thinking` and paper `prompt_file` when relevant), and execs [`training/scripts/run_grpo.py`](scripts/run_grpo.py) — a thin overlay launcher that imports [`training.src.registry`](src/registry.py) (populates DATASET / PROCESSOR / ENV registries) before calling NeMo-RL's `examples.run_grpo.main()`.
+
+**Hyperparameter rationale + verified mapping vs upstream verl:** [docs/training/README.md](../docs/training/README.md).
+**Vast.ai end-to-end sequence:** [docs/milestone_two/PHASE_2_RUNBOOK.md](../docs/milestone_two/PHASE_2_RUNBOOK.md).
 
 ## Folder layout
 
