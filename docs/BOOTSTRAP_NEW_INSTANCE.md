@@ -230,7 +230,7 @@ tar --use-compress-program=unzstd -xf /path/to/ros_results_YYYYMMDD.tar.zst
 - **`/venv/...` paths missing** — the image's conda envs are at `/opt/miniforge3/envs/...`. The `/venv/retriever` and `/venv/evaluation_search_r1` paths exist on the Vast template but not on a vanilla `docker run`. Either symlink them or use `conda activate` directly.
 - **GPU FAISS + SGLang fight on a 4090** — 16 GB index + 22 GB model > 24 GB VRAM. On a 4090, keep FAISS on CPU.
 - **`huggingface-cli upload` requires login** — the public downloads above don't, but if you ever push artifacts back, run `huggingface-cli login` first.
-- **Datasets aren't downloaded above** — they ship in the repo (`data/` and `data_subsample/`). If `data/` is empty, you cloned with sparse-checkout or LFS-disabled; re-clone with full LFS.
+- **Datasets ship in the repo** at `data/<dataset>/<split>.jsonl` (full eval splits) and `data_subsample/<dataset>/<split>.jsonl` (deterministic 1 k subsamples used by the v1 sweep). Total ~140 MB, tracked in git (not LFS). A normal clone gets them. Source: [`RUC-NLPIR/FlashRAG_datasets`](https://huggingface.co/datasets/RUC-NLPIR/FlashRAG_datasets); to re-pull, see [`VAST_INSTANCE_SETUP.md`](VAST_INSTANCE_SETUP.md).
 - **SGLang cold start is slow** — first launch JIT-compiles CUDA kernels (~3–5 min). Subsequent launches are ~30 s.
 - **Resume hazard for autoresearch** — see [program.md](../program.md): if you're rerunning the same `(variant, dataset, seed)` triple in an experiment loop, `rm -rf` the prior results dir first, otherwise `run_one.sh` will skip silently.
 

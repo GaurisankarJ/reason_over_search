@@ -17,10 +17,11 @@ evaluation_search_r1/search_r1_instruct_model/
 local_retriever/.venv
 scripts/.env
 
-# Data (large eval jsonl files; keep folder structure but not contents)
-data/
-data_subsample/
-*.jsonl
+# Data: eval jsonls (data/, data_subsample/) are tracked. Keep download cache
+# and any parquet artifacts out (parquet are training-data leftovers from an
+# earlier branch — eval pipeline reads jsonl).
+data/.cache/
+data/*/*.parquet
 
 # Results (per-run artifacts; aggregated reports live in docs/)
 evaluation_search_r1/results/

@@ -129,19 +129,9 @@ sha256sum search_r1_base_model/model-00001-of-00003.safetensors | head -c 8 ; ec
 # Expect: 7ac54e1b
 ```
 
-### 4d. Eval datasets (7 datasets, ~1 GB total)
+### 4d. Eval datasets (already in repo)
 
-The eval pipeline expects `data/<dataset>/<split>.jsonl` for each of the 7 benchmarks. Source: [`RUC-NLPIR/FlashRAG_datasets`](https://huggingface.co/datasets/RUC-NLPIR/FlashRAG_datasets).
-
-```bash
-cd /workspace/reason_over_search
-mkdir -p data
-huggingface-cli download RUC-NLPIR/FlashRAG_datasets \
-  --repo-type dataset \
-  --include "nq/*" "triviaqa/*" "popqa/*" "hotpotqa/*" \
-            "2wikimultihopqa/*" "musique/*" "bamboogle/*" \
-  --local-dir data --local-dir-use-symlinks False
-```
+Eval splits **ship in the repo** under `data/<dataset>/<split>.jsonl` (~119 MB, full splits) and `data_subsample/<dataset>/<split>.jsonl` (~18 MB, deterministic 1 k subsamples used by the Plan B v1 sweep). A normal clone has them — no download step needed. Source: [`RUC-NLPIR/FlashRAG_datasets`](https://huggingface.co/datasets/RUC-NLPIR/FlashRAG_datasets).
 
 Confirm row counts match [PAPER_VS_OURS_AUDIT.md §G](PAPER_VS_OURS_AUDIT.md#g-datasets--splits):
 
@@ -156,7 +146,17 @@ done
 #           2wikimultihopqa=12576, musique=2417, bamboogle=125
 ```
 
-If you only want to run **Plan B** (subsampled), also build `data_subsample/`:
+If `data/` is missing for some reason, re-pull:
+
+```bash
+cd /workspace/reason_over_search
+hf download RUC-NLPIR/FlashRAG_datasets --repo-type dataset \
+  bamboogle/test.jsonl nq/test.jsonl triviaqa/test.jsonl popqa/test.jsonl \
+  hotpotqa/dev.jsonl 2wikimultihopqa/dev.jsonl musique/dev.jsonl \
+  --local-dir data
+```
+
+Subsamples (`data_subsample/`) are also tracked. To rebuild from scratch:
 
 ```bash
 scripts/subsample.sh
