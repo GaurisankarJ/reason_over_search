@@ -99,13 +99,24 @@ Paper values from Appendix B.2; verl values from [`Search-R1/scripts/nq_hotpotqa
 
 ## 7. Compute
 
-| | Paper | Ours (planned) |
-|---|---|---|
-| Hardware | 1 node × 8× H100 | **1× A100 80GB** (or 2× A100 80GB) |
-| Training time | not stated explicitly in paper | **TBD** — record on first run |
-| GPU-hours per run | not stated | **TBD** |
-| $/run (Vast.ai) | n/a | **TBD** — Vast.ai A100 80GB ≈ $1–2/h depending on availability; multiply by GPU-hours |
-| Multi-seed plan | (paper does single-seed training) | **3 seeds × {base, hybrid} = 6 runs** |
+| | Paper | Ours — projected (1× A100) | Ours — projected (2× A100) | Ours — observed |
+|---|---|---|---|---|
+| Hardware | 1 node × 8× H100 | 1× A100 80GB | 2× A100 80GB | — |
+| Training steps | 1005 (verl `total_training_steps`) | 1005 | 1005 | TBD |
+| Wall-clock estimate | not stated explicitly | **~30–50 h** (see derivation below) | **~18–28 h** | **TBD — record on first run** |
+| GPU-hours / run | ~24 h × 8 ≈ 192 GPU-h (rough) | 30–50 GPU-h | 36–56 GPU-h | TBD |
+| Vast.ai A100 80GB rate | n/a | ~$1–2 / GPU-h | ~$1–2 / GPU-h | check at launch time |
+| Estimated $/run | n/a | **~$30–100** | **~$36–112** | TBD |
+| Multi-seed plan | single-seed | **3 seeds × {base, hybrid} = 6 runs** | same | — |
+| Total Phase-2 budget | n/a | **~$180–600** (6 runs × $30–100) | ~$216–672 | — |
+
+**Wall-clock derivation (1× A100, projected).** Paper's 8× H100 setup runs ~24 h to do 1005 steps (rough estimate from training-dynamics plot in [arXiv 2503.09516 Fig. 4](https://arxiv.org/html/2503.09516v5)). Throughput delta: H100 ≈ 1.6× A100 (bf16); 8 GPUs / 1 GPU = 8×. So 1× A100 is **~12–13× slower** than the paper's hardware, projecting to **~30–50 h** for the same 1005 steps. The range covers (a) network/IO overhead from rollout retrieval calls, which gets amortized differently across hardware, and (b) DTensor (ours) vs. FSDP-CPU-offload (theirs) memory-vs-throughput trade-offs.
+
+**2× A100 cuts wall-clock but raises GPU-hours.** With DDP for training + TP=2 for vLLM rollouts, we expect ~1.7× speedup (rollouts amortize TP overhead well; training DDP scales near-linearly at this size). So 2× A100 should land at **~18–28 h × 2 GPUs = 36–56 GPU-h** — slightly more total compute than 1× A100 at lower wall-clock.
+
+**Phase-2 milestone gate.** First run is on **1× A100** (cheapest, simplest). If wall-clock projects under 50 h and reward dynamics look sane at the first checkpoint (step 100), commit to the 6-run plan. If it's 50+ h or unstable, switch to 2× A100 (or H100 if pricing favors it).
+
+> **Filled in post-Phase-2.** All "TBD" cells become observed numbers from the first successful run, then averaged across the 3 seeds × 2 variants.
 
 **Throughput delta:** the paper's 8× H100 setup is roughly 4–6× our 1× A100 (rough rule of thumb: H100 ≈ 1.6× A100 for bf16, × 8 GPUs / 1 GPU). Expect our wall-clock per run to be ~4–6× the paper's. The 500-step training is short enough that this is acceptable; if it's not, we'll move to 2× A100 or rent H100 fleet on Vast.ai.
 

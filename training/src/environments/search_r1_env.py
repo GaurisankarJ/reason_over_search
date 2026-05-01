@@ -243,10 +243,46 @@ class SearchR1Env(EnvironmentInterface):
 
     def global_post_process_and_metrics(
         self, batch: BatchedDataDict
-    ) -> tuple[BatchedDataDict, dict]:
-        # Surface a few rollout-shape metrics. The rollout loop already tracks
-        # turns/tokens in `sample_turn_counts`, so we keep this minimal.
-        return batch, {}
+    ) -> tuple[BatchedDataDict, dict[str, float | int]]:
+        """Compute rollup metrics for one rollout batch.
+
+        Mirrors `MathEnvironment.global_post_process_and_metrics`'s shape so
+        `checkpointing.metric_name = "val:accuracy"` resolves correctly. The
+        rollout loop fills `batch` with `rewards`, `is_end`, `prompt_lengths`,
+        `generation_lengths`, `text` per sample (rollouts.py).
+        """
+        rewards = (
+            batch["rewards"] if batch["rewards"].ndim == 1 else batch["rewards"][:, 0]
+        )
+
+        # Zero-out rewards for rollouts that didn't end with a real stop token
+        # (truncated at max_response_length). Matches MathEnvironment.
+        if "is_end" in batch:
+            rewards = rewards * batch["is_end"]
+            properly_ended = batch["is_end"].float().mean().item()
+        else:
+            properly_ended = float("nan")
+
+        accuracy = rewards.mean().item()
+        # The compute_search_r1_reward function returns the full structured
+        # reward in [0, 1]. For the paper arm with full format match this is
+        # 1.0; for qwen_native + correct EM it's 0.8 (score - structure_format).
+        # Track an EM-success rate (reward >= 0.8) too — useful sanity metric
+        # since it dichotomizes "got the answer" vs "didn't".
+        em_hit_rate = (rewards >= 0.8).float().mean().item()
+
+        metrics: dict[str, float | int] = {
+            "accuracy": accuracy,
+            "em_hit_rate": em_hit_rate,
+            "fraction_of_samples_properly_ended": properly_ended,
+            "num_problems_in_batch": int(rewards.shape[0]),
+        }
+
+        if "generation_lengths" in batch and "prompt_lengths" in batch:
+            metrics["generation_lengths"] = batch["generation_lengths"].float().mean().item()
+            metrics["prompt_lengths"] = batch["prompt_lengths"].float().mean().item()
+
+        return batch, metrics
 
 
 # Ray-remote-wrapped class. `register_env` should point at this FQN.

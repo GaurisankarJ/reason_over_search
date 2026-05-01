@@ -86,7 +86,7 @@ Reference for the NeMo-RL settings that matter when running GRPO on Qwen3.5-2B o
 |---|---|---|
 | `checkpointing.enabled` | `true` | Keep on. |
 | `checkpointing.checkpoint_dir` | `"results/grpo"` | **Set to a path on Vast.ai persistent storage** (e.g. `/workspace/persistent/checkpoints/qwen3.5-2b-{base,hybrid}/seed_{1,2,3}`). |
-| `checkpointing.metric_name` | `"val:accuracy"` | Best-checkpoint selection metric. We log `val:em`. |
+| `checkpointing.metric_name` | `"val:accuracy"` | Best-checkpoint selection metric. Our `SearchR1Env.global_post_process_and_metrics` emits `accuracy` (mean reward, zero-masked for not-properly-ended rollouts) so this works as-is. |
 | `checkpointing.keep_top_k` | `3` | Retain best 3 + latest. |
 | `checkpointing.save_period` | `10` | Every N training steps. **Search-R1 uses every 100 steps**; we should match initially. |
 | `logger.wandb_enabled` | `false` | **Set `true`**; key in `training/.env`. |
@@ -152,7 +152,7 @@ cluster:
 checkpointing:
   enabled: true
   checkpoint_dir: "/workspace/persistent/checkpoints/qwen3.5-2b-base/seed1"
-  metric_name: "val:em"
+  metric_name: "val:accuracy"
   keep_top_k: 3
   save_period: 100                        # Search-R1 cadence
 

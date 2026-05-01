@@ -119,9 +119,18 @@ After that, the training loop sees `dataset_name: search_r1`, `processor: search
 
 ## Hardware + runtime expectations
 
-Per [PAPER_VS_OURS_TRAINING.md §7](PAPER_VS_OURS_TRAINING.md#7-compute):
-- Training GPU: 1× or 2× A100 80GB (Vast.ai). Wall-clock ~4–6× the paper's 8× H100 setup.
-- Retriever: separate process on `127.0.0.1:3005`, ~80 GB host RAM (Wiki-18 FAISS-flat). See [`local_retriever/README.md`](../../local_retriever/README.md).
-- 3 seeds × {base, hybrid} = 6 runs per ablation arm.
+Per [PAPER_VS_OURS_TRAINING.md §7](PAPER_VS_OURS_TRAINING.md#7-compute) — projected:
+- 1× A100 80GB: ~30–50 h / run, $30–100 / run.
+- 2× A100 80GB: ~18–28 h / run, $36–112 / run.
+- Total Phase 2 budget for 6 runs (3 seeds × {base, hybrid}): ~$180–600 on 1× A100.
 
-Concrete config + launch scripts: [`training/configs/`](../../training/configs/) and [`training/scripts/`](../../training/scripts/) (Milestone 2 step 6).
+Retriever: separate process on `127.0.0.1:3005`, ~65 GB host RAM (Wiki-18 FAISS-flat). See [`local_retriever/README.md`](../../local_retriever/README.md).
+
+Concrete configs + launch scripts: [`training/configs/`](../../training/configs/) and [`training/scripts/`](../../training/scripts/).
+
+## Running training
+
+The how-to-launch view:
+- **Operator-side** (what to run): [`training/README.md`](../../training/README.md)
+- **Phase 2 runbook** (Vast.ai sequence, smoke run, monitoring, eval gate): [`../milestone_two/PHASE_2_RUNBOOK.md`](../milestone_two/PHASE_2_RUNBOOK.md)
+- **Milestone scope + status**: [`../milestone_two/MILESTONE_2.md`](../milestone_two/MILESTONE_2.md)

@@ -70,7 +70,8 @@ OVERRIDES=(
 )
 
 if [[ "${VARIANT}" == "hybrid" ]]; then
-    OVERRIDES+=("policy.tokenizer.chat_template_kwargs={enable_thinking: true}")
+    # `++` force-adds the key since the base config has chat_template_kwargs: null.
+    OVERRIDES+=("++policy.tokenizer.chat_template_kwargs.enable_thinking=true")
 fi
 
 if [[ "${ARM}" == "paper" ]]; then

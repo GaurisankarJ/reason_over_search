@@ -73,9 +73,10 @@ OVERRIDES=(
     "checkpointing.checkpoint_dir=${CKPT_DIR}"
 )
 
-# Hybrid variant: surface <think> blocks during generation.
+# Hybrid variant: surface <think> blocks during generation. Use Hydra's `++`
+# (force-add) so the key is created even though the config has it as null.
 if [[ "${VARIANT}" == "hybrid" ]]; then
-    OVERRIDES+=("policy.tokenizer.chat_template_kwargs={enable_thinking: true}")
+    OVERRIDES+=("++policy.tokenizer.chat_template_kwargs.enable_thinking=true")
 fi
 
 # Paper arm needs the prompt-file template wired in.

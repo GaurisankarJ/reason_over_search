@@ -37,14 +37,16 @@ With verl's 1005-step training, that gives **10 validation points** per run plus
 
 At every validation step:
 
+Emitted by [`SearchR1Env.global_post_process_and_metrics`](../../training/src/environments/search_r1_env.py) (mirroring `MathEnvironment`'s shape so checkpointing can select on `val:accuracy`):
+
 | Metric | Source |
 |---|---|
-| `val/em` | Per-dataset exact-match using the existing scorer in [`flashrag/search_r1/reward.py`](../../evaluation_search_r1/flashrag/search_r1/reward.py) |
-| `val/format_validity` | Fraction of traces where the final response contains a closed `<answer>...</answer>` |
-| `val/length_truncation` | Fraction of traces hitting `max_new_tokens` (stop_reason ≠ stop/eos) |
-| `val/mean_answer_tokens` | Mean token count of the answer span |
-| `val/mean_search_calls` | Average number of `<tool_call>` invocations per trace (Qwen3.5 native template) |
-| `val/mean_response_tokens` | Mean total response length |
+| `val/accuracy` | Mean reward (zero-masked for not-properly-ended rollouts) — the canonical `metric_name` for `keep_top_k` checkpointing. For paper arm with full format match this is in [0, 1.0]; for qwen_native the format-failure penalty caps at ~0.8 even on correct EM, so `accuracy` is a reward-mean, not a strict EM rate. |
+| `val/em_hit_rate` | Fraction of rollouts with reward ≥ 0.8 (proxy for "got the answer", arm-agnostic). |
+| `val/fraction_of_samples_properly_ended` | Fraction of rollouts that emitted a real stop token (not max-tokens-truncated). Should be ≥ 0.95 by step ~200; lower means model isn't learning the format. |
+| `val/generation_lengths` | Mean total response length in tokens. |
+| `val/prompt_lengths` | Mean prompt length (post chat-template) in tokens. |
+| `val/num_problems_in_batch` | Sanity counter — should match `grpo.max_val_samples`. |
 
 Per-step training metrics (already standard in NeMo-RL):
 
@@ -57,7 +59,7 @@ Per-step training metrics (already standard in NeMo-RL):
 
 **Paper / verl:** fixed schedule of 1005 steps (`total_training_steps=1005`, capped before the 15-epoch nominal); no early stopping.
 
-**Ours:** match. Run all 1005 steps. Save the best-by-`val/em` checkpoint via NeMo-RL's `keep_top_k: 3` mechanism; that's the candidate we feed into the Milestone 1 eval pipeline.
+**Ours:** match. Run all 1005 steps. Save the best-by-`val/accuracy` checkpoint via NeMo-RL's `keep_top_k: 3` mechanism; that's the candidate we feed into the Milestone 1 eval pipeline.
 
 If reward is collapsing or training is unstable (NaN loss, KL spike), abort manually rather than auto-stop — we want the failure mode visible in W&B for diagnosis, not silently truncated.
 
