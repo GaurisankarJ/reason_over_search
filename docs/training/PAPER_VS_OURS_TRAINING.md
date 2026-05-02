@@ -34,13 +34,17 @@ Sources for paper numbers: [Search-R1 arXiv 2503.09516](https://arxiv.org/abs/25
 
 $$r_\phi(x, y) = \mathrm{EM}(a_\text{pred}, a_\text{gold})$$
 
-No format penalty, no process reward, no learned reward model. ([arXiv 2503.09516, §3.4](https://arxiv.org/html/2503.09516)).
+No format penalty, no process reward, no learned reward model. ([arXiv 2503.09516, §3.4](https://arxiv.org/html/2503.09516)). The paper is explicit about excluding shaping:
 
-**Ours (Milestone 2 baseline):** **identical to the paper.** We do not modify the reward function in Milestone 2 — the goal is to verify the training pipeline reproduces paper-like dynamics on Qwen3.5 first. Reward ablations (process reward, format reward, retrieval-quality reward) move to **Milestone 3**.
+> "Unlike Guo et al. (2025), we do not incorporate format rewards, as our learned model already demonstrates strong structural adherence."
 
-The EM scorer is **byte-identical** to [`evaluation_search_r1/flashrag/search_r1/reward.py`](../../evaluation_search_r1/flashrag/search_r1/reward.py) (the SQuAD-canonical normaliser used in Milestone 1 eval): port at [`training/src/rewards/search_r1.py`](../../training/src/rewards/search_r1.py). Verified by [`training/tests/test_reward_parity.py`](../../training/tests/test_reward_parity.py) (15 tests, including exhaustive case coverage of all branches in `compute_search_r1_reward`). Training-time reward and post-training EM are computed by the same code.
+**Ours:** matches the paper — **pure EM, no shaping**. `r = 1.0` if normalized-EM hits, else `r = 0.0`.
 
-> **Qwen-native arm caveat.** The reward's `is_valid_sequence` and `is_retrieval_correct` walkers are keyed on the paper's tag set (`<think>`, `<search>`, `<information>`, `<answer>`). For the `qwen_native` chat-template arm those checks always fail (different tags), so the reward collapses to **EM-only** via the `score - structure_format_score = 0.8` branch. That's the M2 baseline by design — paper reward unchanged; tag-aware variants move to M3.
+> **Paper-vs-Search-R1-repo gap (important).** The Search-R1 GitHub repo ships **two** reward functions: [`qa_em.py`](https://github.com/PeterGriffinJin/Search-R1/blob/main/verl/utils/reward_score/qa_em.py) (paper-faithful, EM only) and [`qa_em_format.py`](https://github.com/PeterGriffinJin/Search-R1/blob/main/verl/utils/reward_score/qa_em_format.py) (a 6-tier shaped variant exposing `structure_format_score`, `final_format_score`, `retrieval_score`). The shaped variant is *not* what the paper describes. Earlier in this project we ported `qa_em_format.py` (with non-zero shaping defaults of 0.2 / 0.1 / 0.1, the values exposed in FlashRAG's CLI flags) and described it as "identical to the paper" — that was a documentation error caught in early-May smoke testing (see `docs/training/SMOKE_RESULTS_V4.md` for the trail). The shaping was producing visible partial-credit reward signal on rollouts where EM=0, masking what was actually a flat learning curve.
+>
+> **Resolution:** the multi-tier scaffold remains in [`training/src/rewards/search_r1.py`](../../training/src/rewards/search_r1.py) (and the eval-side mirror), but **all three shaping coefficients default to 0.0**, collapsing the function to pure EM. The scaffold stays so that M3 ablations can re-introduce shaping by passing non-zero coefficients explicitly without rewriting the state-machine format walker.
+
+The EM scorer is **byte-identical** to [`evaluation_search_r1/flashrag/search_r1/reward.py`](../../evaluation_search_r1/flashrag/search_r1/reward.py) (the SQuAD-canonical normaliser used in Milestone 1 eval): port at [`training/src/rewards/search_r1.py`](../../training/src/rewards/search_r1.py). Verified by [`training/tests/test_reward_parity.py`](../../training/tests/test_reward_parity.py). Training-time reward and post-training EM are computed by the same code.
 
 ## 4. Chat template
 

@@ -115,10 +115,9 @@ def test_answer_terminates_with_correct_em_paper():
 
     out = env.step([log], [metadata])
     assert out.terminateds[0].item() is True
-    # Paper format with answer — invalid format walker (no opening <think> in
-    # state machine for this exact shape might still be valid). Either way the
-    # reward must reflect a correct EM (≥0.8 = score-structure_format_score floor).
-    assert out.rewards[0].item() >= 0.8
+    # Pure-EM mode (shaping coefs = 0): correct EM → reward 1.0 regardless of
+    # whether the format walker accepts this exact shape.
+    assert out.rewards[0].item() == 1.0
     assert out.answers[0] == "Elon Musk"
 
 
@@ -132,8 +131,8 @@ def test_answer_terminates_with_zero_em_when_wrong():
 
     out = env.step([log], [metadata])
     assert out.terminateds[0].item() is True
-    # Wrong EM + (qwen_native => format-invalid against paper tags) → final_format_score=0.1
-    assert out.rewards[0].item() == 0.1
+    # Wrong EM + format-invalid → 0.0 in pure-EM mode (final_format_score=0).
+    assert out.rewards[0].item() == 0.0
     assert out.answers[0] == "Steve Jobs"
 
 

@@ -28,10 +28,13 @@ the Qwen3.5 chat-template markers: `<|im_end|>\n<|im_start|>user\n
 the next-turn generation context is well-formed.
 
 Reward uses the byte-identical M1 scorer at `training/src/rewards/search_r1.py`.
-For the qwen_native arm, the paper-tag-keyed `is_valid_sequence` /
-`is_retrieval_correct` checks always fail (different tag set), so the reward
-collapses to EM-only via the `score - structure_format_score` branch — that's
-the M2 baseline by design.
+The scorer is **pure EM** (paper §3.4): all three shaping coefficients
+(`structure_format_score`, `final_format_score`, `retrieval_score`) default
+to 0.0, so the format-validity branches contribute zero. For the qwen_native
+arm the paper-tag-keyed format walker fails anyway, but with shaping=0 that
+makes no difference — both arms collapse to `1.0 if EM else 0.0`. See
+docs/training/PAPER_VS_OURS_TRAINING.md §3 for the paper-vs-Search-R1-repo
+gap and why the multi-tier scaffold is preserved (M3 ablations).
 """
 from __future__ import annotations
 

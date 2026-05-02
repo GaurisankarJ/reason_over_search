@@ -1,16 +1,24 @@
-"""Search-R1 baseline reward.
+"""Search-R1 baseline reward — paper-faithful (pure EM, no shaping).
 
-Byte-identical port of evaluation_search_r1/flashrag/search_r1/reward.py — the
-M1 eval-side scorer that the user verified against the paper. Kept identical so
-training rollouts and post-training eval score with the same logic.
+Byte-identical port of evaluation_search_r1/flashrag/search_r1/reward.py.
+Both modules ship the multi-tier scoring scaffold from Search-R1's
+`verl/utils/reward_score/qa_em_format.py`, but the three shaping coefficients
+(`structure_format_score`, `final_format_score`, `retrieval_score`) default
+to 0.0 — collapsing the function to pure EM, which is what arXiv 2503.09516
+§3.4 specifies:
 
-Tag set (`<think>`, `<search>`, `<information>`, `<answer>`) is the **paper**
-chat template's tag set. For the `qwen_native` ablation arm (Qwen3.5
-`<tool_call>` / `<tool_response>`), `is_valid_sequence` and
-`is_retrieval_correct` will always return False (different tags), so the reward
-collapses to format-invalid → EM-only via the `score - structure_format_score`
-branch in `compute_search_r1_reward`. That's the M2 baseline by design — paper
-reward unchanged; full Qwen-native-aware reward is M3 ablation work.
+    rϕ(x, y) = EM(a_pred, a_gold)
+
+The paper explicitly rejects format rewards: "Unlike Guo et al. (2025), we do
+not incorporate format rewards, as our learned model already demonstrates
+strong structural adherence." See
+docs/training/PAPER_VS_OURS_TRAINING.md §3 for the full provenance trail
+(why the upstream Search-R1 repo's `qa_em_format.py` exposes shaping at all,
+and why our defaults are 0.0).
+
+The scaffold is preserved (rather than deleted) so that ablations in M3 can
+re-introduce shaping by passing non-zero coefficients without re-implementing
+the state-machine format walker.
 """
 import re
 import string
@@ -117,9 +125,9 @@ def is_retrieval_correct(text: str, golden_answers: List[str]) -> bool:
 def compute_search_r1_reward(
     solution_str: str,
     golden_answers,
-    structure_format_score: float = 0.2,
-    final_format_score: float = 0.1,
-    retrieval_score: float = 0.1,
+    structure_format_score: float = 0.0,
+    final_format_score: float = 0.0,
+    retrieval_score: float = 0.0,
     score: float = 1.0,
 ):
     is_valid_format, reason = is_valid_sequence(solution_str)
