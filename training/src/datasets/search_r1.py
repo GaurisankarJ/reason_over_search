@@ -63,5 +63,11 @@ class SearchR1Dataset(RawDataset):
         # `golden_answers`, `data_source`, `id`, etc. all flow through to
         # `AllTaskProcessedDataset.__getitem__`'s `entry` (see processed_dataset.py:101).
         self.dataset: Dataset = Dataset.from_parquet(data_path)
+        # processed_dataset.py:107/118 reads entry["task_name"] when
+        # task_data_processors is a dict. Stamp it onto every row.
+        if "task_name" not in self.dataset.column_names:
+            self.dataset = self.dataset.add_column(
+                "task_name", [self.task_name] * len(self.dataset)
+            )
         self.val_dataset: Optional[Dataset] = None
         self.split_train_validation(split_validation_size, seed)

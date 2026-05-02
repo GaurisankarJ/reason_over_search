@@ -16,6 +16,10 @@ from __future__ import annotations
 
 from nemo_rl.data.datasets.response_datasets import DATASET_REGISTRY
 from nemo_rl.data.processors import PROCESSOR_REGISTRY, register_processor
+from nemo_rl.distributed.ray_actor_environment_registry import (
+    ACTOR_ENVIRONMENT_REGISTRY,
+)
+from nemo_rl.distributed.virtual_cluster import PY_EXECUTABLES
 from nemo_rl.environments.utils import ENV_REGISTRY, register_env
 
 from training.src.datasets.search_r1 import SearchR1Dataset
@@ -34,6 +38,8 @@ def register() -> None:
         register_processor(PROCESSOR_NAME, search_r1_processor)
     if ENV_NAME not in ENV_REGISTRY:
         register_env(ENV_NAME, ENV_ACTOR_FQN)
+    if ENV_ACTOR_FQN not in ACTOR_ENVIRONMENT_REGISTRY:
+        ACTOR_ENVIRONMENT_REGISTRY[ENV_ACTOR_FQN] = PY_EXECUTABLES.SYSTEM
 
 
 register()

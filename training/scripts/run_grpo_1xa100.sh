@@ -20,6 +20,7 @@ set -euo pipefail
 VARIANT="base"
 SEED="42"
 ARM="qwen_native"
+EXTRA_OVERRIDES=()
 
 # ---- argparse ----
 while [[ $# -gt 0 ]]; do
@@ -27,6 +28,7 @@ while [[ $# -gt 0 ]]; do
         --variant) VARIANT="$2"; shift 2 ;;
         --seed) SEED="$2"; shift 2 ;;
         --arm) ARM="$2"; shift 2 ;;
+        --) shift; EXTRA_OVERRIDES=("$@"); break ;;
         -h|--help) sed -n '2,15p' "$0"; exit 0 ;;
         *) echo "unknown arg: $1" >&2; exit 2 ;;
     esac
@@ -73,7 +75,6 @@ OVERRIDES=(
     "policy.model_name=${MODEL}"
     "grpo.seed=${SEED}"
     "data.train.arm=${ARM}"
-    "data.validation.arm=${ARM}"
     "env.search_r1.arm=${ARM}"
     "logger.wandb.name=${RUN_NAME}"
     "checkpointing.checkpoint_dir=${CKPT_DIR}"
@@ -98,4 +99,5 @@ echo "[run_grpo_1xa100] ckpt=${CKPT_DIR}"
 
 exec "${VENV_PYTHON}" training/scripts/run_grpo.py \
     --config=training/configs/grpo_qwen3.5_2b_1xa100.yaml \
-    "${OVERRIDES[@]}"
+    "${OVERRIDES[@]}" \
+    "${EXTRA_OVERRIDES[@]}"
