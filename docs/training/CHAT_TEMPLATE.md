@@ -243,3 +243,172 @@ Switching arms is a config flip — same dataset (committed via LFS), different 
 | Env's tool-call parser + tool-response formatter | [`training/src/environments/parsers.py`](../../training/src/environments/parsers.py) |
 | Config defaults (qwen_native) | [`training/configs/grpo_qwen3.5_2b_{1,2}xa100.yaml`](../../training/configs/) — `data.default.system_prompt_file` |
 | Config override (paper) | [`training/scripts/run_grpo_{1,2}xa100.sh`](../../training/scripts/) — when `--arm paper`, sets `prompt_file` and clears `system_prompt_file` |
+
+---
+
+## 7. Rendered examples — what the model actually sees
+
+Both arms run on the same training data. The dataset row is template-agnostic:
+
+```python
+{
+  "messages": [{"role": "user", "content": "who got the first nobel prize in physics?"}],
+  "golden_answers": ["Wilhelm Conrad Röntgen", "Röntgen"],
+  "data_source": "nq",
+  ...
+}
+```
+
+The processor renders this very differently per arm. Below is what `tokenizer.apply_chat_template(...)` produces for each, and what the env appends after the first `<tool_call>` / `<search>` round-trip with the retriever.
+
+### 7a. qwen_native arm
+
+**Turn 1 — initial rollout context** (what the policy sees before generating its first token):
+
+```
+<|im_start|>system
+You are a helpful assistant. Answer the user's question by using the `search`
+tool when you need external knowledge.
+
+You must conduct reasoning inside <think> and </think> first every time you
+get new information. You may call `search` as many times as needed. If you
+find no further external knowledge needed, you can directly provide the
+answer inside <answer> and </answer>, without detailed illustrations. For
+example, <answer> Beijing </answer>.
+
+# Tools
+You may call one or more functions to assist with the user query.
+
+You are provided with function signatures within <tools></tools> XML tags:
+<tools>
+{"type": "function", "function": {"name": "search", "description": "Search Wikipedia for passages relevant to the query. Returns the top-K most relevant chunks. Call this whenever the question requires factual knowledge you do not already have.", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "The search query. Be specific."}}, "required": ["query"]}}}
+</tools>
+
+For each function call, return a json object with function name and arguments
+within <tool_call></tool_call> XML tags:
+<tool_call>
+<function=search>
+<parameter=query>
+search query here
+</parameter>
+</function>
+</tool_call><|im_end|>
+<|im_start|>user
+who got the first nobel prize in physics?<|im_end|>
+<|im_start|>assistant
+<think>
+```
+
+The trailing `<think>\n` is the auto-generation prefix Qwen3.5's chat template emits when `add_generation_prompt=True` and `enable_thinking=True` (hybrid variant) — see [§2's jinja](#2-qwen35-2b-native-template-verbatim). For base variant it's just `<|im_start|>assistant\n`.
+
+The system message comes from two sources stacked:
+1. **Our protocol** (lines 1–11) — verbatim from [`search_r1_qwen_native_system.txt`](../../training/src/prompts/search_r1_qwen_native_system.txt).
+2. **Tool schema** (lines 13–32) — auto-rendered by Qwen3.5's chat template from `tools=[SEARCH_TOOL]` ([`chat_template/tools.py`](../../training/src/chat_template/tools.py)).
+
+The user role is just the bare question.
+
+**Turn 2 — after one search round-trip:**
+
+The model emitted (and vLLM stopped on `</tool_call>`):
+```
+<think>
+The first Nobel Prize in Physics was awarded back in 1901. Let me confirm.
+</think>
+<tool_call>
+<function=search>
+<parameter=query>
+first nobel prize physics 1901 winner
+</parameter>
+</function>
+</tool_call>
+```
+
+The env's [`format_docs_qwen_native`](../../training/src/environments/parsers.py) appends this raw string (no chat-template re-run):
+```
+<|im_end|>
+<|im_start|>user
+<tool_response>
+Doc 1: Wilhelm Conrad Röntgen (German physicist, 1845–1923) received the first
+Nobel Prize in Physics in 1901 for his discovery of X-rays...
+Doc 2: The 1901 Nobel Prize in Physics was the first ever awarded in the
+category, presented at a ceremony in Stockholm on December 10, 1901...
+</tool_response><|im_end|>
+<|im_start|>assistant
+```
+
+Now the next-turn rollout sees the full system + user(question) + assistant(turn 1) + tool_response(env) + assistant prefix, and continues from `<|im_start|>assistant\n` to emit either another `<tool_call>` or finally `<answer>...</answer>`.
+
+The conversation is **formally multi-turn** — every retrieval is its own role boundary (`<|im_start|>user` ... `<|im_end|>`), the chat template's structure is preserved.
+
+### 7b. paper arm
+
+**Turn 1 — initial rollout context:**
+
+```
+<|im_start|>user
+Answer the given question. You must conduct reasoning inside <think> and
+</think> first every time you get new information. After reasoning, if you
+find you lack some knowledge, you can call a search engine by <search>
+query </search> and it will return the top searched results between
+<information> and </information>. You can search as many times as your want.
+If you find no further external knowledge needed, you can directly provide
+the answer inside <answer> and </answer>, without detailed illustrations.
+For example, <answer> Beijing </answer>. Question: who got the first nobel
+prize in physics?
+<|im_end|>
+<|im_start|>assistant
+```
+
+No system role. No tool schema. The protocol IS the user message — that's the paper's whole approach. The instructions ride along on every initial prompt.
+
+**Turn 2 — after one search round-trip:**
+
+The model emitted (vLLM stopped on `</search>`):
+```
+<think>
+I need to look up the first Nobel Prize in Physics.
+</think>
+<search>first nobel prize physics 1901 winner</search>
+```
+
+The env's [`format_docs_paper`](../../training/src/environments/parsers.py) appends this raw string:
+```
+
+<information>
+Doc 1: Wilhelm Conrad Röntgen (German physicist, 1845–1923) received the first
+Nobel Prize in Physics in 1901 for his discovery of X-rays...
+Doc 2: The 1901 Nobel Prize in Physics was the first ever awarded in the
+category, presented at a ceremony in Stockholm on December 10, 1901...
+</information>
+
+```
+
+There are **no `<|im_start|>` / `<|im_end|>` boundaries** in the env's appended content — the assistant's "turn" never formally ends. From the chat template's perspective the entire rollout is one long assistant utterance with `<search>` / `<information>` / `<answer>` blocks embedded in it. Generation just continues from where vLLM stopped.
+
+### 7c. Why the structural difference matters
+
+| Concern | qwen_native | paper |
+|---|---|---|
+| Each retrieval round is | a separate `user` (tool response) + `assistant` continuation pair | text appended inside one continuous assistant turn |
+| Assistant turn boundaries (`<|im_end|>`) | one per `<tool_call>` round + one for the final `<answer>` | one — at the very end of the rollout |
+| Context tokens spent on protocol | ~270 tokens of system message, paid once at turn 1 | ~150 tokens of user-message instructions, paid once at turn 1 |
+| Context tokens spent on retrieved docs | `<tool_response>` markers (~10 tokens overhead per round) + docs | `<information>` markers (~5 tokens overhead per round) + docs |
+| Loss masking ([`grpo.py:1685-1693`](../../training/nemo_rl/nemo_rl/algorithms/grpo.py#L1685-L1693)) | every assistant span gets loss=1, every user (tool_response) span gets loss=0 — clean separation | every token after the initial user prompt gets loss=1 (it's all one assistant turn). `<information>` blocks are NOT zero-masked unless we do something custom. |
+
+The last row is subtle and important. **For the paper arm, the policy receives gradient signal on the retrieved-doc tokens too**, because they live inside the assistant span. That's a known quirk of the paper's design that verl works around with its `state_masking=true` flag (which uses regex on `<information>...</information>` to mask those tokens out).
+
+For qwen_native, we get the same effect for free via NeMo-RL's role-based `token_loss_mask` — the env's tool response is `role: tool`, automatically loss=0. **Documented in [`docs/training/PAPER_VS_OURS_TRAINING.md` §6](PAPER_VS_OURS_TRAINING.md#6-hyperparameters)** as "state masking → equivalent" — that's the equivalence.
+
+### 7d. Final state — model emits `<answer>X</answer>`
+
+For both arms, the env's reward-computation path is the same: regex-extract the LAST `<answer>...</answer>` block from the concatenated assistant content (skipping any `user`/`tool` messages), normalize, and EM-check against `golden_answers`. See [`compute_search_r1_reward`](../../training/src/rewards/search_r1.py).
+
+A successful trajectory ends with the model emitting:
+```
+<think>
+I now have enough information.
+</think>
+<answer>Wilhelm Conrad Röntgen</answer>
+```
+
+vLLM stops on `</answer>`, the env classifies the rollout as terminal, computes reward = 1.0 (paper arm — full format match) or ~0.8 (qwen_native arm — the paper-tag-keyed `is_valid_sequence` check fails by design, so the reward collapses to the `score - structure_format_score` branch). Both arms are EM-correct on this rollout; they differ only in how the format-validity bonus stacks. See [`SEED.md`](../edu/SEED.md) for why this 0.8 vs 1.0 ceiling difference is intentional in M2.
