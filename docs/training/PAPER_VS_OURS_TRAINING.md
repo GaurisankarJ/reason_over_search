@@ -55,7 +55,9 @@ Full rationale + verbatim jinja in [`CHAT_TEMPLATE.md`](CHAT_TEMPLATE.md).
 
 ## 5. Validation set & cadence
 
-See [`VALIDATION.md`](VALIDATION.md) for the full plan. Summary:
+> ⚠️ **Currently disabled (first-pass training)**: both YAMLs have `grpo.val_period: 0` and `data.validation: null`; checkpointing is also off. Mechanics-verification first; re-enable per [`VALIDATION.md §7`](VALIDATION.md#7-re-enabling-validation-planned-not-active).
+
+See [`VALIDATION.md`](VALIDATION.md) for the full plan. Summary (the values once re-enabled):
 
 | | Paper / verl yaml | Ours |
 |---|---|---|
@@ -125,7 +127,7 @@ Paper values from Appendix B.2; verl values from [`Search-R1/scripts/nq_hotpotqa
 Run **one seed on 1× A100** first. After step 100 (first validation point):
 - If wall-clock so far ≤ 5 h → projects ~50 h end-to-end, proceed with 6-run plan on 1× A100.
 - If wall-clock 5–15 h → projects 50–150 h, evaluate cost-vs-time trade-off; consider 2× A100 for the remaining 5 runs.
-- If > 15 h or `val/accuracy = 0` (model not learning the format) → abort, debug.
+- If > 15 h or `train/reward_mean` is flat at ~0 (model not finding any rewardable trajectories — first-pass has no `val/*` to lean on) → abort, debug.
 
 Update this table from the W&B run summary once the first run completes.
 

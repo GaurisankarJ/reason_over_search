@@ -22,11 +22,11 @@ grpo:
   # [paper] verl total_training_steps=1005.
   max_num_steps: 1005
   max_num_epochs: 1
-  # [paper] verl test_freq=100.
-  val_period: 100
-  val_at_start: true
-  val_at_end: true
-  max_val_samples: 1000
+  # [DISABLED for first-pass training] — same as 1xa100. See VALIDATION.md.
+  val_period: 0
+  val_at_start: false
+  val_at_end: false
+  max_val_samples: 256
   val_batch_size: 256
   # [paper] verl max_turns=4.
   max_rollout_turns: 4
@@ -83,10 +83,10 @@ loss_fn:
   use_kl_in_reward: false
 
 # =============================================================================
-# Checkpointing — same as 1xa100
+# Checkpointing — [DISABLED for first-pass training] same as 1xa100
 # =============================================================================
 checkpointing:
-  enabled: true
+  enabled: false
   checkpoint_dir: "results/grpo/qwen3.5-2b"
   metric_name: "val:accuracy"
   higher_is_better: true
@@ -324,10 +324,7 @@ data:
     data_path: data/training/nq_hotpotqa_train/train.parquet
     arm: qwen_native
     seed: ${grpo.seed}
-  validation:
-    dataset_name: search_r1
-    data_path: data/training/nq_hotpotqa_train/test.parquet
-    arm: qwen_native
+  validation: null   # [DISABLED for first-pass training] — same as 1xa100
   default:
     # qwen_native default: see grpo_qwen3.5_2b_1xa100.yaml for the full comment.
     prompt_file: null

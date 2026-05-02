@@ -66,9 +66,9 @@ Lock-in mapping between [`Search-R1/scripts/nq_hotpotqa/v0.2/train_grpo.sh`](htt
 | Optimizer LR | `1e-6` | `policy.optimizer.kwargs.lr` | `1e-6` | match |
 | Warmup ratio | `0.285` | `policy.scheduler` LinearLR `total_iters` | `286` (= 0.285 × 1005) | match |
 | Total steps | `total_training_steps=1005` | `grpo.max_num_steps` | `1005` | match — paper text says 500; verl yaml + published checkpoints are 1005 |
-| Save cadence | `save_freq=100` | `checkpointing.save_period` | `100` | match |
-| Val cadence | `test_freq=100` | `grpo.val_period` | `100` | match |
-| Val at start | `val_before_train=true` | `grpo.val_at_start` | `true` | match |
+| Save cadence | `save_freq=100` | `checkpointing.save_period` | `100` (but `checkpointing.enabled: false` first-pass) | **paper-match planned**; first-pass disables checkpointing |
+| Val cadence | `test_freq=100` | `grpo.val_period` | **`0` first-pass; `100` planned** | **first-pass disables validation** — re-enable per [VALIDATION.md §7](VALIDATION.md#7-re-enabling-validation-planned-not-active) |
+| Val at start | `val_before_train=true` | `grpo.val_at_start` | **`false` first-pass; `true` planned** | first-pass disables validation |
 | KL coef (β) | `kl_loss_coef=0.001` | `loss_fn.reference_policy_kl_penalty` | `0.001` | match |
 | **KL estimator** | `kl_loss_type=low_var_kl` | `loss_fn.reference_policy_kl_type` | `k3` (NeMo-RL default) | **byte-identical** — both compute Schulman 2020 k3 |
 | **State masking** | `state_masking=true` (`<information>` zero-masked) | role-based `token_loss_mask` ([grpo.py:1685-1693](../../training/nemo_rl/nemo_rl/algorithms/grpo.py#L1685-L1693)) | automatic | **equivalent**, no config knob — env emits `role: tool`, gradient masks it |

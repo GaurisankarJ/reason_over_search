@@ -4,7 +4,9 @@ In-loop validation during GRPO training. Mirrors Search-R1's validation setup so
 
 Sources: [Search-R1 arXiv 2503.09516](https://arxiv.org/abs/2503.09516), [Search-R1 GitHub](https://github.com/PeterGriffinJin/Search-R1).
 
-> **Status**: paper-side numbers and conventions are settled. `test_freq=100` and `total_training_steps=1005` are confirmed against upstream [`Search-R1/scripts/nq_hotpotqa/v0.2/train_grpo.sh`](https://github.com/PeterGriffinJin/Search-R1/blob/main/scripts/nq_hotpotqa/v0.2/train_grpo.sh) — the EM-only baseline that produced the published GRPO checkpoints we evaluated in Milestone 1.
+> ⚠️ **DISABLED for first-pass training** (current state). Both YAML configs at [`training/configs/`](../../training/configs/) have `grpo.val_period: 0`, `grpo.val_at_start: false`, `grpo.val_at_end: false`, `data.validation: null`. The first-pass run is mechanics verification only — getting the GRPO loop, retriever HTTP, env actor, and W&B logging to all line up cleanly. Once that's confirmed, re-enable per the steps in §7 below.
+
+> **Status (paper-side)**: paper-side numbers and conventions are settled. `test_freq=100` and `total_training_steps=1005` are confirmed against upstream [`Search-R1/scripts/nq_hotpotqa/v0.2/train_grpo.sh`](https://github.com/PeterGriffinJin/Search-R1/blob/main/scripts/nq_hotpotqa/v0.2/train_grpo.sh) — the EM-only baseline that produced the published GRPO checkpoints we evaluated in Milestone 1. We're matching this once we re-enable.
 
 ---
 
@@ -29,9 +31,9 @@ These are the in-distribution benchmarks; out-of-distribution datasets (Bamboogl
 
 **Paper / verl:** `save_freq=100` and `test_freq=100` (validation co-runs with each checkpoint) — confirmed in [`scripts/nq_hotpotqa/v0.2/train_grpo.sh:68-69`](https://github.com/PeterGriffinJin/Search-R1/blob/main/scripts/nq_hotpotqa/v0.2/train_grpo.sh). Plus `+trainer.val_before_train=true` runs validation at step 0 as a baseline.
 
-**Ours:** match — `checkpointing.save_period: 100`, `grpo.val_period: 100`, `grpo.val_at_start: true`.
+**Ours (planned, after re-enable):** match — `checkpointing.save_period: 100`, `grpo.val_period: 100`, `grpo.val_at_start: true`. **First-pass (current):** all three off.
 
-With verl's 1005-step training, that gives **10 validation points** per run plus step 0 = **11 total**.
+With verl's 1005-step training, the planned cadence gives **10 validation points** per run plus step 0 = **11 total**.
 
 ## 4. Metrics logged to W&B
 
@@ -59,7 +61,7 @@ Per-step training metrics (already standard in NeMo-RL):
 
 **Paper / verl:** fixed schedule of 1005 steps (`total_training_steps=1005`, capped before the 15-epoch nominal); no early stopping.
 
-**Ours:** match. Run all 1005 steps. Save the best-by-`val/accuracy` checkpoint via NeMo-RL's `keep_top_k: 3` mechanism; that's the candidate we feed into the Milestone 1 eval pipeline.
+**Ours (when validation is re-enabled):** match. Run all 1005 steps. Save the best-by-`val/accuracy` checkpoint via NeMo-RL's `keep_top_k: 3` mechanism; that's the candidate we feed into the Milestone 1 eval pipeline. **First-pass (current)**: validation off, no checkpointing, just run all 1005 steps and verify training mechanics from W&B `train/*` metrics.
 
 If reward is collapsing or training is unstable (NaN loss, KL spike), abort manually rather than auto-stop — we want the failure mode visible in W&B for diagnosis, not silently truncated.
 
@@ -67,3 +69,28 @@ If reward is collapsing or training is unstable (NaN loss, KL spike), abort manu
 
 1. **Validation subsample size.** 1k per validation point × 11 validations × {NQ, HotpotQA} × 5 GRPO rollouts (group=5) = 110k validation rollouts per run. If this dominates wall-clock, drop to 500-question subsamples.
 2. **Validation rollout sampling.** Paper does not state whether validation rollouts use temp=0 or temp=1. Eval is greedy (Milestone 1 confirmed); training rollouts are temp=1. We default validation to **temp=1, single sample** to match the *training* distribution (the point of in-loop val is to track what the policy actually does during training). Final post-training eval uses the Milestone 1 pipeline at temp=0.
+
+## 7. Re-enabling validation (planned, not active)
+
+When the first-pass training run is confirmed mechanically sound, restore validation by editing both [`training/configs/grpo_qwen3.5_2b_{1,2}xa100.yaml`](../../training/configs/):
+
+```yaml
+grpo:
+  val_period: 100        # was 0
+  val_at_start: true     # was false
+  val_at_end: true       # was false
+  max_val_samples: 1000  # already set; effective once val_period > 0
+
+data:
+  validation:            # was null
+    dataset_name: search_r1
+    data_path: data/training/nq_hotpotqa_train/test.parquet
+    arm: qwen_native     # must match data.train.arm
+
+checkpointing:
+  enabled: true          # was false
+```
+
+After flipping these, the run will produce 11 validation points (step 0 + every 100 steps over 1005 steps) and keep the top-3 checkpoints by `val:accuracy`. The metric name and env hooks are already wired — see [`SearchR1Env.global_post_process_and_metrics`](../../training/src/environments/search_r1_env.py).
+
+No code changes needed for the re-enable; it's a config flip.

@@ -164,20 +164,22 @@ CHECKPOINT_DIR_BASE=/workspace/persistent/checkpoints
 
 ## Smoke run (recommended before the real thing)
 
-Run a tiny truncated training to verify all the pipes connect — retriever, dataset, env, GRPO loop, W&B logging, checkpointing.
+Run a tiny truncated training to verify all the pipes connect — retriever, dataset, env, GRPO loop, W&B logging.
 
 ```bash
-# 5-step training run, single seed, 1× A100. Override max_num_steps + val cadence.
+# 5-step training run, single seed, 1× A100.
 bash training/scripts/run_grpo_1xa100.sh --variant base --seed 999 \
-    grpo.max_num_steps=5 grpo.val_period=2 grpo.val_at_start=true \
+    grpo.max_num_steps=5 \
     logger.wandb.name=smoke-test
 ```
 
 Expected outcome:
-- W&B picks up the run; you see `train/reward_mean`, `val/accuracy`, etc.
+- W&B picks up the run; you see `train/reward_mean`, `train/kl`, `train/policy_loss`, GPU utilization.
 - The retriever logs receive `/batch_search` calls during rollouts.
-- Checkpoint saves to `${CHECKPOINT_DIR_BASE}/qwen3.5-2b-base/qwen_native/seed999/`.
 - No NaN losses or KL spikes.
+- The 5 steps complete and the process exits cleanly.
+
+> **Validation + checkpointing are disabled in the current configs** — see [`VALIDATION.md`](../training/VALIDATION.md) and the `[DISABLED for first-pass training]` comments in the YAMLs. The smoke run won't write any checkpoint and won't run any val rollouts; that's expected. Re-enable in a follow-up once training mechanics are verified.
 
 If anything blows up here, fix it before committing real GPU-hours.
 
@@ -201,10 +203,9 @@ bash training/scripts/run_grpo_1xa100.sh --variant hybrid --seed 1337
 
 Each run:
 - 1005 steps, **~50–150 h projected on 1× A100** (high uncertainty — see [`PAPER_VS_OURS_TRAINING.md §7`](../training/PAPER_VS_OURS_TRAINING.md#7-compute) and the first-run gate below).
-- 11 validation points (step 0 + every 100 steps).
-- Top-3 checkpoints kept by `val:accuracy`, plus `latest`.
+- **No validation, no checkpoints written** in the current first-pass configs (see VALIDATION.md / the YAML's `[DISABLED for first-pass training]` blocks). Final weights live in W&B run artifacts only until checkpointing is re-enabled.
 
-> **First-run gate**: launch ONE seed first (`--variant base --seed 42`). At step 100 (~1 h in if going well, much longer if not), check the W&B `gpu_monitoring` panel and the wall-clock so far. If projecting to land under 50 h end-to-end, commit to the 6-run plan on 1× A100. If 50–150 h, weigh cost-vs-time and consider switching the remaining 5 runs to 2× A100. If >150 h or `val/accuracy = 0` after step 100 (model not learning the format), abort and debug.
+> **First-run gate**: launch ONE seed first (`--variant base --seed 42`). At step 100 (~1 h in if going well, much longer if not), check the W&B `gpu_monitoring` panel + step rate + `train/reward_mean` curve. If wall-clock projects to land under 50 h end-to-end and `train/reward_mean` is climbing (not flat at 0), commit to the 6-run plan on 1× A100. If 50–150 h, weigh cost-vs-time and consider switching the remaining 5 runs to 2× A100. If >150 h or `train/reward_mean` stays flat at ~0 (model not finding any rewardable trajectories), abort and debug.
 
 ### 2× A100 (faster; if 1× takes too long)
 
@@ -227,14 +228,14 @@ On a single Vast instance, runs are **sequential** (one process at a time per GP
 
 ### W&B
 
-Per [VALIDATION.md §4](../training/VALIDATION.md#4-metrics-logged-to-wb), watch:
+Validation is off for first-pass training, so the only signal is from training-side metrics:
 
-- `train/reward_mean` — should rise from ~0 to ~0.3 over the first 100 steps for `paper` arm; from ~0 to ~0.5 for `qwen_native` (different reward scale).
+- `train/reward_mean` — should rise from ~0 to ~0.3 over the first 100 steps for `paper` arm; from ~0 to ~0.5 for `qwen_native` (different reward scale, see [§7d of CHAT_TEMPLATE.md](../training/CHAT_TEMPLATE.md#7d-final-state--model-emits-answerxanswer)).
 - `train/kl` — spikes followed by recovery are normal early. Sustained KL > 0.5 is a warning.
-- `val/accuracy` (= mean reward on val) — should improve at each validation point.
-- `val/em_hit_rate` — fraction of val rollouts with reward ≥ 0.8 (proxy for "got the answer").
-- `val/fraction_of_samples_properly_ended` — fraction that emitted a proper stop token (not max-tokens-truncated). Should be ≥ 0.95 by step 200; lower means model is not learning the format.
-- Truncation rate via `policy.generation` truncation events.
+- `train/policy_loss`, `train/clip_fraction` — standard PPO/GRPO sanity.
+- `train/grad_norm`, `train/lr` — should track the warmup schedule (linear ramp over 286 steps from 0.1× to 1× of `1e-6`, then constant).
+- Per-rollout-batch metrics from our env's `global_post_process_and_metrics`: `train/accuracy`, `train/em_hit_rate`, `train/fraction_of_samples_properly_ended`, `train/generation_lengths`. These are computed on training rollouts (since validation is off) and are the closest signal to "is the model learning the format" without paying for a val pass.
+- GPU utilization via `gpu_monitoring`.
 
 ### Retriever
 
@@ -256,58 +257,19 @@ Configs ship with conservative defaults (`train_micro_batch_size=4`, `gpu_memory
 | Retriever HTTP timeout / connection errors | retriever overloaded (CPU pegged) or down | Check `tmux attach -t retriever`. Bump `env.search_r1.request_timeout_s=60`. If retriever is healthy but slow, drop concurrent rollout pressure: `grpo.num_prompts_per_step=64` (lower trajectories/step temporarily). |
 | `val/accuracy` stays at 0 after step 100 | format-validity ≈ 0 (model not emitting `<answer>`) | Inspect a few val rollouts in W&B (`logger.num_val_samples_to_print: 5`). Likely needs longer warmup or a slightly higher LR (`policy.optimizer.kwargs.lr=2.0e-6`). |
 | KL explodes (>5) | LR too high or KL coef too low | Verify `loss_fn.reference_policy_kl_penalty=0.001`. If correct, halve LR. |
-| `val:accuracy` checkpoint metric "missing" | env's `global_post_process_and_metrics` not registered | Verify `import training.src.registry` at top of `run_grpo.py` runs before `main()`. The metric key must be `accuracy` (env emits it) and `metric_name` must be `val:accuracy` (config sets it). |
-| Hybrid variant emits `<think>` blocks but no `<answer>` | enable_thinking=true broke the chat-template termination | Verify the bash wrapper added `++policy.tokenizer.chat_template_kwargs.enable_thinking=true`. Inspect a few val traces; if the model loops in `<think>...</think>` blocks without converging, raise `policy.generation.max_new_tokens` from 500 to 750 or 1000 for the hybrid runs. |
+| Hybrid variant emits `<think>` blocks but no `<answer>` | enable_thinking=true broke the chat-template termination | Verify the bash wrapper added `++policy.tokenizer.chat_template_kwargs.enable_thinking=true`. If the model loops in `<think>...</think>` without converging, raise `policy.generation.max_new_tokens` from 500 to 750 or 1000 for the hybrid runs. |
 
 ---
 
-## Smoke-eval on Bamboogle
+## After Phase 2 (first-pass goals)
 
-After each run completes, smoke-test the best checkpoint through the Milestone-1 eval pipeline.
+The first-pass training run is **mechanics verification only** — checkpointing and validation are off. After the first 1005-step run finishes cleanly:
 
-### 1. Convert checkpoint to a vLLM-loadable format
-
-NeMo-RL's checkpointing saves both DTensor sharded state and (with `save_consolidated: true`) a HF-compatible safetensors. Our config sets `save_consolidated: false` to save space; flip it for runs you want to eval, OR run NeMo-RL's `convert_dcp_to_hf.py` post-hoc.
-
-```bash
-training/nemo_rl/.venv/bin/python training/nemo_rl/examples/converters/convert_dcp_to_hf.py \
-    --dcp-ckpt-path ${CHECKPOINT_DIR_BASE}/qwen3.5-2b-base/qwen_native/seed42/checkpoints/best/policy/ \
-    --hf-output-path /workspace/persistent/checkpoints/qwen3.5-2b-base-grpo-seed42-hf/ \
-    --tokenizer-name Qwen/Qwen3.5-2B-Base
-```
-
-### 2. Run M1 eval pipeline on Bamboogle
-
-```bash
-# Following docs/milestone_one/FROZEN_CONFIG_v1.md, but pointing at our trained checkpoint.
-scripts/manage_sglang.sh switch trained -- \
-    --model-path /workspace/persistent/checkpoints/qwen3.5-2b-base-grpo-seed42-hf
-scripts/run_one.sh trained bamboogle 1 > bamboogle_seed42.log 2>&1
-
-LATEST=$(ls -dt evaluation_search_r1/results/bamboogle/bamboogle_*_search_r1_trained_seed1 | head -1)
-grep -E "^(em|f1):" "$LATEST/metric_score.txt"
-```
-
-> **Eval gate**: if Bamboogle EM trends up vs. the **untrained** Qwen3.5-2B-Base baseline (~5 min eval, n=125), proceed to the full Milestone-1 benchmark suite. If not, debug before committing 60 GPU-hours of full eval.
-
-### 3. Full benchmark suite (only if Bamboogle improves)
-
-```bash
-# 7 datasets × variant × seed. See evaluation_search_r1/README.md and
-# docs/setup/VAST_AI_PLAN_A.md for the cost-optimized fleet plan.
-for ds in nq triviaqa popqa hotpotqa 2wikimultihopqa musique bamboogle; do
-    scripts/run_one.sh trained $ds 1 > eval_${ds}_seed42.log 2>&1
-done
-```
-
----
-
-## After Phase 2
-
-1. **Fill the TBD rows** in [PAPER_VS_OURS_TRAINING.md §7](../training/PAPER_VS_OURS_TRAINING.md#7-compute): observed wall-clock, GPU-hours, $/run.
-2. **Aggregate eval results** across the 3 seeds × 2 variants. Mirror the M1 results table at [docs/milestone_one/RESULTS_PLAN_B.md](../milestone_one/RESULTS_PLAN_B.md).
-3. **Side-by-side write-up** vs. paper Table 3 numbers (§3 of [PAPER_VS_OURS_TRAINING.md](../training/PAPER_VS_OURS_TRAINING.md)).
-4. **Decide on M3** based on what M2 reveals — likely reward-function ablations and a Qwen-native-aware format reward.
+1. **Confirm `train/reward_mean` climbed** above 0 over the run, and the loss/KL/grad-norm curves are sane. That's the first-pass success criterion.
+2. **Fill the TBD rows** in [PAPER_VS_OURS_TRAINING.md §7](../training/PAPER_VS_OURS_TRAINING.md#7-compute): observed wall-clock, GPU-hours, $/run.
+3. **Re-enable validation + checkpointing** — flip the `[DISABLED for first-pass training]` blocks in both YAMLs back to `enabled: true` / `val_period: 100` / `val_at_start: true` / restore `data.validation`. See [`VALIDATION.md`](../training/VALIDATION.md) for the planned re-enable.
+4. **Then run the full 6-run plan** (3 seeds × 2 variants) with checkpointing on, smoke-eval the best checkpoint on Bamboogle through the M1 eval pipeline ([`MILESTONE_1.1_QWEN_BASELINES.md`](../milestone_one/MILESTONE_1.1_QWEN_BASELINES.md) gives you the untrained baseline to beat).
+5. **Aggregate** across seeds, side-by-side vs. paper Table 3, decide on M3 (reward ablations).
 
 ---
 
@@ -318,7 +280,7 @@ done
 | Launch script (1× A100) | [`training/scripts/run_grpo_1xa100.sh`](../../training/scripts/run_grpo_1xa100.sh) |
 | Launch script (2× A100) | [`training/scripts/run_grpo_2xa100.sh`](../../training/scripts/run_grpo_2xa100.sh) |
 | Hyperparameter audit | [`docs/training/PAPER_VS_OURS_TRAINING.md`](../training/PAPER_VS_OURS_TRAINING.md) |
-| W&B metric set | [`docs/training/VALIDATION.md`](../training/VALIDATION.md#4-metrics-logged-to-wb) |
+| W&B metric set | [`docs/training/VALIDATION.md`](../training/VALIDATION.md#4-metrics-logged-to-wb) (validation off in first-pass — train-side metrics only) |
 | Tuning knobs | [`docs/training/NEMO_RL_KNOBS.md`](../training/NEMO_RL_KNOBS.md) |
 | Overlay architecture | [`docs/training/README.md`](../training/README.md#trainingsrc-overlay-architecture) |
 | Retriever setup | [`local_retriever/README.md`](../../local_retriever/README.md) |

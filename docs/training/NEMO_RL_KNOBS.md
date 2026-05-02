@@ -44,8 +44,8 @@ Reference for the NeMo-RL settings that matter when running GRPO on Qwen3.5-2B o
 | `grpo.num_prompts_per_step` | GRPO | `32` (1B example) | Prompts per training step. With `num_generations_per_prompt=16`, that's 32 × 16 = 512 trajectories per step → matches our target global batch. |
 | `grpo.num_generations_per_prompt` | GRPO | `16` (1B example) | Group size G in GRPO. **Search-R1 paper uses `5`** for Qwen2.5-3B. Larger G = lower-variance advantage but more rollouts per step. |
 | `grpo.max_num_steps` | GRPO | varies | Total training steps. **Search-R1 uses `1005`** (verl `total_training_steps=1005` in v0.2; supersedes paper text's "500"). |
-| `grpo.val_period` | GRPO | varies | Validation cadence in steps. **Search-R1 uses `100`** (verl `test_freq=100`). |
-| `grpo.val_at_start` | GRPO | varies | Run validation at step 0 as a baseline. **Search-R1 uses `true`** (verl `val_before_train=true`). |
+| `grpo.val_period` | GRPO | varies | Validation cadence in steps. **Search-R1 uses `100`** (verl `test_freq=100`). **Currently `0` (disabled) for first-pass training** — see VALIDATION.md §7. |
+| `grpo.val_at_start` | GRPO | varies | Run validation at step 0 as a baseline. **Search-R1 uses `true`** (verl `val_before_train=true`). **Currently `false`** (first-pass). |
 | `grpo.max_rollout_turns` | GRPO | `999999` | Hard cap on env-loop iterations per rollout. **Search-R1 uses `4`** (verl `max_turns=4` in v0.2). Our env enforces this internally too. |
 | `grpo.normalize_rewards` | GRPO | `true` | Normalize rewards within each group (standard GRPO behaviour). |
 | `grpo.use_leave_one_out_baseline` | GRPO | `true` | Use leave-one-out baseline for advantage estimation. Standard. |
@@ -82,11 +82,13 @@ Reference for the NeMo-RL settings that matter when running GRPO on Qwen3.5-2B o
 
 ## 6. Checkpointing & logging
 
+> ⚠️ **Currently `checkpointing.enabled: false`** in both YAMLs — first-pass training is mechanics-only, no weights saved. Re-enable per [`VALIDATION.md §7`](VALIDATION.md#7-re-enabling-validation-planned-not-active).
+
 | Knob | Default | Notes |
 |---|---|---|
-| `checkpointing.enabled` | `true` | Keep on. |
-| `checkpointing.checkpoint_dir` | `"results/grpo"` | **Set to a path on Vast.ai persistent storage** (e.g. `/workspace/persistent/checkpoints/qwen3.5-2b-{base,hybrid}/seed_{1,2,3}`). |
-| `checkpointing.metric_name` | `"val:accuracy"` | Best-checkpoint selection metric. Our `SearchR1Env.global_post_process_and_metrics` emits `accuracy` (mean reward, zero-masked for not-properly-ended rollouts) so this works as-is. |
+| `checkpointing.enabled` | `true` | **Currently `false`** (first-pass). Re-enable when validation comes back on. |
+| `checkpointing.checkpoint_dir` | `"results/grpo"` | **Set to a path on Vast.ai persistent storage** (e.g. `/workspace/persistent/checkpoints/qwen3.5-2b-{base,hybrid}/seed_{1,2,3}`). Unused while disabled. |
+| `checkpointing.metric_name` | `"val:accuracy"` | Best-checkpoint selection metric. Our `SearchR1Env.global_post_process_and_metrics` emits `accuracy` (mean reward, zero-masked for not-properly-ended rollouts) so this works as-is once validation runs. |
 | `checkpointing.keep_top_k` | `3` | Retain best 3 + latest. |
 | `checkpointing.save_period` | `10` | Every N training steps. **Search-R1 uses every 100 steps**; we should match initially. |
 | `logger.wandb_enabled` | `false` | **Set `true`**; key in `training/.env`. |
@@ -112,7 +114,10 @@ The actual configs live at [`training/configs/grpo_qwen3.5_2b_{1,2}xa100.yaml`](
 | `grpo.num_prompts_per_step` | `32` | `102` | same | [paper] 102 × 5 = 510 ≈ verl's 512 trajectories |
 | `grpo.num_generations_per_prompt` | `16` | `5` | same | [paper] verl `n_agent=5` |
 | `grpo.max_num_steps` | `1000000` | `1005` | same | [paper] verl `total_training_steps=1005` |
-| `grpo.val_period` | `10` | `100` | same | [paper] verl `test_freq=100` |
+| `grpo.val_period` | `10` | **`0` (first-pass; planned 100)** | same | first-pass disables validation; `100` matches verl `test_freq` once re-enabled |
+| `grpo.val_at_start` / `val_at_end` | `false` / `false` | **both `false` (first-pass; planned `true` once val is on)** | same | first-pass disables validation |
+| `data.validation` | `null` | **`null` (first-pass)** | same | re-add the `dataset_name: search_r1` block alongside `train` once `val_period > 0` |
+| `checkpointing.enabled` | `true` | **`false` (first-pass; planned `true`)** | same | first-pass is mechanics-only; flip back when validation comes on |
 | `grpo.max_rollout_turns` | `1` | `4` | same | [paper] verl `max_turns=4` (multi-turn search) |
 | `loss_fn.reference_policy_kl_penalty` | `0.01` | `0.001` | same | [paper] verl `kl_loss_coef=0.001` |
 | `loss_fn.reference_policy_kl_type` | `"k3"` | `"k3"` | same | upstream default = verl `low_var_kl` (byte-identical) |

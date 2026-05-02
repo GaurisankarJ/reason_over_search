@@ -27,12 +27,14 @@ grpo:
   # published checkpoints we evaluated in M1 came from 1005-step runs).
   max_num_steps: 1005
   max_num_epochs: 1   # capped by max_num_steps anyway
-  # [paper] verl test_freq=100 + val_before_train=true.
-  val_period: 100
-  val_at_start: true
-  val_at_end: true
-  # Cap validation rollouts per period (see docs/training/VALIDATION.md §6).
-  max_val_samples: 1000
+  # [DISABLED for first-pass training] — paper uses test_freq=100 + val_before
+  # _train=true. We're keeping validation off for now to focus on verifying
+  # training mechanics; will re-enable once the loop is running cleanly. See
+  # docs/training/VALIDATION.md for the planned re-enable steps.
+  val_period: 0          # 0 → no periodic validation
+  val_at_start: false
+  val_at_end: false
+  max_val_samples: 256   # unused while val is off; kept to satisfy the schema
   val_batch_size: 256
   # [paper] verl max_turns=4 (per-rollout search-tool call cap).
   max_rollout_turns: 4
@@ -94,16 +96,17 @@ loss_fn:
   use_kl_in_reward: false
 
 # =============================================================================
-# Checkpointing
+# Checkpointing — [DISABLED for first-pass training]
 # =============================================================================
+# Re-enable once we've verified the training loop is mechanically sound. The
+# rest of the keys are kept (with safe defaults) so the schema validates and
+# re-enabling is a single `enabled: true` flip.
 checkpointing:
-  enabled: true
-  # Override on Vast: /workspace/persistent/checkpoints/qwen3.5-2b-{base,hybrid}/seed_{N}/
+  enabled: false
   checkpoint_dir: "results/grpo/qwen3.5-2b"
-  metric_name: "val:accuracy"   # NeMo-RL standard val metric; our env returns reward in [0,1] EM-equivalent
+  metric_name: "val:accuracy"
   higher_is_better: true
   keep_top_k: 3
-  # [paper] verl save_freq=100.
   save_period: 100
   checkpoint_must_save_by: null
   model_save_format: "safetensors"
@@ -358,10 +361,10 @@ data:
     arm: qwen_native            # override to "paper" for ablation arm
     seed: ${grpo.seed}
 
-  validation:
-    dataset_name: search_r1
-    data_path: data/training/nq_hotpotqa_train/test.parquet
-    arm: qwen_native            # must match train
+  # [DISABLED for first-pass training] — re-add the validation dataset block
+  # once `grpo.val_period > 0`. Test parquet stays committed at
+  # data/training/nq_hotpotqa_train/test.parquet, ready when needed.
+  validation: null
 
   default:
     # qwen_native default: system prompt describes the search protocol
