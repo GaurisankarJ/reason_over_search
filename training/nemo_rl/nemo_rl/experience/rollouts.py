@@ -395,6 +395,9 @@ def run_multi_turn_rollout(
     sample_terminated = torch.zeros(batch_size, dtype=torch.bool)
     sample_truncated = torch.zeros(batch_size, dtype=torch.bool)
     sample_max_turns_reached = torch.zeros(batch_size, dtype=torch.bool)
+    # A "tool call" = a turn where the env did not terminate (i.e. produced an obs
+    # the model then conditions on). Counted per sample.
+    sample_tool_call_counts = torch.zeros(batch_size, dtype=torch.int32)
 
     # Tracking per-turn metrics
     total_gen_tokens_per_turn = []
@@ -537,6 +540,12 @@ def run_multi_turn_rollout(
         terminateds = env_output.terminateds.bool()
         done = truncation_mask | terminateds
         sample_terminated[active_indices] |= done
+        # Count tool calls: env returned an obs the model would condition on (i.e. did
+        # not terminate). Counted regardless of outer-loop truncation, since the env
+        # logic still ran.
+        for i, global_idx in enumerate(active_indices.tolist()):
+            if not terminateds[i].item():
+                sample_tool_call_counts[global_idx] += 1
 
         # Update active indices for the next iteration
         active_indices_local_next = torch.where(~done)[0]
@@ -570,12 +579,25 @@ def run_multi_turn_rollout(
         for i in range(num_reward_components):
             current_batch[f"reward{i + 1}"] = multi_rewards[:, i].clone()
 
+    # Pull had_valid_answer from final per-sample env metadata (default False if env
+    # does not emit it, so non-search_r1 envs degrade gracefully).
+    sample_had_valid_answer = torch.tensor(
+        [
+            bool(current_batch["extra_env_info"][i].get("had_valid_answer", False))
+            if isinstance(current_batch["extra_env_info"][i], dict)
+            else False
+            for i in range(batch_size)
+        ],
+        dtype=torch.bool,
+    )
+
     # Calculate aggregate metrics
     rollout_metrics = {
         # Overall metrics
         "total_turns": int(sample_turn_counts.sum().item()),
         "avg_turns_per_sample": float(sample_turn_counts.float().mean().item()),
         "max_turns_per_sample": int(sample_turn_counts.max().item()),
+        "min_turns_per_sample": int(sample_turn_counts.min().item()),
         "natural_termination_rate": float(sample_terminated.float().mean().item()),
         "truncation_rate": float(sample_truncated.float().mean().item()),
         "max_turns_reached_rate": float(sample_max_turns_reached.float().mean().item()),
@@ -589,9 +611,23 @@ def run_multi_turn_rollout(
         "max_gen_tokens_per_sample": float(
             sample_assistant_token_counts.float().max().item()
         ),
+        "min_gen_tokens_per_sample": float(
+            sample_assistant_token_counts.float().min().item()
+        ),
         "mean_env_tokens_per_sample": float(
             sample_env_token_counts.float().mean().item()
         ),
+        # Tool-call counts per sample (count of non-terminating env steps).
+        "mean_tool_calls_per_sample": float(
+            sample_tool_call_counts.float().mean().item()
+        ),
+        "max_tool_calls_per_sample": int(sample_tool_call_counts.max().item()),
+        "min_tool_calls_per_sample": int(sample_tool_call_counts.min().item()),
+        # Aborted = no parseable final answer. Mirrors had_valid_answer from env.
+        "aborted_ratio": float(1.0 - sample_had_valid_answer.float().mean().item()),
+        # Verl-style alias: per-sample fraction whose response was clipped at the
+        # generation budget. truncation_rate already captures this signal.
+        "response_length/clip_ratio": float(sample_truncated.float().mean().item()),
     }
     return current_batch, rollout_metrics
 
@@ -710,6 +746,12 @@ async def run_sample_multi_turn_rollout(
     terminated = False
     truncated = False
     max_turns_reached = False
+    # Number of env steps that did not terminate the rollout — i.e. tool calls
+    # whose obs the model conditions on next.
+    tool_call_count = 0
+    # Whether the env's terminal step reported a parseable final answer.
+    # Defaults False; envs that don't emit `had_valid_answer` will leave this False.
+    had_valid_answer = False
 
     # Track per-turn metrics
     turn_gen_tokens = []
@@ -788,6 +830,17 @@ async def run_sample_multi_turn_rollout(
             total_reward += float(env_output.rewards[0].item())
         # Check termination
         terminated = env_output.terminateds[0].item()
+        if not terminated:
+            tool_call_count += 1
+        # Read had_valid_answer from this turn's env metadata (default False).
+        # Envs that don't emit it leave had_valid_answer at its existing value,
+        # so a single answer turn anywhere in the rollout sticks.
+        if env_output.metadata[0] is not None and isinstance(
+            env_output.metadata[0], dict
+        ):
+            had_valid_answer = had_valid_answer or bool(
+                env_output.metadata[0].get("had_valid_answer", False)
+            )
         env_obs_content = env_output.observations[0]["content"]
         # Tokenize environment response
         tokenized_obs = tokenizer(
@@ -852,6 +905,8 @@ async def run_sample_multi_turn_rollout(
         "turn_gen_tokens": turn_gen_tokens,
         "turn_input_tokens": turn_input_tokens,
         "turn_total_tokens": turn_total_tokens,
+        "tool_call_count": tool_call_count,
+        "had_valid_answer": had_valid_answer,
         # Pass-through per-worker per-turn accounting for aggregation at batch level
         "per_worker_token_counts": per_worker_token_counts,
     }
@@ -998,6 +1053,7 @@ def run_async_multi_turn_rollout(
             "avg_turns_per_sample": sum(m["turn_count"] for m in all_sample_metrics)
             / batch_size,
             "max_turns_per_sample": max(m["turn_count"] for m in all_sample_metrics),
+            "min_turns_per_sample": min(m["turn_count"] for m in all_sample_metrics),
             "natural_termination_rate": sum(m["terminated"] for m in all_sample_metrics)
             / batch_size,
             "truncation_rate": sum(m["truncated"] for m in all_sample_metrics)
@@ -1018,6 +1074,9 @@ def run_async_multi_turn_rollout(
             "max_gen_tokens_per_sample": max(
                 m["assistant_tokens"] for m in all_sample_metrics
             ),
+            "min_gen_tokens_per_sample": min(
+                m["assistant_tokens"] for m in all_sample_metrics
+            ),
             "mean_env_tokens_per_sample": sum(
                 m["env_tokens"] for m in all_sample_metrics
             )
@@ -1027,6 +1086,27 @@ def run_async_multi_turn_rollout(
             / batch_size,
             "max_total_reward": max(m["total_reward"] for m in all_sample_metrics),
             "min_total_reward": min(m["total_reward"] for m in all_sample_metrics),
+            # Tool-call counts per sample (count of non-terminating env steps).
+            "mean_tool_calls_per_sample": sum(
+                m.get("tool_call_count", 0) for m in all_sample_metrics
+            )
+            / batch_size,
+            "max_tool_calls_per_sample": max(
+                m.get("tool_call_count", 0) for m in all_sample_metrics
+            ),
+            "min_tool_calls_per_sample": min(
+                m.get("tool_call_count", 0) for m in all_sample_metrics
+            ),
+            # Aborted = no parseable final answer. Mirrors had_valid_answer from env.
+            "aborted_ratio": 1.0
+            - sum(bool(m.get("had_valid_answer", False)) for m in all_sample_metrics)
+            / batch_size,
+            # Verl-style alias: per-sample fraction whose response was clipped at the
+            # generation budget. truncation_rate already captures this signal.
+            "response_length/clip_ratio": sum(
+                m["truncated"] for m in all_sample_metrics
+            )
+            / batch_size,
         }
 
         # Calculate per-worker token counts
