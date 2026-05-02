@@ -136,6 +136,8 @@ Canonical list in [docs/MILESTONE_1.md#whats-left](../docs/milestone_one/MILESTO
 
 Do **not** change `temperature` or `top_p` — paper eval is greedy. See note above.
 
+**Milestone 1.1 — untrained Qwen3.5-2B baselines** (Jose-owned): [docs/milestone_one/MILESTONE_1.1_QWEN_BASELINES.md](../docs/milestone_one/MILESTONE_1.1_QWEN_BASELINES.md). Run the M1 eval pipeline against `Qwen/Qwen3.5-2B-Base` and `Qwen/Qwen3.5-2B` using the qwen_native protocol (system prompt with `search` tool registered) so M2's trained checkpoints have a meaningful "untrained" floor to beat. Eval pipeline needs a qwen_native arm (port the parsers from `training/src/environments/parsers.py`).
+
 **Milestone 2 — training Search-R1 on Qwen3 via NeMo-RL**: scoped in [docs/milestone_two/MILESTONE_2.md](../docs/milestone_two/MILESTONE_2.md). Work happens on the `training-setup` branch. Verl does not support Qwen3, so we port the Search-R1-style GRPO loop to NeMo-RL. Reward function and chat template are decoupled as ablation surfaces; baseline uses Qwen3's native `<tool_call>` / `<tool_response>` template instead of the paper's `<search>` / `<information>`.
 
 - **Phase 1** (build the pipeline) — **complete** as of 2026-05-01. NeMo-RL @ v0.6.0 vendored at `training/nemo_rl/`, training data prepped + LFS-committed, overlay at `training/src/` (dataset adapter, processor, retrieval env, reward, registry — 9 files; 19 unit tests pass), GRPO YAML configs for 1× and 2× A100, parameterized launch scripts. Audit landing page: [docs/training/README.md](../docs/training/README.md). Hyperparameter audit: [docs/training/PAPER_VS_OURS_TRAINING.md](../docs/training/PAPER_VS_OURS_TRAINING.md) (every value cross-checked against `Search-R1/scripts/nq_hotpotqa/v0.2/train_grpo.sh`).
