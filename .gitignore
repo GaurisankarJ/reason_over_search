@@ -16,18 +16,22 @@ evaluation_search_r1/search_r1_instruct_model/
 /.venv
 local_retriever/.venv
 scripts/.env
+training/.env
 
-# Data: eval jsonls (data/, data_subsample/) are tracked. Keep download cache
-# and any parquet artifacts out (parquet are training-data leftovers from an
-# earlier branch — eval pipeline reads jsonl).
+# Data: eval jsonls (data/, data_subsample/) are tracked via LFS. Training
+# parquets at data/training/ are also committed via LFS (see .gitattributes).
+# Keep the HF download cache out.
 data/.cache/
-data/*/*.parquet
 
 # Results (per-run artifacts; aggregated reports live in docs/)
 evaluation_search_r1/results/
 
 # Run logs
 *.log
+
+# Training run artifacts (commit smoke trace jsonls explicitly; ignore W&B dirs and checkpoints)
+logs/**/wandb/
+results/grpo/
 
 # Autoresearch working log
 results.tsv
