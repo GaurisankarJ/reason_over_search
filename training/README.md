@@ -142,7 +142,7 @@ bash training/scripts/run_grpo_2xa100.sh --variant {base|hybrid} --seed N [--arm
 | Arg | Values | Default | Effect |
 |---|---|---|---|
 | `--variant` | `base`, `hybrid` | `base` | Selects `Qwen/Qwen3.5-2B-Base` or `Qwen/Qwen3.5-2B`; `hybrid` adds `enable_thinking=true`. |
-| `--seed` | int | `42` | Sets `grpo.seed`; goes into the W&B run name and checkpoint dir. |
+| `--seed` | int | `42` | RNG seed for the whole run — controls dataset-shuffle order, vLLM rollout sampling, and PyTorch RNG. Different seeds give error bars on EM (Phase 2 = 3 seeds × 2 variants for variance estimation). Sets `grpo.seed`; also goes into the W&B run name and the checkpoint dir. |
 | `--arm` | `qwen_native`, `paper` | `qwen_native` | Chat-template arm. `paper` wires [`training/src/prompts/search_r1_paper.txt`](src/prompts/search_r1_paper.txt); `qwen_native` registers the `search` tool via `tokenizer.apply_chat_template`. |
 
 **6-run plan** (matches Phase-2 success criteria — 3 seeds × 2 variants):

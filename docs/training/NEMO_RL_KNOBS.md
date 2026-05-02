@@ -90,7 +90,7 @@ Reference for the NeMo-RL settings that matter when running GRPO on Qwen3.5-2B o
 | `checkpointing.keep_top_k` | `3` | Retain best 3 + latest. |
 | `checkpointing.save_period` | `10` | Every N training steps. **Search-R1 uses every 100 steps**; we should match initially. |
 | `logger.wandb_enabled` | `false` | **Set `true`**; key in `training/.env`. |
-| `logger.wandb.name` | — | Name pattern: `qwen3.5-2b-{base,hybrid}-seed{N}-search_r1_baseline`. |
+| `logger.wandb.name` | — | Pattern: `qwen3.5-2b-{variant}-search_r1-{arm}-{Nx}a100-seed{N}-{UTC-timestamp}` (e.g. `...seed42-20260502T1437Z`). Built by the bash wrappers; the timestamp lets repeated launches of the same `(variant, arm, seed)` get distinct W&B runs while still resuming from the same checkpoint dir. |
 | `logger.num_val_samples_to_print` | — | Set to ~5 so we eyeball trace quality during training. |
 
 ---

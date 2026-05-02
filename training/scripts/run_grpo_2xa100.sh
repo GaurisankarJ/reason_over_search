@@ -56,7 +56,10 @@ if [[ -f "${REPO_ROOT}/training/.env" ]]; then
 fi
 
 # ---- Hydra overrides ----
-RUN_NAME="qwen3.5-2b-${VARIANT}-search_r1-${ARM}-2xa100-seed${SEED}"
+# See run_grpo_1xa100.sh for the rationale: timestamp on the W&B run name only,
+# checkpoint dir stays keyed by (variant, arm, seed) so resumes work.
+TS="$(date -u +%Y%m%dT%H%MZ)"
+RUN_NAME="qwen3.5-2b-${VARIANT}-search_r1-${ARM}-2xa100-seed${SEED}-${TS}"
 CKPT_DIR="${CHECKPOINT_DIR_BASE:-results/grpo}/qwen3.5-2b-${VARIANT}/${ARM}/seed${SEED}"
 
 OVERRIDES=(

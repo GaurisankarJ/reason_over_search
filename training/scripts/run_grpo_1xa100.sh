@@ -60,7 +60,13 @@ if [[ -f "${REPO_ROOT}/training/.env" ]]; then
 fi
 
 # ---- Hydra overrides ----
-RUN_NAME="qwen3.5-2b-${VARIANT}-search_r1-${ARM}-1xa100-seed${SEED}"
+# Timestamp suffixed to the W&B run name so repeated launches (e.g. resuming
+# after an OOM, or re-running the same seed for sanity) get distinct W&B runs
+# while still resuming from the seed's checkpoint dir below.
+TS="$(date -u +%Y%m%dT%H%MZ)"
+RUN_NAME="qwen3.5-2b-${VARIANT}-search_r1-${ARM}-1xa100-seed${SEED}-${TS}"
+# Checkpoint dir is keyed by (variant, arm, seed) — NOT timestamped — so a
+# resumed run picks up where it left off.
 CKPT_DIR="${CHECKPOINT_DIR_BASE:-results/grpo}/qwen3.5-2b-${VARIANT}/${ARM}/seed${SEED}"
 
 OVERRIDES=(
