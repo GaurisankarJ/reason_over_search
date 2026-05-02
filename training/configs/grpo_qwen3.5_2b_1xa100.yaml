@@ -321,9 +321,13 @@ policy:
     top_p: 1.0
     top_k: null
     stop_token_ids: null
-    # Per-arm stop strings are also injected by the env's `next_stop_strings`.
-    # These globals are belt-and-braces; not strictly needed but harmless.
-    stop_strings: null
+    # Initial stop strings for vLLM — REQUIRED for turn 1. The env's
+    # `next_stop_strings` only kicks in after the first env.step(), so without
+    # this fallback the first vLLM call has no stop strings and the model
+    # generates past `</tool_call>` / `</search>`, hallucinating fake
+    # tool_response blocks. Union of both arms' tags is safe — neither arm
+    # emits the other arm's closing tag in normal generation.
+    stop_strings: ["</tool_call>", "</search>", "</answer>"]
     mcore_generation_config:
       buffer_size_gb: 10
       num_cuda_graphs: 4
@@ -379,13 +383,14 @@ data:
   validation: null
 
   default:
-    # qwen_native default: system prompt describes the search protocol
-    # (paper-equivalent, minus the <search>/<information> instructions Qwen3.5
-    # handles natively via <tool_call>/<tool_response>). The bash wrapper
-    # overrides both fields for arm=paper:
-    #   data.default.system_prompt_file=null
+    # qwen_native default: system message is the brief tool-role description
+    # only; the reasoning/answer protocol rides in the user message (prompt_file)
+    # — same structure as the paper arm, just with <tool_call>/<tool_response>
+    # instead of <search>/<information>. The bash wrapper overrides both fields
+    # for arm=paper:
     #   data.default.prompt_file=training/src/prompts/search_r1_paper.txt
-    prompt_file: null
+    #   data.default.system_prompt_file=null
+    prompt_file: training/src/prompts/search_r1_qwen_native_user.txt
     system_prompt_file: training/src/prompts/search_r1_qwen_native_system.txt
     processor: search_r1_processor
     env_name: search_r1

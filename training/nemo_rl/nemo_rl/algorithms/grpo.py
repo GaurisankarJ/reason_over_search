@@ -90,6 +90,60 @@ from nemo_rl.utils.venvs import create_local_venv_on_each_node
 TokenizerType = TypeVar("TokenizerType", bound=PreTrainedTokenizerBase)
 
 
+# Project-specific rollout metrics (defined in
+# nemo_rl/experience/rollouts.py). Routed to the `reason_over_search/`
+# W&B namespace instead of upstream's `train/` so the project's tool-call /
+# abort-rate / clip-rate signals get their own dashboard panel.
+_REASON_OVER_SEARCH_METRIC_KEYS = frozenset({
+    # Turn / tool-call shape
+    "mean_turns_per_sample",
+    "max_turns_per_sample",
+    "min_turns_per_sample",
+    "mean_tool_calls_per_sample",
+    "max_tool_calls_per_sample",
+    "min_tool_calls_per_sample",
+    # Termination-mode breakdown — three mutually-distinct ways a rollout ends
+    "aborted_ratio",            # no parseable <answer>
+    "natural_termination_rate", # emitted <answer> cleanly
+    "max_turns_reached_rate",   # ran out of search rounds
+    "truncation_rate",          # response hit max_new_tokens (== response_length/clip_ratio)
+    # Token usage
+    "mean_total_tokens_per_sample",
+    "mean_env_tokens_per_sample",
+    # Response-length stats (also exposed as mean/max/min_gen_tokens_per_sample
+    # under train/, but these short aliases live in the project namespace)
+    "response_length/clip_ratio",
+    "resp_len_mean",
+    "resp_len_max",
+    "resp_len_min",
+    "resp_len_non_aborted_mean",  # cleaner length signal — excludes failed rollouts
+    "resp_len_non_aborted_max",
+    "resp_len_non_aborted_min",
+    # Initial prompt length (input tokens before any rollout turns)
+    "prompt_len_mean",
+    "prompt_len_max",
+    "prompt_len_min",
+    # Reward stats
+    "reward_mean",
+    "reward_max",
+    "reward_min",
+})
+
+
+def _pop_reason_over_search_metrics(rollout_metrics: dict) -> dict:
+    """Pop the project's custom metric keys from `rollout_metrics`; return them.
+
+    Mutates `rollout_metrics` in place. The returned dict is intended to be
+    logged with `prefix="reason_over_search"` while the (now-trimmed)
+    `rollout_metrics` keeps the upstream `train/` prefix.
+    """
+    return {
+        k: rollout_metrics.pop(k)
+        for k in list(rollout_metrics)
+        if k in _REASON_OVER_SEARCH_METRIC_KEYS
+    }
+
+
 class RewardScalingConfig(TypedDict):
     """Configure linear reward scaling with clamping.
 
@@ -1576,7 +1630,15 @@ def grpo_train(
                     metrics_logging_data["mean_gen_tokens_per_sample"] = (
                         rollout_metrics["mean_gen_tokens_per_sample"]
                     )
+                    # Route project-specific metrics to their own W&B namespace.
+                    # Pop happens before the log call AND before the later
+                    # `metrics.update(rollout_metrics)` so we don't double-log.
+                    ros_metrics = _pop_reason_over_search_metrics(rollout_metrics)
                     logger.log_metrics(rollout_metrics, total_steps + 1, prefix="train")
+                    if ros_metrics:
+                        logger.log_metrics(
+                            ros_metrics, total_steps + 1, prefix="reason_over_search"
+                        )
 
                 repeated_batch = scale_rewards(
                     repeated_batch, master_config["grpo"]["reward_scaling"]
@@ -2980,6 +3042,10 @@ def async_grpo_train(
                         metrics[k] = np.mean(v).item()
                     else:
                         metrics[k] = np.sum(v).item()
+                # Pop project-specific metrics so the upstream `train/` log call
+                # below doesn't claim them; they get logged with their own
+                # `reason_over_search/` prefix at the bottom of this iteration.
+                ros_metrics = _pop_reason_over_search_metrics(rollout_metrics)
                 metrics.update(rollout_metrics)
                 if generation_logger_metrics is not None:
                     metrics["generation_logger_metrics"] = generation_logger_metrics
@@ -3162,6 +3228,10 @@ def async_grpo_train(
 
             logger.log_metrics(performance_metrics, step + 1, prefix="performance")
             logger.log_metrics(metrics, step + 1, prefix="train")
+            if ros_metrics:
+                logger.log_metrics(
+                    ros_metrics, step + 1, prefix="reason_over_search"
+                )
             logger.log_metrics(timing_metrics, step + 1, prefix="timing/train")
 
             timer.reset()

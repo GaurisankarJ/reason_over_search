@@ -23,48 +23,51 @@ The benchmarks, retriever, FAISS index, and EM scorer stay identical to M1.
 
 ## Prompt strategy per variant
 
+> **Updated 2026-05-02** — The training prompts were split into a brief system prompt + a user-message protocol template (matching the paper arm's structure). For eval-vs-train fairness, M1.1 should use the same split. Both files live under [`training/src/prompts/`](../../training/src/prompts/).
+
 ### Qwen3.5-2B-Base (no chat template)
 
-The base model has no instruction-following post-training and no chat template. The user said to do "instruction + question, no wrapping". So:
+The base model has no instruction-following post-training. Concatenate the user-message template (with the question filled in) — the system role intro is uninformative without a chat template.
 
+```python
+with open("training/src/prompts/search_r1_qwen_native_user.txt") as f:
+    user_template = f.read()
+prompt = user_template.format(question)
+# → "You must conduct reasoning inside <think> and </think>... Question: {question}"
 ```
-<verbatim system prompt below>
 
-Question: {question}
-```
-
-Plain string concatenation — fed straight to the model with `apply_chat=False` (the existing eval-pipeline flag from M1's `SearchR1Pipeline.__init__`).
+Feed straight to the model with `apply_chat=False`.
 
 ### Qwen3.5-2B (hybrid; default soft-switch reasoning)
 
-The hybrid variant has Qwen3.5's chat template AND post-training on `<tool_call>` / `<tool_response>`. Use full chat-template rendering with `apply_chat=True`, `enable_thinking=True`:
+The hybrid variant has Qwen3.5's chat template AND post-training on `<tool_call>` / `<tool_response>`. Use full chat-template rendering — same code as the training processor:
 
 ```python
+with open("training/src/prompts/search_r1_qwen_native_system.txt") as f:
+    system_prompt = f.read().strip()
+with open("training/src/prompts/search_r1_qwen_native_user.txt") as f:
+    user_template = f.read()
+
 tokenizer.apply_chat_template(
     [
-        {"role": "system", "content": <verbatim system prompt below>},
-        {"role": "user",   "content": question},
+        {"role": "system", "content": system_prompt},
+        {"role": "user",   "content": user_template.format(question)},
     ],
     tools=[SEARCH_TOOL],         # from training/src/chat_template/tools.py
     tokenize=False,
     add_generation_prompt=True,
+    add_special_tokens=False,
     enable_thinking=True,
 )
 ```
 
 Qwen3.5's chat template will auto-render the `search` tool's schema into the system area. See [`docs/training/CHAT_TEMPLATE.md §7a`](../training/CHAT_TEMPLATE.md#7a-qwen_native-arm) for what the model actually sees, copy-pasteable.
 
-## The verbatim prompt (use this exact text)
+## The verbatim prompt files
 
-Same content for both variants — only the wrapping differs:
-
-```
-You are a helpful assistant. Answer the user's question by using the `search` tool when you need external knowledge.
-
-You must conduct reasoning inside <think> and </think> first every time you get new information. You may call `search` as many times as needed. If you find no further external knowledge needed, you can directly provide the answer inside <answer> and </answer>, without detailed illustrations. For example, <answer> Beijing </answer>.
-```
-
-Source of truth (do not duplicate; load from this path): [`training/src/prompts/search_r1_qwen_native_system.txt`](../../training/src/prompts/search_r1_qwen_native_system.txt).
+Source of truth — do not duplicate; load from these paths:
+- [`training/src/prompts/search_r1_qwen_native_system.txt`](../../training/src/prompts/search_r1_qwen_native_system.txt) — one-line role intro
+- [`training/src/prompts/search_r1_qwen_native_user.txt`](../../training/src/prompts/search_r1_qwen_native_user.txt) — protocol + `Question: {}` placeholder
 
 ## Pre-flight — what needs to be in place
 

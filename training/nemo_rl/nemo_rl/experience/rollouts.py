@@ -591,6 +591,33 @@ def run_multi_turn_rollout(
         dtype=torch.bool,
     )
 
+    # Initial prompt length per sample. The first message in each sample's
+    # message_log is the bare user prompt (built by the data processor before
+    # any rollout turns), so its `token_ids` length is the input prompt length.
+    sample_prompt_lengths = torch.tensor(
+        [
+            len(current_batch["message_log"][i][0]["token_ids"])
+            for i in range(batch_size)
+        ],
+        dtype=torch.float32,
+    )
+
+    # Response length restricted to non-aborted samples (those that emitted a
+    # parseable <answer>). Aborted rollouts often run to max_new_tokens,
+    # dragging up the resp_len_* mean/max — this metric isolates the
+    # "successful" generation length distribution. Empty if every sample
+    # aborted (extremely degenerate batch); use NaN so W&B skips the point
+    # in the chart instead of plotting a misleading 0.
+    _non_aborted_lens = sample_assistant_token_counts[sample_had_valid_answer]
+    if _non_aborted_lens.numel() > 0:
+        _rln_mean = float(_non_aborted_lens.float().mean().item())
+        _rln_max = int(_non_aborted_lens.max().item())
+        _rln_min = int(_non_aborted_lens.min().item())
+    else:
+        _rln_mean = float("nan")
+        _rln_max = float("nan")
+        _rln_min = float("nan")
+
     # Calculate aggregate metrics
     rollout_metrics = {
         # Overall metrics
@@ -628,6 +655,30 @@ def run_multi_turn_rollout(
         # Verl-style alias: per-sample fraction whose response was clipped at the
         # generation budget. truncation_rate already captures this signal.
         "response_length/clip_ratio": float(sample_truncated.float().mean().item()),
+        # Per-sample response length (assistant tokens generated this rollout).
+        # Mirrors mean_gen_tokens_per_sample but with the project's standard
+        # `resp_len_*` naming so the dashboard matches the async path / verl.
+        "resp_len_mean": float(sample_assistant_token_counts.float().mean().item()),
+        "resp_len_max": int(sample_assistant_token_counts.max().item()),
+        "resp_len_min": int(sample_assistant_token_counts.min().item()),
+        # Per-sample total reward (sum of rewards across all turns of the rollout).
+        # The sync path didn't aggregate reward stats before; added here so the
+        # `reason_over_search/` dashboard shows the same reward signal as async.
+        "reward_mean": float(total_rewards.float().mean().item()),
+        "reward_max": float(total_rewards.float().max().item()),
+        "reward_min": float(total_rewards.float().min().item()),
+        # Turn count alias — `mean_turns_per_sample` mirrors upstream's
+        # `avg_turns_per_sample`, keeping the project's `mean_*` naming convention.
+        "mean_turns_per_sample": float(sample_turn_counts.float().mean().item()),
+        # Initial prompt length (tokens before any rollout turns).
+        "prompt_len_mean": float(sample_prompt_lengths.mean().item()),
+        "prompt_len_max": int(sample_prompt_lengths.max().item()),
+        "prompt_len_min": int(sample_prompt_lengths.min().item()),
+        # Response length restricted to non-aborted samples (cleaner signal than
+        # resp_len_* which includes failed rollouts that often hit max_new_tokens).
+        "resp_len_non_aborted_mean": _rln_mean,
+        "resp_len_non_aborted_max": _rln_max,
+        "resp_len_non_aborted_min": _rln_min,
     }
     return current_batch, rollout_metrics
 
@@ -1107,6 +1158,54 @@ def run_async_multi_turn_rollout(
                 m["truncated"] for m in all_sample_metrics
             )
             / batch_size,
+            # Project naming aliases (also routed to the reason_over_search/
+            # W&B namespace via grpo.py — see _REASON_OVER_SEARCH_METRIC_KEYS).
+            # `resp_len_*` mirrors mean_gen_tokens_per_sample / max / min.
+            "resp_len_mean": sum(
+                m["assistant_tokens"] for m in all_sample_metrics
+            )
+            / batch_size,
+            "resp_len_max": max(m["assistant_tokens"] for m in all_sample_metrics),
+            "resp_len_min": min(m["assistant_tokens"] for m in all_sample_metrics),
+            # `reward_*` mirrors mean_total_reward / max_total_reward / min_total_reward.
+            "reward_mean": sum(m["total_reward"] for m in all_sample_metrics)
+            / batch_size,
+            "reward_max": max(m["total_reward"] for m in all_sample_metrics),
+            "reward_min": min(m["total_reward"] for m in all_sample_metrics),
+            # Turn count alias — mirrors upstream's avg_turns_per_sample.
+            "mean_turns_per_sample": sum(m["turn_count"] for m in all_sample_metrics)
+            / batch_size,
+            # Initial prompt length (first turn's input length per sample).
+            "prompt_len_mean": sum(
+                m["turn_input_tokens"][0] if m["turn_input_tokens"] else 0
+                for m in all_sample_metrics
+            )
+            / batch_size,
+            "prompt_len_max": max(
+                m["turn_input_tokens"][0] if m["turn_input_tokens"] else 0
+                for m in all_sample_metrics
+            ),
+            "prompt_len_min": min(
+                m["turn_input_tokens"][0] if m["turn_input_tokens"] else 0
+                for m in all_sample_metrics
+            ),
+            # Response length restricted to non-aborted samples (NaN if all aborted).
+            "resp_len_non_aborted_mean": (
+                sum(m["assistant_tokens"] for m in all_sample_metrics if m.get("had_valid_answer"))
+                / max(1, sum(1 for m in all_sample_metrics if m.get("had_valid_answer")))
+                if any(m.get("had_valid_answer") for m in all_sample_metrics)
+                else float("nan")
+            ),
+            "resp_len_non_aborted_max": (
+                max(m["assistant_tokens"] for m in all_sample_metrics if m.get("had_valid_answer"))
+                if any(m.get("had_valid_answer") for m in all_sample_metrics)
+                else float("nan")
+            ),
+            "resp_len_non_aborted_min": (
+                min(m["assistant_tokens"] for m in all_sample_metrics if m.get("had_valid_answer"))
+                if any(m.get("had_valid_answer") for m in all_sample_metrics)
+                else float("nan")
+            ),
         }
 
         # Calculate per-worker token counts

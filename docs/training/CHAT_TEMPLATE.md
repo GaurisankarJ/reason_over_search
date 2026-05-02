@@ -36,23 +36,25 @@ Question: {prompt}
 | `<information> ... </information>` | Retrieved documents injected into the trace (Search-R1 invention) |
 | `<answer> ... </answer>` | Final answer; close-rate is the format-validity metric |
 
-### 1a. Our `qwen_native` arm — paper-equivalent system prompt
+### 1a. Our `qwen_native` arm — paper-structured prompt with native tool-use tags
 
 Our default arm uses Qwen3.5's native `<tool_call>` / `<tool_response>` machinery, but we keep the *protocol* the paper teaches: reason in `<think>`, search when needed, deliver the answer in `<answer>...</answer>`. The `<search>` / `<information>` tag instructions are dropped because Qwen3.5 already knows how to call tools via `<tool_call>` and read their results via `<tool_response>` (post-training distribution covers both).
 
-Source: [`training/src/prompts/search_r1_qwen_native_system.txt`](../../training/src/prompts/search_r1_qwen_native_system.txt). Loaded by the processor as a **system message** (verbatim, not a Python format string), wired via `data.default.system_prompt_file` in [`grpo_qwen3.5_2b_{1,2}xa100.yaml`](../../training/configs/).
+**Structurally identical to the paper arm**: the protocol rides in the user message, the system prompt holds only the brief role description (plus the auto-injected tool schema). This was an explicit fix on 2026-05-02 — putting the protocol in the system prompt and leaving the user message bare gave the model less consistent format compliance than the paper-style "everything in the user turn" layout.
 
-**System prompt:**
+**System prompt** ([`search_r1_qwen_native_system.txt`](../../training/src/prompts/search_r1_qwen_native_system.txt), wired via `data.default.system_prompt_file`):
 
 ```
 You are a helpful assistant. Answer the user's question by using the `search` tool when you need external knowledge.
-
-You must conduct reasoning inside <think> and </think> first every time you get new information. You may call `search` as many times as needed. If you find no further external knowledge needed, you can directly provide the answer inside <answer> and </answer>, without detailed illustrations. For example, <answer> Beijing </answer>.
 ```
 
-**User message:** the bare question (no template wrapping). The processor passes `messages[0].content` straight through.
+**User message template** ([`search_r1_qwen_native_user.txt`](../../training/src/prompts/search_r1_qwen_native_user.txt), wired via `data.default.prompt_file`, processor calls `prompt.format(question)`):
 
-**What Qwen3.5 auto-injects on top.** Because we pass `tools=[SEARCH_TOOL]` to `tokenizer.apply_chat_template`, Qwen3.5's chat template walks the [`SEARCH_TOOL` schema](../../training/src/chat_template/tools.py) and renders the `search` function signature into the system area on its own — so the model has both (a) the protocol from our system prompt and (b) the tool's argument schema from the auto-injected description. Together they're the qwen_native equivalent of the paper's verbose user-message template.
+```
+You must conduct reasoning inside <think> and </think> first every time you get new information. You may call `search` as many times as needed. If you find no further external knowledge needed, you can directly provide the answer inside <answer> and </answer>, without detailed illustrations. For example, <answer> Beijing </answer>. Question: {}
+```
+
+**What Qwen3.5 auto-injects on top.** Because we pass `tools=[SEARCH_TOOL]` to `tokenizer.apply_chat_template`, Qwen3.5's chat template walks the [`SEARCH_TOOL` schema](../../training/src/chat_template/tools.py) and renders a `# Tools` block (function signature + tool-call format example + reminders) **before** our system text. Final system message = auto-injected tool block + our brief role description.
 
 **Diff vs the paper template** — what we kept, what we dropped, why:
 
@@ -65,7 +67,7 @@ You must conduct reasoning inside <think> and </think> first every time you get 
 | "search as many times as your want" | "call `search` as many times as needed" | kept (paraphrased) |
 | "provide the answer inside `<answer>` and `</answer>`, without detailed illustrations" | identical | kept — `<answer>` is the EM scorer's anchor in [`reward.py:extract_solution`](../../training/src/rewards/search_r1.py); must be in the output |
 | "For example, `<answer> Beijing </answer>`." | identical | kept — M1 audit (D-prompt-micro) found this micro-detail materially affects single-hop QA accuracy |
-| "Question: {prompt}" | (omitted; the bare question goes in the user role) | the user role IS the question in chat-template land |
+| "Question: {prompt}" | identical (`Question: {}` in `search_r1_qwen_native_user.txt`) | kept — same `.format(question)` plumbing as the paper arm |
 
 ---
 
@@ -225,7 +227,7 @@ Our prep script ([`training/scripts/prepare_dataset.py`](../../training/scripts/
 
 The chat template is applied at **rollout time** by the training loop (a config knob, not a dataset transformation):
 
-- **`qwen_native` (default).** Bare question goes in the user role. Our paper-equivalent system prompt at [`training/src/prompts/search_r1_qwen_native_system.txt`](../../training/src/prompts/search_r1_qwen_native_system.txt) (see §1a above) is loaded via `data.default.system_prompt_file` and prepended as a `system` message. `tools=[SEARCH_TOOL]` from [`chat_template/tools.py`](../../training/src/chat_template/tools.py) is passed to `tokenizer.apply_chat_template` so Qwen3.5's jinja auto-renders the search tool's schema into the system area. Tool calls / responses follow §2's XML format.
+- **`qwen_native` (default).** Two prompt files: a brief role-description system prompt ([`search_r1_qwen_native_system.txt`](../../training/src/prompts/search_r1_qwen_native_system.txt)) and a user-message template carrying the think/search/answer protocol ([`search_r1_qwen_native_user.txt`](../../training/src/prompts/search_r1_qwen_native_user.txt)). The processor uses `task_data_spec.prompt.format(question)` to build the user-role content (same shape as the paper arm). `tools=[SEARCH_TOOL]` from [`chat_template/tools.py`](../../training/src/chat_template/tools.py) is passed to `tokenizer.apply_chat_template` so Qwen3.5's jinja auto-renders the search tool's schema into the system area. Tool calls / responses follow §2's XML format.
 - **`paper` (ablation arm).** Wrap the bare question with upstream `make_prefix` — the bash wrapper sets `data.default.prompt_file=training/src/prompts/search_r1_paper.txt` and clears `system_prompt_file`. The processor uses `task_data_spec.prompt.format(question)` to build the user-role content.
 
 Switching arms is a config flip — same dataset (committed via LFS), different runtime template. `question`, `golden_answers`, `reward_model.ground_truth.target`, `data_source` are preserved verbatim by the prep script (those drive the EM reward and aren't tied to the prompt format).
@@ -237,12 +239,13 @@ Switching arms is a config flip — same dataset (committed via LFS), different 
 | Component | Where |
 |---|---|
 | Tool schema (qwen_native arm) | [`training/src/chat_template/tools.py`](../../training/src/chat_template/tools.py) — `SEARCH_TOOL` |
-| qwen_native system prompt | [`training/src/prompts/search_r1_qwen_native_system.txt`](../../training/src/prompts/search_r1_qwen_native_system.txt) |
+| qwen_native system prompt (brief role intro) | [`training/src/prompts/search_r1_qwen_native_system.txt`](../../training/src/prompts/search_r1_qwen_native_system.txt) |
+| qwen_native user-message template (protocol + question) | [`training/src/prompts/search_r1_qwen_native_user.txt`](../../training/src/prompts/search_r1_qwen_native_user.txt) |
 | Paper user-message template | [`training/src/prompts/search_r1_paper.txt`](../../training/src/prompts/search_r1_paper.txt) |
-| Arm dispatch (processor) | [`training/src/processors/search_r1.py`](../../training/src/processors/search_r1.py) — reads `task_data_spec.prompt` / `task_data_spec.system_prompt`, branches on `arm` recovered from `task_name` |
+| Arm dispatch (processor) | [`training/src/processors/search_r1.py`](../../training/src/processors/search_r1.py) — both arms now require `task_data_spec.prompt`; branches on `arm` recovered from `task_name` |
 | Env's tool-call parser + tool-response formatter | [`training/src/environments/parsers.py`](../../training/src/environments/parsers.py) |
-| Config defaults (qwen_native) | [`training/configs/grpo_qwen3.5_2b_{1,2}xa100.yaml`](../../training/configs/) — `data.default.system_prompt_file` |
-| Config override (paper) | [`training/scripts/run_grpo_{1,2}xa100.sh`](../../training/scripts/) — when `--arm paper`, sets `prompt_file` and clears `system_prompt_file` |
+| Config defaults (qwen_native) | [`training/configs/grpo_qwen3.5_2b_{1,2}xa100.yaml`](../../training/configs/) — `data.default.prompt_file` + `data.default.system_prompt_file` |
+| Config override (paper) | [`training/scripts/run_grpo_{1,2}xa100.sh`](../../training/scripts/) — when `--arm paper`, swaps `prompt_file` to `search_r1_paper.txt` and clears `system_prompt_file` |
 
 ---
 
@@ -267,45 +270,51 @@ The processor renders this very differently per arm. Below is what `tokenizer.ap
 
 ```
 <|im_start|>system
-You are a helpful assistant. Answer the user's question by using the `search`
-tool when you need external knowledge.
-
-You must conduct reasoning inside <think> and </think> first every time you
-get new information. You may call `search` as many times as needed. If you
-find no further external knowledge needed, you can directly provide the
-answer inside <answer> and </answer>, without detailed illustrations. For
-example, <answer> Beijing </answer>.
-
 # Tools
-You may call one or more functions to assist with the user query.
 
-You are provided with function signatures within <tools></tools> XML tags:
+You have access to the following functions:
+
 <tools>
 {"type": "function", "function": {"name": "search", "description": "Search Wikipedia for passages relevant to the query. Returns the top-K most relevant chunks. Call this whenever the question requires factual knowledge you do not already have.", "parameters": {"type": "object", "properties": {"query": {"type": "string", "description": "The search query. Be specific."}}, "required": ["query"]}}}
 </tools>
 
-For each function call, return a json object with function name and arguments
-within <tool_call></tool_call> XML tags:
+If you choose to call a function ONLY reply in the following format with NO suffix:
+
 <tool_call>
-<function=search>
-<parameter=query>
-search query here
+<function=example_function_name>
+<parameter=example_parameter_1>
+value_1
+</parameter>
+<parameter=example_parameter_2>
+This is the value for the second parameter
+that can span
+multiple lines
 </parameter>
 </function>
-</tool_call><|im_end|>
+</tool_call>
+
+<IMPORTANT>
+Reminder:
+- Function calls MUST follow the specified format: an inner <function=...></function> block must be nested within <tool_call></tool_call> XML tags
+- Required parameters MUST be specified
+- You may provide optional reasoning for your function call in natural language BEFORE the function call, but NOT after
+- If there is no function call available, answer the question like normal with your current knowledge and do not tell the user about function calls
+</IMPORTANT>
+
+You are a helpful assistant. Answer the user's question by using the `search` tool when you need external knowledge.<|im_end|>
 <|im_start|>user
-who got the first nobel prize in physics?<|im_end|>
+You must conduct reasoning inside <think> and </think> first every time you get new information. You may call `search` as many times as needed. If you find no further external knowledge needed, you can directly provide the answer inside <answer> and </answer>, without detailed illustrations. For example, <answer> Beijing </answer>. Question: who got the first nobel prize in physics?<|im_end|>
 <|im_start|>assistant
 <think>
 ```
 
-The trailing `<think>\n` is the auto-generation prefix Qwen3.5's chat template emits when `add_generation_prompt=True` and `enable_thinking=True` (hybrid variant) — see [§2's jinja](#2-qwen35-2b-native-template-verbatim). For base variant it's just `<|im_start|>assistant\n`.
+The trailing `<think>\n` is the auto-generation prefix Qwen3.5's chat template emits when `add_generation_prompt=True` and `enable_thinking=True` — see [§2's jinja](#2-qwen35-2b-native-template-verbatim). Both base and hybrid variants pass `enable_thinking=True` (processor fix, 2026-05-02), so both always get the open `<think>\n` prefix.
 
-The system message comes from two sources stacked:
-1. **Our protocol** (lines 1–11) — verbatim from [`search_r1_qwen_native_system.txt`](../../training/src/prompts/search_r1_qwen_native_system.txt).
-2. **Tool schema** (lines 13–32) — auto-rendered by Qwen3.5's chat template from `tools=[SEARCH_TOOL]` ([`chat_template/tools.py`](../../training/src/chat_template/tools.py)).
+The system message comes from two sources, in this order (Qwen3.5's chat template puts the auto-injected tool block *first*, then any system content):
+1. **Tool schema** — auto-rendered by Qwen3.5's chat template from `tools=[SEARCH_TOOL]` ([`chat_template/tools.py`](../../training/src/chat_template/tools.py)). Includes the `# Tools` block, function signature, the call format example, and the `<IMPORTANT>` reminder.
+2. **Our role intro** — the single sentence from [`search_r1_qwen_native_system.txt`](../../training/src/prompts/search_r1_qwen_native_system.txt).
 
-The user role is just the bare question.
+The user message comes from [`search_r1_qwen_native_user.txt`](../../training/src/prompts/search_r1_qwen_native_user.txt) with `{}` replaced by the question — same `.format(question)` plumbing as the paper arm.
 
 **Turn 2 — after one search round-trip:**
 
@@ -357,6 +366,7 @@ For example, <answer> Beijing </answer>. Question: who got the first nobel
 prize in physics?
 <|im_end|>
 <|im_start|>assistant
+<think>
 ```
 
 No system role. No tool schema. The protocol IS the user message — that's the paper's whole approach. The instructions ride along on every initial prompt.
@@ -391,7 +401,7 @@ There are **no `<|im_start|>` / `<|im_end|>` boundaries** in the env's appended 
 |---|---|---|
 | Each retrieval round is | a separate `user` (tool response) + `assistant` continuation pair | text appended inside one continuous assistant turn |
 | Assistant turn boundaries (`<|im_end|>`) | one per `<tool_call>` round + one for the final `<answer>` | one — at the very end of the rollout |
-| Context tokens spent on protocol | ~270 tokens of system message, paid once at turn 1 | ~150 tokens of user-message instructions, paid once at turn 1 |
+| Context tokens spent on protocol | ~330 tokens at turn 1 — system: tool block + role intro (~270); user: protocol+question (~60) | ~133 tokens of user-message instructions+question, paid once at turn 1 |
 | Context tokens spent on retrieved docs | `<tool_response>` markers (~10 tokens overhead per round) + docs | `<information>` markers (~5 tokens overhead per round) + docs |
 | Loss masking ([`grpo.py:1685-1693`](../../training/nemo_rl/nemo_rl/algorithms/grpo.py#L1685-L1693)) | every assistant span gets loss=1, every user (tool_response) span gets loss=0 — clean separation | every token after the initial user prompt gets loss=1 (it's all one assistant turn). `<information>` blocks are NOT zero-masked unless we do something custom. |
 
@@ -411,4 +421,4 @@ I now have enough information.
 <answer>Wilhelm Conrad Röntgen</answer>
 ```
 
-vLLM stops on `</answer>`, the env classifies the rollout as terminal, computes reward = 1.0 (paper arm — full format match) or ~0.8 (qwen_native arm — the paper-tag-keyed `is_valid_sequence` check fails by design, so the reward collapses to the `score - structure_format_score` branch). Both arms are EM-correct on this rollout; they differ only in how the format-validity bonus stacks. See [`SEED.md`](../edu/SEED.md) for why this 0.8 vs 1.0 ceiling difference is intentional in M2.
+vLLM stops on `</answer>`, the env classifies the rollout as terminal, computes reward = 1.0 on EM hit regardless of arm. The reward function's shaping coefficients (`structure_format_score`, `final_format_score`, `retrieval_score`) all default to 0.0, matching the paper's pure-EM design — so qwen_native and paper arms have the same 1.0 ceiling. The earlier "0.8 vs 1.0" gap (described in older revisions of this doc and `SEED.md`) was an artifact of the shaped reward we previously inherited from Search-R1's `qa_em_format.py`; see [`PAPER_VS_OURS_TRAINING.md` §3](PAPER_VS_OURS_TRAINING.md#3-reward-function) for the corrected provenance.

@@ -13,11 +13,22 @@ Both arms then build the rollout-side message_log fresh via
 
 - **paper arm**: wrap the bare question in
   `task_data_spec.prompt.format(question)` (prompt file =
-  `training/src/prompts/search_r1_paper.txt`). No tool registration.
-- **qwen_native arm**: leave the question bare. Pass `tools=[SEARCH_TOOL]`
-  to apply_chat_template so Qwen3.5's template renders the search tool's
-  schema into the system prompt. (Optional system_prompt_file from
-  task_data_spec is prepended verbatim if set.)
+  `training/src/prompts/search_r1_paper.txt`). No system prompt, no tool
+  registration — the paper bakes the protocol into the user message.
+- **qwen_native arm**: same shape — wrap the bare question in
+  `task_data_spec.prompt.format(question)` (prompt file =
+  `training/src/prompts/search_r1_qwen_native_user.txt`, which carries the
+  think/search/answer protocol). The system prompt is the brief role
+  description from `search_r1_qwen_native_system.txt`. Pass
+  `tools=[SEARCH_TOOL]` so Qwen3.5's template auto-injects the search tool's
+  schema into the system area.
+
+Both arms pass `enable_thinking=True` so the generation prefix becomes
+`<|im_start|>assistant\\n<think>\\n` (open block) — the model fills its
+reasoning, closes `</think>`, then emits `<search>`/`<tool_call>`/`<answer>`.
+Without this, Qwen3.5's template would auto-emit `<think>\\n\\n</think>\\n\\n`
+(closed empty block) before the model generates anything, conflicting with
+the prompt's instruction to reason first.
 """
 from __future__ import annotations
 
@@ -91,15 +102,26 @@ def search_r1_processor(
             tokenize=False,
             add_generation_prompt=True,
             add_special_tokens=False,
+            enable_thinking=True,  # open <think>\n so model fills reasoning before searching/answering
         )
     elif arm == "qwen_native":
-        convo.append({"role": "user", "content": question})
+        # Protocol (think/search/answer instructions) lives in the user message,
+        # mirroring the paper arm. System message carries only the brief role
+        # description; the tool schema is auto-injected by the chat template.
+        if task_data_spec.prompt is None:
+            raise ValueError(
+                "qwen_native arm requires task_data_spec.prompt_file to be set "
+                "(typically training/src/prompts/search_r1_qwen_native_user.txt)."
+            )
+        user_content = task_data_spec.prompt.format(question)
+        convo.append({"role": "user", "content": user_content})
         rendered = tokenizer.apply_chat_template(
             convo,
             tools=[SEARCH_TOOL],
             tokenize=False,
             add_generation_prompt=True,
             add_special_tokens=False,
+            enable_thinking=True,  # open <think>\n so model fills reasoning before tool calls/answer
         )
     else:
         raise ValueError(f"unknown arm {arm!r}")
