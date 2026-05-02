@@ -12,7 +12,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 LOGS = REPO / "logs"
-OUT = REPO / "smoke_results.md"
+OUT = REPO / "docs" / "training" / "smoke_results.md"
 
 COMBOS = [
     ("base_qwen_native", "base", "qwen_native"),

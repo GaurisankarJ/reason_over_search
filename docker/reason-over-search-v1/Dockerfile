@@ -60,7 +60,15 @@ RUN /opt/miniforge3/bin/conda run -n evaluation_search_r1 \
 # envs taking ~33 GB; bump to ≥120 GB (Settings → Resources → Disk image size)
 # before building. Confirm with: docker run --rm alpine df -h /
 ARG NEMO_RL_REF=v0.6.0
-ARG UV_EXTRAS=vllm
+# v0 shipped UV_EXTRAS=vllm only. v1 also pre-warms `automodel` so the
+# DTensorPolicyWorkerV2 (default in our config) doesn't have to download
+# wheels on Vast first-boot. The `automodel` extra still has to *compile*
+# transformer-engine + nv-grouped-gemm + deep_ep on first launch (these are
+# not pure wheels — they pull from git+ sources and build CUDA kernels);
+# but the wheel deps for them ARE cached, which saves ~10 min on Vast.
+# The full compile (~25 min) happens once via training/scripts/bootstrap.sh,
+# which gracefully reuses any pre-built venv on subsequent invocations.
+ARG UV_EXTRAS=vllm,automodel
 
 # vastai/base-image already ships a `uv` at /usr/local/bin/uv; we still install
 # our own copy via the Astral installer to pin a known version, then `ln -sf`
@@ -116,8 +124,18 @@ COPY docker/reason-over-search-v1/10-fix-ssh-perms.sh /etc/vast_boot.d/10-fix-ss
 RUN chmod +x /etc/vast_boot.d/10-fix-ssh-perms.sh
 
 # === Runtime defaults ===
+# v1 retriever defaults: 8 workers + IVF-SQ8 index (path is set in
+# local_retriever/retriever_config.yaml as the default). The flat IP index
+# at 2 workers timed out on >80% of /batch_search calls under the training
+# rollout load; IVF-SQ8 + 8 workers brought 3-query batch latency from
+# 30 s timeout → ~1.7 s. Recall hit < 1 % (acceptable for online RL).
+# See local_retriever/README_v1.md for the full rationale.
 ENV RETRIEVER_PORT=3005
-ENV NUM_RETRIEVER=1
+ENV NUM_RETRIEVER=8
+# HF cache lives on the persistent /workspace volume (large), not the
+# overlay root (small). bootstrap.sh overrides if the user prefers a
+# different location.
+ENV HF_HOME=/workspace/hf_cache
 EXPOSE 3005
 
 RUN env-hash > /.env_hash
