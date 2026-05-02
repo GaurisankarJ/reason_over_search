@@ -7,7 +7,7 @@ gpu_id: "0"
 # To swap back to the exact flat IP index, pass `--index ./indexes/wiki18_100w_e5_flat_inner.index` to
 # retriever_serving.py. For full retrieval-quality eval (not training rollouts) use the flat index with `--num_retriever 2`.
 retrieval_method: "./models/e5-base-v2/"  # name or path of the retrieval model.
-index_path: "./indexes/wiki18_100w_e5_ivf4096_sq8.index"  # ~6.6 GB IVF4096-SQ8; CLI --index can override
+index_path: "./indexes/wiki18_100w_e5_ivf4096_sq8.index"  # ~16 GB IVF4096-SQ8; download from HF dataset pantomiman/reason-over-search; CLI --index can override
 faiss_gpu: False  # CPU FAISS by default; CLI --gpu can override
 faiss_nprobe: 64  # only applied when the index is IVF-based (FlatIP ignores it)
 corpus_path: "./corpus/wiki18_100w.jsonl"  # path to corpus in '.jsonl' format that store the documents

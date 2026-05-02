@@ -104,7 +104,7 @@ You now have 21M unit vectors and one query unit vector. You want the top-k by i
 - **Pros**: exact. The top-3 is the *true* top-3.
 - **Cons**: 21M × 768 multiplications per query. On CPU, 100–300 ms. Memory: 65 GB resident in RAM.
 
-This is what the repo defaults to (`wiki18_100w_e5_flat_inner.index`, ~65 GB). The trick: 65 GB sounds huge, but the box has 503 GB RAM, and a flat index is just one big matrix, so vectorized BLAS makes it surprisingly fast.
+This is the repo's exact-recall fallback (`wiki18_100w_e5_flat_inner.index`, ~65 GB) — useful for paper-fidelity eval. (The training-time *default* is the faster IVF-SQ8 variant — see Approach D.) The trick: 65 GB sounds huge, but the box has 503 GB RAM, and a flat index is just one big matrix, so vectorized BLAS makes it surprisingly fast.
 
 ### Approach B — IVF (approximate, faster)
 
@@ -238,8 +238,8 @@ If you only remember one thing: **the retriever turns text into 768-d vectors, t
 | GPU FAISS | Same algorithm on CUDA | 10× faster than CPU. Needs 16 GB free VRAM. |
 
 And the four files that matter:
-- `wiki18_100w_e5_flat_inner.index` (65 GB, default)
-- `wiki18_100w_e5_ivf4096_sq8.index` (16 GB, opt-in)
+- `wiki18_100w_e5_ivf4096_sq8.index` (16 GB, default; HF dataset [`pantomiman/reason-over-search`](https://huggingface.co/datasets/pantomiman/reason-over-search/blob/main/retriever/wiki18_100w_e5_ivf4096_sq8.index))
+- `wiki18_100w_e5_flat_inner.index` (65 GB, optional, exact recall)
 - `wiki18_100w.jsonl` (14 GB raw passages, mmap'd, row-aligned with index)
 - E5-base-v2 weights (~0.5 GB, loaded into the encoder)
 

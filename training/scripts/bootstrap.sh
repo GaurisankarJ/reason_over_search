@@ -113,22 +113,62 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 3. v2 / automodel uv venv (~25–40 min on first run; instant on rebuild)
+# 3. v2 / automodel uv venv
+# Two paths to materialize this:
+#   a. Fast path — download pre-built tarball from HuggingFace Hub and extract
+#      (~3 min for 5 GB compressed). Default.
+#   b. Slow path — compile transformer-engine + nv-grouped-gemm + deep_ep
+#      from source via `uv sync --extra automodel`. ~25 min on first run.
+# Both produce the same on-disk venv. The fast path is preferred because the
+# slow path can't run inside NeMo-RL's lazy GPU-less Ray _env_builder actor:
+# nv-grouped-gemm's setup.py calls torch.cuda.init() at install time.
 # ---------------------------------------------------------------------------
 V2_VENV="$REPO_ROOT/training/nemo_rl/venvs/nemo_rl.models.policy.workers.dtensor_policy_worker_v2.DTensorPolicyWorkerV2"
+V2_VENV_HF_REPO="${V2_VENV_HF_REPO:-pantomiman/reason-over-search-v1-venvs}"
+V2_VENV_HF_FILE="${V2_VENV_HF_FILE:-dtensor_policy_worker_v2.tar.gz}"
 
 if [[ "${SKIP_V2_BUILD:-0}" == "1" ]]; then
   warn "SKIP_V2_BUILD=1 — assuming the v2 venv exists or that you'll only use _v2=false."
 elif [[ -x "$V2_VENV/bin/python" ]] && "$V2_VENV/bin/python" -c "import nemo_automodel" 2>/dev/null; then
   log "v2 (automodel) venv already built at $V2_VENV."
-else
-  log "Building v2 (automodel) venv from host shell — this compiles transformer-engine + nv-grouped-gemm + deep_ep, ~25 min."
-  log "(Cannot be done inside the Ray actor: nv-grouped-gemm calls torch.cuda.init() at install-time and the actor has no GPU.)"
+elif [[ "${V2_BUILD_FROM_SOURCE:-0}" == "1" ]]; then
+  log "V2_BUILD_FROM_SOURCE=1 → compiling v2 venv from source (~25 min)…"
   ( cd training/nemo_rl
     export NEMO_RL_VENV_DIR="$REPO_ROOT/training/nemo_rl/venvs"
     uv venv --allow-existing "$V2_VENV"
     UV_PROJECT_ENVIRONMENT="$V2_VENV" uv sync --locked --extra automodel
   )
+else
+  log "Downloading pre-built v2 venv from HF dataset $V2_VENV_HF_REPO (~5 GB)…"
+  source /opt/miniforge3/etc/profile.d/conda.sh
+  conda activate retriever
+  TARBALL_DIR="$(mktemp -d)"
+  trap 'rm -rf "$TARBALL_DIR"' EXIT
+  if hf download "$V2_VENV_HF_REPO" "$V2_VENV_HF_FILE" \
+        --repo-type dataset --local-dir "$TARBALL_DIR" 2>&1 | tail -3; then
+    log "Extracting tarball to $(dirname "$V2_VENV") (~2 min)…"
+    mkdir -p "$(dirname "$V2_VENV")"
+    tar -xzf "$TARBALL_DIR/$V2_VENV_HF_FILE" -C "$(dirname "$V2_VENV")"
+    rm -rf "$TARBALL_DIR"
+    trap - EXIT
+    if [[ -x "$V2_VENV/bin/python" ]] && "$V2_VENV/bin/python" -c "import nemo_automodel" 2>/dev/null; then
+      log "v2 (automodel) venv ready (downloaded path)."
+    else
+      err "Tarball extracted but venv doesn't import nemo_automodel. Falling back to source build."
+      rm -rf "$V2_VENV"
+      V2_BUILD_FROM_SOURCE=1 exec "$0" "$@"
+    fi
+  else
+    warn "HF download failed or repo unavailable. Falling back to source build (~25 min)…"
+    rm -rf "$TARBALL_DIR"
+    trap - EXIT
+    ( cd training/nemo_rl
+      export NEMO_RL_VENV_DIR="$REPO_ROOT/training/nemo_rl/venvs"
+      uv venv --allow-existing "$V2_VENV"
+      UV_PROJECT_ENVIRONMENT="$V2_VENV" uv sync --locked --extra automodel
+    )
+  fi
+  conda deactivate
 fi
 
 # ---------------------------------------------------------------------------

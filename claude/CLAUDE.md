@@ -46,7 +46,7 @@ Paper targets we compare against (Qwen2.5-3B EM, Search-R1 v5 Table 3):
 - [`local_retriever/`](../local_retriever/) — FAISS retriever HTTP service.
   - [`README.md`](../local_retriever/README.md) — start the retriever; flat vs IVF-SQ8 vs GPU.
   - [`RETRIEVER_INDEXING.md`](../docs/retriever/RETRIEVER_INDEXING.md) — RAM costs, index choices.
-- [`/workspace/index_creation/`](../../index_creation/) — script + artifact for the IVF4096-SQ8 quantized index (`wiki18_100w_e5_ivf4096_sq8.index`, ~16 GB, 3–10× faster than flat).
+- [`/workspace/index_creation/`](../../index_creation/) — build pipeline for the IVF4096-SQ8 quantized index (`wiki18_100w_e5_ivf4096_sq8.index`, ~16 GB, 3–10× faster than flat). Default download path: HF dataset [`pantomiman/reason-over-search`](https://huggingface.co/datasets/pantomiman/reason-over-search/blob/main/retriever/wiki18_100w_e5_ivf4096_sq8.index) (`curl -L .../resolve/main/retriever/wiki18_100w_e5_ivf4096_sq8.index -o local_retriever/indexes/...`). Rebuild only if you don't trust the upload.
 - [`scripts/`](../scripts/) — `run_one.sh`, `manage_sglang.sh`, `subsample.sh`, `aggregate.py`, the three sweep scripts.
 - [`docker/reason-over-search-v1/`](../docker/) — image used on Vast.ai (`pantomiman/reason-over-search-v1`).
 - [`docs/VAST_AI_PLAN_A.md`](../docs/setup/VAST_AI_PLAN_A.md) — Vast.ai GPU cost/throughput analysis for finishing Plan A in ≤24 h. Three concrete fleet configs.
@@ -57,7 +57,7 @@ Paper targets we compare against (Qwen2.5-3B EM, Search-R1 v5 Table 3):
 
 ## Runtime services (everything must be up before eval)
 
-- **Retriever** on `127.0.0.1:3005`. Health: `curl -sS http://127.0.0.1:3005/health` → `"healthy"`. Default is CPU + flat FAISS (~65 GB RAM, faiss-cpu venv at `/venv/retriever`). For ~3–10× faster CPU retrieval pass `--index ./indexes/wiki18_100w_e5_ivf4096_sq8.index`. GPU FAISS is opt-in via `local_retriever/.venv` and **cannot coexist with SGLang on the single 4090** (16 GB VRAM for the index + 22 GB for SGLang).
+- **Retriever** on `127.0.0.1:3005`. Health: `curl -sS http://127.0.0.1:3005/health` → `"healthy"`. Default is CPU + IVF-SQ8 FAISS (~16 GB RAM, faiss-cpu venv at `/venv/retriever`); the index lives at `local_retriever/indexes/wiki18_100w_e5_ivf4096_sq8.index` and is downloaded from HF [`pantomiman/reason-over-search`](https://huggingface.co/datasets/pantomiman/reason-over-search). For exact-recall paper-fidelity eval pass `--index ./indexes/wiki18_100w_e5_flat_inner.index` (~65 GB RAM). GPU FAISS is opt-in via `local_retriever/.venv` and **cannot coexist with SGLang on the single 4090** (16 GB VRAM for the index + 22 GB for SGLang).
 - **SGLang** on `127.0.0.1:3000` serving the variant under test. Switch with `scripts/manage_sglang.sh switch base|instruct`. Verify: `curl -sS http://127.0.0.1:3000/get_model_info | grep -o instruct`.
 - **Eval venv** at `/venv/evaluation_search_r1`. Verify: `/venv/evaluation_search_r1/bin/python -c "import flashrag"`.
 

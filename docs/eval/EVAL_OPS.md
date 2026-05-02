@@ -95,7 +95,7 @@ Matches the observed 2.85 s.
 Mitigations available:
 
 - `--num_retriever 4` for parallel CPU FAISS workers (read-only, fully safe).
-- IVF-SQ8 index — built; lives at [`/local_retriever/indexes/wiki18_100w_e5_ivf4096_sq8.index`](../../local_retriever/indexes/) (16 GB, ~3-10× faster than flat, <1 % recall hit). Default in [retriever_config.yaml](../../local_retriever/retriever_config.yaml).
+- IVF-SQ8 index — default in [retriever_config.yaml](../../local_retriever/retriever_config.yaml); lives at [`/local_retriever/indexes/wiki18_100w_e5_ivf4096_sq8.index`](../../local_retriever/indexes/) (16 GB, ~3-10× faster than flat, <1 % recall hit). Download from HF: [`pantomiman/reason-over-search`](https://huggingface.co/datasets/pantomiman/reason-over-search/blob/main/retriever/wiki18_100w_e5_ivf4096_sq8.index).
 - GPU FAISS — wired up in the retriever, but cannot co-exist with SGLang on the same 24 GB 4090 (16 GB index + 22 GB SGLang > 24 GB). Useful only when SGLang is stopped, or for offline batch retrieval.
 
 ### Speedup ranking (no model/data changes)

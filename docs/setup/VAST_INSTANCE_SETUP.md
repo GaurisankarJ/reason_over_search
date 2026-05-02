@@ -291,8 +291,8 @@ Then destroy the instance from the Vast UI. The persistent volume billing stops 
 ├── data_subsample/                               # Plan B subsampled (optional)
 ├── local_retriever/
 │   ├── corpus/wiki18_100w.jsonl                  # 14 GB
-│   ├── indexes/wiki18_100w_e5_flat_inner.index   # 65 GB (Flat IP, default)
-│   ├── indexes/wiki18_100w_e5_ivf4096_sq8.index  # 16 GB (optional, faster)
+│   ├── indexes/wiki18_100w_e5_ivf4096_sq8.index  # 16 GB (default; HF: pantomiman/reason-over-search)
+│   ├── indexes/wiki18_100w_e5_flat_inner.index   # 65 GB (Flat IP; optional, exact recall)
 │   └── models/e5-base-v2/                        # 0.5 GB encoder
 └── evaluation_search_r1/
     ├── search_r1_base_model/                     # 14 GB GRPO base

@@ -89,7 +89,11 @@ huggingface-cli download PeterJinGo/wiki-18-corpus --repo-type dataset \
 gunzip -f corpus/wiki-18.jsonl.gz
 mv corpus/wiki-18.jsonl corpus/wiki18_100w.jsonl
 
-# Flat FAISS index (~60 GB after merge + gunzip)
+# IVF-SQ8 FAISS index (~16 GB) — the retriever default
+curl -L -o indexes/wiki18_100w_e5_ivf4096_sq8.index \
+  https://huggingface.co/datasets/pantomiman/reason-over-search/resolve/main/retriever/wiki18_100w_e5_ivf4096_sq8.index
+
+# Flat FAISS index (~60 GB after merge + gunzip) — optional, for paper-quality eval (exact recall)
 huggingface-cli download PeterJinGo/wiki-18-e5-index --repo-type dataset --local-dir indexes
 cat indexes/part_aa indexes/part_ab > indexes/wiki18_100w_e5_flat_inner.index.gz
 gunzip -f indexes/wiki18_100w_e5_flat_inner.index.gz
@@ -118,19 +122,16 @@ sha256sum search_r1_instruct_model/model-00001-of-00003.safetensors
 
 The full identity table (sizes + eos_token_id) is in [../eval/REPRODUCIBILITY.md#models—confirmed-grpo](../eval/REPRODUCIBILITY.md).
 
-## Step 5 (optional) — build the IVF-SQ8 index
+## Step 5 (optional) — rebuild the IVF-SQ8 index locally
 
-Skip if 503 GB host RAM and the flat index suit you. Otherwise:
+You already downloaded the IVF index in Step 4. Use this section only if you don't trust the upload and want to recompute it from your local flat index (~1 hour):
 
 ```bash
 cd /workspace/index_creation
 /venv/retriever/bin/python build_ivf_sq8.py \
   --flat-index ../reason_over_search/local_retriever/indexes/wiki18_100w_e5_flat_inner.index \
   --output wiki18_100w_e5_ivf4096_sq8.index
-# ~1 hour; result is ~16 GB
-
-# Then symlink or copy into the retriever's indexes dir:
-ln -s /workspace/index_creation/wiki18_100w_e5_ivf4096_sq8.index \
+ln -sf /workspace/index_creation/wiki18_100w_e5_ivf4096_sq8.index \
   /workspace/reason_over_search/local_retriever/indexes/
 ```
 
@@ -148,7 +149,7 @@ bash local_retriever/setup_gpu_venv.sh
 
 ## Step 7 — start the retriever
 
-CPU + flat index (the safe default):
+CPU + IVF-SQ8 (the default — fast, ~16 GB RAM):
 
 ```bash
 cd /workspace/reason_over_search/local_retriever
@@ -161,12 +162,12 @@ until curl -sf http://127.0.0.1:3005/health; do sleep 5; done
 echo
 ```
 
-CPU + IVF-SQ8 (3–10× faster, no VRAM cost):
+CPU + flat IP (exact, slower, ~65 GB RAM — only when you specifically need exact recall):
 
 ```bash
 nohup /venv/retriever/bin/python retriever_serving.py \
   --config retriever_config.yaml --num_retriever 4 --port 3005 \
-  --index ./indexes/wiki18_100w_e5_ivf4096_sq8.index \
+  --index ./indexes/wiki18_100w_e5_flat_inner.index \
   > /tmp/retriever.log 2>&1 &
 ```
 

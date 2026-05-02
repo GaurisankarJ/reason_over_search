@@ -8,7 +8,7 @@
 
 | Knob | Value | Where |
 |---|---|---|
-| Index | `./indexes/wiki18_100w_e5_ivf4096_sq8.index` (~6.6 GB) | `retriever_config.yaml: index_path` |
+| Index | `./indexes/wiki18_100w_e5_ivf4096_sq8.index` (~16 GB; HF: [`pantomiman/reason-over-search`](https://huggingface.co/datasets/pantomiman/reason-over-search/blob/main/retriever/wiki18_100w_e5_ivf4096_sq8.index)) | `retriever_config.yaml: index_path` |
 | Engine | CPU FAISS (`faiss-cpu`) | `retriever_config.yaml: faiss_gpu: false` |
 | nprobe | 64 | `retriever_config.yaml: faiss_nprobe` |
 | Worker count | **8** (recommended for training rollouts) | `--num_retriever 8` on the CLI |
@@ -69,8 +69,18 @@ python retriever_serving.py --config retriever_config.yaml --num_retriever 2 --p
 
 ## Capacity sanity (1× A100 80 GB Vast box)
 
-- IVF-SQ8 index: 6.6 GB on disk, ~6.6 GB resident per worker → 8 workers ≈ 53 GB RAM (well under 503 GB on a typical Vast A100 image).
+- IVF-SQ8 index: 16 GB on disk, ~16 GB resident per worker → 8 workers ≈ 128 GB RAM (well under 503 GB on a typical Vast A100 image).
 - Flat IP index: 65 GB on disk and per-worker resident — at 2 workers that's 130 GB, still fits, but each retrieval is full-corpus exact search → seconds per query.
+
+## Get the index
+
+```bash
+mkdir -p /workspace/reason_over_search/local_retriever/indexes
+curl -L -o /workspace/reason_over_search/local_retriever/indexes/wiki18_100w_e5_ivf4096_sq8.index \
+  https://huggingface.co/datasets/pantomiman/reason-over-search/resolve/main/retriever/wiki18_100w_e5_ivf4096_sq8.index
+```
+
+(Build-from-source path: see [/workspace/index_creation/README.md](../../index_creation/README.md).)
 
 ## Endpoints (unchanged from v0)
 
