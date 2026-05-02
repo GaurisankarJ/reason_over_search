@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Extract sampled (prompt, response, reward) tuples per combo for smoke_results.md.
+"""Extract sampled (prompt, response, reward) tuples per combo for SMOKE_RESULTS.md.
 
 Reads logs/smoke_{combo}/train_data_step{1,2}.jsonl and emits a markdown report.
 """
@@ -12,7 +12,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 LOGS = REPO / "logs"
-OUT = REPO / "docs" / "training" / "smoke_results.md"
+OUT = REPO / "docs" / "training" / "SMOKE_RESULTS.md"
 
 COMBOS = [
     ("base_qwen_native", "base", "qwen_native"),

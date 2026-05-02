@@ -78,7 +78,7 @@ Options (single-select):
 - `smoke hybrid × qwen_native` — Qwen3.5-2B (hybrid soft-switch), qwen-native
 - `smoke hybrid × paper` — Qwen3.5-2B (hybrid), paper template
 - `smoke all 4` — run all four sequentially (~30 min total)
-- `full base × qwen_native` — 1005 steps; ~17 d on this 1× A100 (see docs/training/smoke_results.md)
+- `full base × qwen_native` — 1005 steps; ~17 d on this 1× A100 (see docs/training/SMOKE_RESULTS.md)
 - `full custom` — they'll tell you variant + arm + seed + steps
 
 Map their answer:
@@ -154,7 +154,7 @@ If the user ran the four smoke combos and wants the consolidated report:
 
 ```bash
 python3 training/scripts/extract_smoke_samples.py
-# wrote /workspace/reason_over_search/docs/training/smoke_results.md
+# wrote /workspace/reason_over_search/docs/training/SMOKE_RESULTS.md
 ```
 
 The script picks 8–9 samples per combo (mix of correct + incorrect),
@@ -182,4 +182,4 @@ retrieval-call counts.
 - Bootstrap on a re-used box: **< 1 min**.
 - Smoke combo (2 steps × 4 prompts × group 5): **~5 min** once v2 venv exists.
 - Full Phase-2 run (1005 steps × 510 trajectories) on this 1× A100: **~17 d** linear, ~11 d sub-linear.
-- Recommended hardware for full runs: **1× H100 80 GB SXM** (~8 d, ~$400/run). See `docs/training/smoke_results.md` "Vast sizing" section.
+- Recommended hardware for full runs: **1× H100 80 GB SXM** (~8 d, ~$400/run). See `docs/training/SMOKE_RESULTS.md` "Vast sizing" section.
