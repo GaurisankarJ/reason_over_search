@@ -26,8 +26,8 @@
 #
 # Notes:
 #   - training/nemo_rl/ is committed to this repo. setup.sh does not touch it
-#     unless FORCE_RECLONE is set.
-#   - Patches in training/patches/*.patch are applied after a re-clone.
+#     unless FORCE_RECLONE is set. Local edits go directly into the committed
+#     tree and into git history alongside our overlay.
 
 set -euo pipefail
 
@@ -37,7 +37,6 @@ FORCE_RECLONE="${FORCE_RECLONE:-}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NEMO_RL_DIR="${SCRIPT_DIR}/nemo_rl"
-PATCHES_DIR="${SCRIPT_DIR}/patches"
 
 log() { printf '\033[1;34m[setup]\033[0m %s\n' "$*"; }
 
@@ -60,23 +59,6 @@ if [[ -n "${FORCE_RECLONE}" ]]; then
     rm -rf "${NEMO_RL_DIR}"
     git clone --recursive --branch "${REF}" \
         https://github.com/NVIDIA-NeMo/RL.git "${NEMO_RL_DIR}"
-
-    # Apply local patches (if any) before stripping .git.
-    if [[ -d "${PATCHES_DIR}" ]]; then
-        shopt -s nullglob
-        patches=( "${PATCHES_DIR}"/*.patch )
-        shopt -u nullglob
-        if (( ${#patches[@]} > 0 )); then
-            log "applying ${#patches[@]} patch(es) from ${PATCHES_DIR}"
-            for p in "${patches[@]}"; do
-                log "  $(basename "${p}")"
-                ( cd "${NEMO_RL_DIR}" && git apply --3way "${p}" ) || {
-                    echo "ERROR: failed to apply ${p}. Resolve manually and re-run."
-                    exit 1
-                }
-            done
-        fi
-    fi
 
     log "removing .git directories so it's not a nested repo"
     find "${NEMO_RL_DIR}" -name ".git" -prune -exec rm -rf {} + 2>/dev/null || true

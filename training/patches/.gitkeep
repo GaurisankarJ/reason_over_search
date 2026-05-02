@@ -1,5 +1,0 @@
-# Drop *.patch files here to apply clean diffs against the committed
-# training/nemo_rl/ source. setup.sh applies them automatically after
-# a re-clone (FORCE_RECLONE=1). Useful for upstream-PR-shaped diffs;
-# ordinary local edits can just be made directly to training/nemo_rl/
-# (it's a tracked directory in this repo).

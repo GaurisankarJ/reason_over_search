@@ -52,7 +52,7 @@ docker build --build-arg NEMO_RL_REF=v0.7.0 \
   -f docker/reason-over-search-v1/Dockerfile -t reason-over-search-v1:v1 .
 ```
 
-`FORCE_RECLONE=1` wipes any uncommitted local edits to `nemo_rl/`. To preserve a clean diff against upstream while bumping, drop a `*.patch` into [`patches/`](patches/) — `setup.sh` re-applies patches after re-clone.
+`FORCE_RECLONE=1` wipes any local edits to `nemo_rl/`. If you have local changes you want to preserve across an upstream version bump, save them to a feature branch first; `setup.sh` no longer auto-replays patches.
 
 ## Download steps
 
@@ -167,9 +167,8 @@ training/
 ├── README.md                    # this file (operational; how to run things)
 ├── setup.sh                     # installs uv + runs uv sync (local dev / docker fallback)
 ├── .env                         # W&B key (gitignored)
-├── nemo_rl/                     # vendored NeMo-RL source @ v0.6.0 (committed)
+├── nemo_rl/                     # vendored NeMo-RL source @ v0.6.0 (committed; edit-in-place)
 │   └── .venv/                   # uv-managed Python 3.13 venv (gitignored, materialized on Vast)
-├── patches/                     # optional *.patch overlays for nemo_rl/ (applied by setup.sh)
 ├── configs/                     # full GRPO YAMLs per GPU layout
 │   ├── grpo_qwen3.5_2b_1xa100.yaml
 │   └── grpo_qwen3.5_2b_2xa100.yaml
