@@ -32,7 +32,7 @@ nohup python retriever_serving.py \
 disown
 ```
 
-Cold start: ~30–60 s (8 workers each mmap the IVF index). Watch for `Uvicorn running on http://0.0.0.0:3005` in `/tmp/retriever.log`.
+Cold start: ~30–60 s (8 workers each load the IVF index into heap; total RSS ~134 GB on first launch). Watch for `Uvicorn running on http://0.0.0.0:3005` in `/tmp/retriever.log`.
 
 Smoke check:
 
@@ -69,7 +69,7 @@ python retriever_serving.py --config retriever_config.yaml --num_retriever 2 --p
 
 ## Capacity sanity (1× A100 80 GB Vast box)
 
-- IVF-SQ8 index: 16 GB on disk, ~16 GB resident per worker → 8 workers ≈ 128 GB RAM (well under 503 GB on a typical Vast A100 image).
+- IVF-SQ8 index: 16 GB on disk, ~16 GB loaded into heap per worker → 8 workers ≈ 128–134 GB RSS total (one process). Requires ≥ 150 GB host RAM; comfortably met by the 503 GB Vast A100 image.
 - Flat IP index: 65 GB on disk and per-worker resident — at 2 workers that's 130 GB, still fits, but each retrieval is full-corpus exact search → seconds per query.
 
 ## Get the index

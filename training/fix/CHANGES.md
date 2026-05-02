@@ -17,53 +17,29 @@ These are the in-tree changes made to get a fresh `pantomiman/reason-over-search
 
 - **Added a `task_name` column to the loaded HF Dataset.** `AllTaskProcessedDataset.__getitem__` (`processed_dataset.py:118`) reads `entry["task_name"]` whenever `task_data_processors` is a dict — which is always the case on the multi-task path that NeMo-RL takes by default. The reshaped parquet doesn't carry `task_name`, so every dataloader fetch raised `KeyError: 'task_name'`. Mirrors what every upstream `RawDataset` does (e.g. `clevr.py`, `geometry3k.py`, `daily_omni.py`).
 
-## Docker / venv changes (one-time on Vast box)
+## Infrastructure changes (automated in bootstrap.sh)
 
-These are **not** committed code changes; they're setup steps captured in `docs/SETUP_CLAUDE.md` so a fresh box is reproducible.
+These are now fully automated by `training/scripts/bootstrap.sh`. The agent runbook is `docs/training/SETUP_CLAUDE.md`.
 
-### 4. Pre-build the v2 (automodel) venv from the host shell
+### 4. v2 (automodel) venv — downloaded from HF Hub, not compiled on Vast
 
 The default config uses `policy.dtensor_cfg._v2: true` → `DTensorPolicyWorkerV2` → uv extra `automodel`. NeMo-RL builds these venvs lazily via Ray actor `_env_builder`, which has **no GPU allocated**. The `automodel` extra pulls `nv-grouped-gemm` whose `setup.py` calls `torch.cuda.init()` at install-time — which fails inside the GPU-less actor with `RuntimeError: No CUDA GPUs are available`, killing training before the first step.
 
-Workaround: pre-create the venv from the main shell where CUDA is visible. NeMo-RL's `create_local_venv` checks for a pre-existing `python` and skips the rebuild:
-
-```bash
-cd /workspace/reason_over_search/training/nemo_rl
-export NEMO_RL_VENV_DIR=$(pwd)/venvs
-export V2_VENV=$NEMO_RL_VENV_DIR/nemo_rl.models.policy.workers.dtensor_policy_worker_v2.DTensorPolicyWorkerV2
-uv venv --allow-existing $V2_VENV
-UV_PROJECT_ENVIRONMENT=$V2_VENV uv sync --locked --extra automodel
-```
-
-This compiles `transformer-engine` (~25 min CUDA-kernel build), `nv-grouped-gemm`, and `deep_ep` from source. Final venv ~11 GB.
-
-This step belongs in the docker image (right next to the existing vLLM extras pre-warm). Until then it's a host-shell prerequisite.
+Fix: `bootstrap.sh` (step 3) downloads a pre-built tarball from `pantomiman/reason-over-search-v1-venvs` on HF Hub (~5 GB, ~3 min) and extracts it to the correct venv path. Falls back to host-shell compile (~25 min) if the HF download fails. Either path produces an identical on-disk venv; NeMo-RL's `create_local_venv` detects the existing python and skips any rebuild.
 
 ### 5. Sequence packing must be disabled for Qwen3.5
 
 Qwen3.5 is multimodal with interleaved `linear_attention` (Mamba/GatedDeltaNet) and `full_attention` layers. With `policy.sequence_packing.enabled: true`, the `torch_chunk_gated_delta_rule` kernel raises `CUDA error: an illegal memory access was encountered` during `policy.get_logprobs()`. Disabling sequence packing and using dynamic batching instead works.
 
-Pass on the CLI:
+**These are now the YAML defaults** in both `grpo_qwen3.5_2b_1xa100.yaml` and `grpo_qwen3.5_2b_2xa100.yaml`:
 ```
 policy.sequence_packing.enabled=false
 policy.dynamic_batching.enabled=true
 policy.train_micro_batch_size=2
 ```
 
-If we end up running Qwen3.5 long-term we should flip the YAML defaults; for now the smoke harness scripts add these overrides explicitly.
+### 6. Retriever: IVF-SQ8 index + 8 workers is the default for training
 
-### 6. Retriever index choice for training rollouts
+With `num_retriever=2` and the flat IP index, the training rollout (~80 concurrent `/batch_search` queries) timed out on ~80% of requests. Rewards collapse to 0/format-only.
 
-Default config (`local_retriever/retriever_config.yaml`) loads the **flat IP** index. With `num_retriever=2` and the training rollout submitting 4 prompts × 5 generations × up-to-4 turns ≈ 80 concurrent `/batch_search` queries against an exact 21 M-passage search, ~80 % of queries time out at the 30 s default. Most rollouts come back with `Retriever failed: ... Read timed out`, which makes rewards collapse to 0 / format-only.
-
-Use the IVF-SQ8 index + more workers for training:
-```bash
-cd /workspace/reason_over_search/local_retriever
-python retriever_serving.py \
-  --config retriever_config.yaml \
-  --num_retriever 8 \
-  --port 3005 \
-  --index ./indexes/wiki18_100w_e5_ivf4096_sq8.index
-```
-
-Latency dropped from `30 s timeout` to `~1.7 s` for a 3-query batch on this box. Recall hit is < 1 % per the README.
+`local_retriever/retriever_config.yaml` now defaults to the IVF-SQ8 index. `bootstrap.sh` (step 4) starts the retriever with `--num_retriever 8`. Latency: `30 s timeout` → `~1.7 s` for a 3-query batch. Recall hit < 1% (acceptable for online RL; use flat IP for offline paper-quality eval).

@@ -40,8 +40,8 @@ if (( free_gb_workspace < 30 )); then
 fi
 
 ram_gb=$(free -g | awk '/^Mem:/{print $2}')
-if (( ram_gb < 80 )); then
-  warn "Only ${ram_gb} GB RAM; the IVF retriever + 8 workers needs ~55 GB."
+if (( ram_gb < 150 )); then
+  warn "Only ${ram_gb} GB RAM; IVF-SQ8 + 8 workers loads ~134 GB (8 × 16 GB index copies). Recommend ≥ 150 GB."
 fi
 
 if ! command -v nvidia-smi >/dev/null 2>&1; then

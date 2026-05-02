@@ -8,7 +8,8 @@
 #   - gpu_memory_utilization : 0.7 (was 0.6 — TP=2 means each GPU holds half the vLLM weights)
 #
 # DTensor backend stays at TP=1 → DDP across the two GPUs for training.
-# train_micro_batch_size stays at 4 (DDP doesn't reduce per-GPU memory).
+# train_micro_batch_size=2 (sequence_packing must be off for Qwen3.5-2B;
+# without packing, micro=4 OOMs — smoke-validated on 1× A100).
 # Pattern recommended in docs/training/NEMO_RL_KNOBS.md §5.
 
 # =============================================================================
@@ -112,11 +113,13 @@ policy:
   # 1× A100 config; see docs/edu/BATCH_MATH.md for what changes if you violate
   # the gbs == prompts × gen convention.
   train_global_batch_size: 510
-  # [memory] Same as 1× A100. DDP doesn't reduce per-GPU policy memory, so
-  # train_micro_batch_size stays at 4 (each GPU still has the full model
-  # weights + adam state + grads + ref). The 2× A100 win comes from rollout
-  # TP=2 (below) and DDP halving the per-GPU prompt count per gradient update.
-  train_micro_batch_size: 4
+  # [memory] Qwen3.5-2B requires sequence_packing=false (GDN kernel crash; see
+  # dynamic_batching note below). Without packing, micro-batches are not token-
+  # dense, so micro=4 OOMs on 1× A100. DDP on 2× A100 doesn't reduce per-GPU
+  # model memory — each GPU holds full weights + adam + grads. Set to 2 to
+  # match the smoke-validated 1× A100 baseline; raise to 4 if W&B shows plenty
+  # of headroom after the first run.
+  train_micro_batch_size: 2
   generation_batch_size: 32
   logprob_batch_size: ${policy.train_micro_batch_size}
   max_total_sequence_length: 4096
@@ -233,14 +236,17 @@ policy:
     num_layers: null
     aux_layer_indices: null
 
+  # [Qwen3.5 required] See 1xa100 config for full explanation. Same constraint
+  # applies on 2× A100 — the GDN kernel crash is architecture-level, not
+  # hardware-level.
   dynamic_batching:
-    enabled: false
+    enabled: true
     train_mb_tokens: ${mul:${policy.max_total_sequence_length}, ${policy.train_micro_batch_size}}
     logprob_mb_tokens: ${mul:${policy.max_total_sequence_length}, ${policy.logprob_batch_size}}
     sequence_length_round: 64
 
   sequence_packing:
-    enabled: true
+    enabled: false   # [Qwen3.5 required] GDN kernel crashes with packing
     train_mb_tokens: ${mul:${policy.max_total_sequence_length}, ${policy.train_micro_batch_size}}
     logprob_mb_tokens: ${mul:${policy.max_total_sequence_length}, ${policy.logprob_batch_size}}
     algorithm: "modified_first_fit_decreasing"

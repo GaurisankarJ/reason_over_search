@@ -179,14 +179,7 @@ class SearchR1Env(EnvironmentInterface):
         answers_out: list[Optional[str]] = []
 
         for i, (log, meta, kind) in enumerate(zip(message_log_batch, metadata_batch, kinds)):
-            # had_valid_answer: did the *final* assistant turn emit a parseable <answer>?
-            # Default False; flipped True only when kind == "answer". Propagates turn-to-turn
-            # via metadata, so the value at end-of-rollout reflects the terminal turn.
-            updated_meta = {
-                **meta,
-                "turn_count": int(meta.get("turn_count", 0)) + 1,
-                "had_valid_answer": False,
-            }
+            updated_meta = {**meta, "turn_count": int(meta.get("turn_count", 0)) + 1}
 
             if kind == "answer":
                 # Reconstruct the full solution string for the reward function.
@@ -198,7 +191,6 @@ class SearchR1Env(EnvironmentInterface):
                 reward_info = compute_search_r1_reward(solution_str, gold)
                 rewards[i] = float(reward_info["reward"])
                 terminateds[i] = True
-                updated_meta["had_valid_answer"] = True
                 observations.append({"role": "tool", "content": ""})
                 next_stop_strings.append(None)
                 answers_out.append(extracted_answers[i])

@@ -137,13 +137,11 @@ policy:
   # the trade-off; loss_fn.force_on_policy_ratio (currently false) would
   # assert this convention if you flip it on.
   train_global_batch_size: 510
-  # [memory] Upstream NeMo-RL anchors:
-  #   - 1.5B@seq=512@micro=4 (grpo_math_1B.yaml, no activation_checkpointing) → tested OK
-  #   - 8B@seq=4096@micro=1 (grpo_math_8B.yaml) → tested OK
-  # Our 2B@seq=4096@micro=4 with activation_checkpointing=true sits between
-  # these — should fit comfortably. Drop to 2 if OOM on first run; verify
-  # `dtensor_cfg.activation_checkpointing: true` is on (it is).
-  train_micro_batch_size: 4
+  # [memory] Qwen3.5-2B requires sequence_packing=false (see below) so
+  # micro-batches are not token-dense. Smoke-tested at micro=2 on 1× A100 80GB;
+  # micro=4 OOMs without packing. Upstream anchors: 1.5B@seq=512@micro=4
+  # (grpo_math_1B.yaml, packing on); 8B@seq=4096@micro=1.
+  train_micro_batch_size: 2
   generation_batch_size: 32
   logprob_batch_size: ${policy.train_micro_batch_size}
   # [paper] verl max_prompt_length=4096.
@@ -263,14 +261,21 @@ policy:
     num_layers: null
     aux_layer_indices: null
 
+  # [Qwen3.5 required] sequence_packing must be OFF for Qwen3.5. The model
+  # interleaves GatedDeltaNet (linear-attention / Mamba-style) layers with full
+  # attention. The torch_chunk_gated_delta_rule kernel raises a CUDA illegal
+  # memory access during get_logprobs() when sequences are packed together.
+  # dynamic_batching is the replacement: fills micro-batches by token budget
+  # instead of by sequence count, recovering most of the throughput.
+  # See training/fix/CHANGES.md §5 for the full incident note.
   dynamic_batching:
-    enabled: false
+    enabled: true
     train_mb_tokens: ${mul:${policy.max_total_sequence_length}, ${policy.train_micro_batch_size}}
     logprob_mb_tokens: ${mul:${policy.max_total_sequence_length}, ${policy.logprob_batch_size}}
     sequence_length_round: 64
 
   sequence_packing:
-    enabled: true
+    enabled: false   # [Qwen3.5 required] GDN kernel crashes with packing — see above
     train_mb_tokens: ${mul:${policy.max_total_sequence_length}, ${policy.train_micro_batch_size}}
     logprob_mb_tokens: ${mul:${policy.max_total_sequence_length}, ${policy.logprob_batch_size}}
     algorithm: "modified_first_fit_decreasing"
