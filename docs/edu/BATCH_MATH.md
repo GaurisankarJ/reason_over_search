@@ -129,6 +129,53 @@ This is one of the open questions for our first-pass run: how much does this gap
 
 For first-pass we go with option 3 (do nothing). Decide between 1 and 2 after observing the first run.
 
+## Would lowering `gbs` give us bit-identical verl behavior?
+
+**No, but it gets very close conceptually.** Bit-identity between two RL frameworks is impossible (numerical reduction order differs, vLLM RNG threads differently, etc.) — but the *algorithm* converges to the same regime.
+
+### What matches after dropping `gbs` to (say) 51
+
+Verified by reading [`grpo.py:1747`](../../training/nemo_rl/nemo_rl/algorithms/grpo.py#L1747): NeMo-RL computes `prev_logprobs` **once per training step**, before the training loop, then freezes it for all gradient updates within that step. That's the same `old_log_probs` pattern verl uses. So:
+
+| Behavior | After `gbs=51` |
+|---|---|
+| Gradient updates per training step | **10** (matches verl's `2560 / ppo_mini_batch_size=256 = 10`) |
+| `prev_logprobs` frozen at step start | identical |
+| Importance ratio `π_curr / π_rollout` recomputed each mini-batch | identical |
+| `clip_ratio=0.2` bounds per-step drift | identical |
+| KL formula (Schulman k3) | byte-identical (already verified — see [`VERL_REFERENCE.md`](../training/VERL_REFERENCE.md) §2) |
+| State masking | equivalent (verl regex / NeMo-RL role-based) |
+| PPO epochs through buffer | both 1 (verl Search-R1 default) |
+
+### What remains different (and why bit-identical is impossible)
+
+1. **Numerical reduction order**. Two frameworks summing the same gradients in different orders produce bit-different floats. Compounded over 10k updates, runs diverge.
+2. **Loss normalization details**. NeMo-RL normalizes per-global-batch using `global_valid_toks`; verl uses `eos_mask` over the response span. Both are sample-weighted token-loss means but the per-token weighting can differ when sequences have wildly different response lengths.
+3. **Mini-batch ordering**. NeMo-RL processes in dataloader order; verl may shuffle within a step. With prev_logprobs frozen the *expected* gradient over the 10 updates is the same, but individual update trajectories differ.
+4. **vLLM RNG threading**. Same `--seed` produces different rollout token streams across frameworks because the RNG state advances along framework-specific paths.
+
+These compound over 10k updates. Two runs land in similar EM territory but won't produce identical W&B curves.
+
+### Two paths if you want closer-to-verl
+
+**Cheap — keep rollout, split the gradient** (`gbs=51`, everything else unchanged):
+
+- Same 510 trajectories per step (same compute).
+- 10 gradient updates per step (matches verl's count).
+- Trajectories 52–510 are progressively off-policy across the 10 mini-batch updates; PPO clip handles it but with reduced effective signal.
+- **Use this** to close the 10× gradient-update gap with no extra compute. It's the lightest-touch experiment.
+
+**Expensive — full faithful** (`num_prompts_per_step=512, gbs=256`):
+
+- 2560 trajectories per step (5× current). 5× the rollout compute per step.
+- 10 gradient updates per step.
+- Matches verl's per-step economics exactly.
+- **Cost**: pushes 50–150h projection on 1× A100 → 250–750h. At that point you're better off bumping `max_num_steps` 10× instead.
+
+### Recommendation
+
+First-pass: **leave gbs alone**. Run the current `gbs=510` setup (1 update per step) and watch `train/reward_mean`. If it climbs sanely, the 10× update gap isn't the bottleneck. If it plateaus, try `gbs=51` (cheap option) before escalating. M2 is "does the loop work?" not "does it match the paper bit-for-bit?".
+
 ## TL;DR
 
 - `prompts × gen` = how many trajectories rollout produces per step.
