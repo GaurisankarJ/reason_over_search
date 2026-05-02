@@ -79,6 +79,7 @@ fi
 
 if [[ "${ARM}" == "paper" ]]; then
     OVERRIDES+=("data.default.prompt_file=training/src/prompts/search_r1_paper.txt")
+    OVERRIDES+=("data.default.system_prompt_file=null")
 fi
 
 echo "[run_grpo_2xa100] launching: ${RUN_NAME}"

@@ -364,9 +364,14 @@ data:
     arm: qwen_native            # must match train
 
   default:
-    # paper arm only — null for qwen_native (our processor ignores it):
-    prompt_file: null           # set to training/src/prompts/search_r1_paper.txt for arm=paper
-    system_prompt_file: null
+    # qwen_native default: system prompt describes the search protocol
+    # (paper-equivalent, minus the <search>/<information> instructions Qwen3.5
+    # handles natively via <tool_call>/<tool_response>). The bash wrapper
+    # overrides both fields for arm=paper:
+    #   data.default.system_prompt_file=null
+    #   data.default.prompt_file=training/src/prompts/search_r1_paper.txt
+    prompt_file: null
+    system_prompt_file: training/src/prompts/search_r1_qwen_native_system.txt
     processor: search_r1_processor
     env_name: search_r1
 

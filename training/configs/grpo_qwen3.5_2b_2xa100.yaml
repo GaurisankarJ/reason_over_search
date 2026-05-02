@@ -329,8 +329,9 @@ data:
     data_path: data/training/nq_hotpotqa_train/test.parquet
     arm: qwen_native
   default:
+    # qwen_native default: see grpo_qwen3.5_2b_1xa100.yaml for the full comment.
     prompt_file: null
-    system_prompt_file: null
+    system_prompt_file: training/src/prompts/search_r1_qwen_native_system.txt
     processor: search_r1_processor
     env_name: search_r1
 

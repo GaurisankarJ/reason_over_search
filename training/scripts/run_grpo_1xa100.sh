@@ -85,9 +85,11 @@ if [[ "${VARIANT}" == "hybrid" ]]; then
     OVERRIDES+=("++policy.tokenizer.chat_template_kwargs.enable_thinking=true")
 fi
 
-# Paper arm needs the prompt-file template wired in.
+# Paper arm: swap the qwen_native system prompt out for the paper's user-message
+# instruction template. Both prompts live under training/src/prompts/.
 if [[ "${ARM}" == "paper" ]]; then
     OVERRIDES+=("data.default.prompt_file=training/src/prompts/search_r1_paper.txt")
+    OVERRIDES+=("data.default.system_prompt_file=null")
 fi
 
 echo "[run_grpo_1xa100] launching: ${RUN_NAME}"
