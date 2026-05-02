@@ -48,10 +48,11 @@ What it does, in order (so you know what to expect):
    if not cached (~4 min, 8 GB).
 4. `uv sync --extra vllm` to materialize `training/nemo_rl/.venv`
    (~2 min from the pre-warmed cache).
-5. Build the v2/automodel uv venv at
-   `training/nemo_rl/venvs/.../DTensorPolicyWorkerV2/` from the host shell
-   (≈25 min cold; instant if it already exists). **This step cannot be
-   moved to the Ray actor that NeMo-RL would normally use, because
+5. Download the pre-built v2/automodel uv venv (~5 GB) from
+   `pantomiman/reason-over-search-v1-venvs` on HuggingFace Hub and extract it
+   to `training/nemo_rl/venvs/.../DTensorPolicyWorkerV2/` (~3 min; fast path).
+   Falls back to host-shell compile (~25 min) if HF download fails. **This step
+   cannot be moved to the Ray actor that NeMo-RL would normally use, because
    `nv-grouped-gemm`'s setup.py calls `torch.cuda.init()` at install time
    and the actor has no GPU.**
 6. Start the IVF-SQ8 retriever with 8 workers on port 3005, wait until
@@ -178,7 +179,8 @@ retrieval-call counts.
 
 ## Time + cost expectations (so you can level-set the user)
 
-- Bootstrap on a fresh Vast box (cold cache): **30–45 min** (v2 venv compile is ~25 min).
+- Bootstrap on a fresh Vast box (HF download path): **~10 min** (Qwen weights ~4 min + v2 venv download/extract ~3 min + retriever cold start ~1 min).
+- Bootstrap on a fresh Vast box (compile fallback, HF unavailable): **~35 min** (v2 venv compile is ~25 min).
 - Bootstrap on a re-used box: **< 1 min**.
 - Smoke combo (2 steps × 4 prompts × group 5): **~5 min** once v2 venv exists.
 - Full Phase-2 run (1005 steps × 510 trajectories) on this 1× A100: **~17 d** linear, ~11 d sub-linear.
