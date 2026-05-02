@@ -107,7 +107,10 @@ policy:
     chat_template_kwargs: null
   hf_config_overrides: {}
 
-  # [paper] 510 trajectories — matches 102 × 5 above. Identical to 1× A100.
+  # 510 trajectories per gradient update — matches num_prompts_per_step × num_gen.
+  # Pure on-policy GRPO (one optimizer.step() per training step). Identical to
+  # 1× A100 config; see docs/edu/BATCH_MATH.md for what changes if you violate
+  # the gbs == prompts × gen convention.
   train_global_batch_size: 510
   # [memory] Same as 1× A100. DDP doesn't reduce per-GPU policy memory, so
   # train_micro_batch_size stays at 4 (each GPU still has the full model

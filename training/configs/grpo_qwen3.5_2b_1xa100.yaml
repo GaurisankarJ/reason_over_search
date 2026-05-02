@@ -18,10 +18,13 @@
 grpo:
   # [paper] verl `n_agent=5` (GRPO group size G).
   num_generations_per_prompt: 5
-  # [paper] 102 prompts × 5 generations = 510 trajectories per step (≈ verl's
-  # train_batch_size=512). Matches train_global_batch_size below exactly so
-  # NeMo-RL's per-step trajectory budget == gradient batch size (upstream
-  # convention; see grpo_math_1B.yaml's 32×16=512).
+  # [paper] 102 prompts × 5 generations = 510 trajectories per step.
+  # Matches policy.train_global_batch_size below exactly — one optimizer.step()
+  # per training step, pure on-policy GRPO (the upstream NeMo-RL convention,
+  # see grpo_math_1B.yaml's 32×16=512). Note this is 5× FEWER trajectories per
+  # step than verl's 2560 (512 prompts × 5 gen) and the gradient is applied
+  # 10× less often. See docs/edu/BATCH_MATH.md for the full breakdown of why
+  # gbs == prompts × gen matters and what regime change happens if it doesn't.
   num_prompts_per_step: 102
   # [paper] verl total_training_steps=1005 (supersedes paper text's "500"; the
   # published checkpoints we evaluated in M1 came from 1005-step runs).
@@ -125,10 +128,14 @@ policy:
     chat_template_kwargs: null
   hf_config_overrides: {}
 
-  # [paper] 510 trajectories per gradient update (matches num_prompts_per_step
-  # × num_generations_per_prompt above — upstream convention). Verl uses
-  # train_batch_size=512; the 2-trajectory delta is rounding from the 5×102
-  # factorization and is harmless because force_on_policy_ratio is off.
+  # 510 trajectories per gradient update — matches num_prompts_per_step ×
+  # num_generations_per_prompt above. This is the "gbs == prompts × gen"
+  # convention: one optimizer.step() per training step, pure on-policy.
+  # Set lower (e.g., 51) to mini-batch within a step like verl does; that
+  # would do 10 gradient updates per step (slightly off-policy after the
+  # first, bounded by clip_ratio=0.2). docs/edu/BATCH_MATH.md walks through
+  # the trade-off; loss_fn.force_on_policy_ratio (currently false) would
+  # assert this convention if you flip it on.
   train_global_batch_size: 510
   # [memory] Upstream NeMo-RL anchors:
   #   - 1.5B@seq=512@micro=4 (grpo_math_1B.yaml, no activation_checkpointing) → tested OK

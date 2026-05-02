@@ -41,7 +41,7 @@ Reference for the NeMo-RL settings that matter when running GRPO on Qwen3.5-2B o
 
 | Knob | Where | Default | What it controls |
 |---|---|---|---|
-| `grpo.num_prompts_per_step` | GRPO | `32` (1B example) | Prompts per training step. With `num_generations_per_prompt=16`, that's 32 × 16 = 512 trajectories per step → matches our target global batch. |
+| `grpo.num_prompts_per_step` | GRPO | `32` (1B example) | Prompts per training step. With `num_generations_per_prompt=16`, that's 32 × 16 = 512 trajectories per step → matches `train_global_batch_size` (one optimizer.step() per training step, on-policy). See [`docs/edu/BATCH_MATH.md`](../edu/BATCH_MATH.md) for what happens when the convention is violated. |
 | `grpo.num_generations_per_prompt` | GRPO | `16` (1B example) | Group size G in GRPO. **Search-R1 paper uses `5`** for Qwen2.5-3B. Larger G = lower-variance advantage but more rollouts per step. |
 | `grpo.max_num_steps` | GRPO | varies | Total training steps. **Search-R1 uses `1005`** (verl `total_training_steps=1005` in v0.2; supersedes paper text's "500"). |
 | `grpo.val_period` | GRPO | varies | Validation cadence in steps. **Search-R1 uses `100`** (verl `test_freq=100`). **Currently `0` (disabled) for first-pass training** — see VALIDATION.md §7. |
