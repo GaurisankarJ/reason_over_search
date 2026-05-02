@@ -107,8 +107,9 @@ The full sequence — pre-flight checklist, retriever setup, smoke run, real run
 1. **Pre-flight** (local): tests pass, LFS objects present, docker image current, W&B key ready.
 2. **Boot Vast** with `pantomiman/reason-over-search-v1:v1`, 1×/2× A100 80GB, ≥150 GB persistent storage, ≥100 GB RAM.
 3. **Set up + validate retriever** at `127.0.0.1:3005`.
-4. **Smoke run** (5 steps, single seed) to verify all pipes connect.
-5. **Real runs** — 3 seeds × {base, hybrid} via `bash training/scripts/run_grpo_{1,2}xa100.sh --variant {base,hybrid} --seed N`.
-6. **Smoke-eval on Bamboogle** through the M1 eval pipeline.
-7. **Full eval suite** if Bamboogle improves; aggregate across seeds.
+4. **Download Qwen3.5-2B models** (base + hybrid) into `training/models/` via `huggingface-cli download Qwen/Qwen3.5-2B-Base` and `Qwen/Qwen3.5-2B`. ~5 GB each (bf16 weights + tokenizer/config). One-time per Vast instance; lives on persistent storage so it survives across instance restarts. Commands in `[training/README.md#models](../../training/README.md#models)`; runbook step at `[PHASE_2_RUNBOOK.md§4](PHASE_2_RUNBOOK.md)`. The launch scripts default to passing the HF repo IDs (`Qwen/Qwen3.5-2B-Base` / `Qwen/Qwen3.5-2B`) — vLLM resolves them via the HF cache populated by these downloads. Override with `policy.model_name=<absolute-path>` to use a specific local copy.
+5. **Smoke run** (5 steps, single seed) to verify all pipes connect.
+6. **Real runs** — 3 seeds × {base, hybrid} via `bash training/scripts/run_grpo_{1,2}xa100.sh --variant {base,hybrid} --seed N`.
+7. **Smoke-eval on Bamboogle** through the M1 eval pipeline.
+8. **Full eval suite** if Bamboogle improves; aggregate across seeds.
 

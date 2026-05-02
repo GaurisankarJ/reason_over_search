@@ -2,21 +2,21 @@
 
 > **How the training paradigm works + Search-R1 vs Qwen3.5 differences:** see [docs/training/](../docs/training/).
 >
-> TL;DR — `pantomiman/reason-over-search-v1` ships `uv` (no pre-warmed wheel cache yet — see *Setup* below for why). NeMo-RL source is committed at [`nemo_rl/`](nemo_rl/) (pinned to `v0.6.0`). On Vast: clone the repo, `cd training/nemo_rl`, `uv sync --extra vllm` (downloads ~5 GB the first time on a fresh instance), activate. Same pattern as `local_retriever/` and `evaluation_search_r1/` (env from image, code from repo).
+> TL;DR — `pantomiman/reason-over-search-v1` ships `uv` + a **pre-warmed NeMo-RL wheel cache** at `/.uv/cache/` (~13 GB; covers v0.6.0 with the `vllm` extra including the built-from-source `deep_ep` and `deep_gemm` wheels). NeMo-RL source is committed at [`nemo_rl/`](nemo_rl/) (pinned to `v0.6.0`). On Vast: clone the repo, `cd training/nemo_rl`, `uv sync --extra vllm` — fast (wheels pulled from cache, no PyPI download). Same pattern as `local_retriever/` and `evaluation_search_r1/` (env from image, code from repo).
 
 ## Environment Setup
 
-`uv` is preinstalled in the docker image at `/usr/local/bin/uv`. Inside the docker container, materialize the venv against the committed NeMo-RL source:
+`uv` is preinstalled in the docker image at `/usr/local/bin/uv`, and the wheel cache at `/.uv/cache/` is pre-warmed. Inside the docker container:
 
 ```bash
 cd training/nemo_rl
-uv sync --extra vllm                  # first run: ~5 GB download, 10–20 min
+uv sync --extra vllm                  # fast — wheels read from /.uv/cache/
 source .venv/bin/activate
 ```
 
-The `uv sync` creates the venv at `training/nemo_rl/.venv/` (Python 3.13). The first run on a fresh Vast instance downloads ~5 GB of wheels (torch, vLLM, cuDNN, etc.); subsequent runs in the same container hit uv's local cache (`/root/.cache/uv/`) and complete in seconds.
+The `uv sync` creates the venv at `training/nemo_rl/.venv/` (Python 3.13). On the Vast docker image this is fast — wheels come from the pre-warmed cache, no PyPI round-trip.
 
-> **Why no pre-warmed cache in the image?** An earlier draft baked the wheels into the image so the first `uv sync` was near-instant. That requires ~15 GB free in the build VM during torch's unpack — Docker Desktop on Apple Silicon allocates only ~58 GB by default, with the conda envs eating most of it, so the build OOM'd. To re-enable pre-warming, bump Docker Desktop's disk allocation to ≥120 GB and add a `uv venv + uv sync` step to the Dockerfile (commented in [`docker/reason-over-search-v1/Dockerfile`](../docker/reason-over-search-v1/Dockerfile)).
+> **How the pre-warm works.** The Dockerfile shallow-clones NeMo-RL @ v0.6.0, runs `uv sync --extra vllm --no-install-project` (downloads + builds all transitive deps including the git+ source `deep_ep` / `deep_gemm`), and leaves the populated cache at `/.uv/cache/`. We override `UV_NO_CACHE=0` (the vastai base image sets it to `1` by default — that would silently disable caching). The base image also requires `libibverbs-dev` for `deep_ep` to compile (provided by the apt step in the Dockerfile). Build VM needs ≥120 GB disk for torch's unpack — bump Docker Desktop's "Disk image size" if building locally on a Mac.
 
 If `uv` is missing entirely (e.g. running outside the docker image and outside any other env that has it), use the helper script:
 
@@ -70,6 +70,13 @@ training/scripts/prepare_dataset.py --force   # regenerate even if outputs exist
 
 ### Models
 
+Download both Qwen3.5-2B variants we train:
+
+- **base** → [`Qwen/Qwen3.5-2B-Base`](https://huggingface.co/Qwen/Qwen3.5-2B-Base) (pure LM, no post-training)
+- **hybrid** → [`Qwen/Qwen3.5-2B`](https://huggingface.co/Qwen/Qwen3.5-2B) (post-trained with soft-switch reasoning toggle)
+
+Each is ~5 GB on disk (bf16 weights + tokenizer + config). Run the downloads on the Vast instance — they live on persistent storage so they survive instance restarts.
+
 ```bash
 cd training
 mkdir -p models
@@ -87,6 +94,8 @@ huggingface-cli download Qwen/Qwen3.5-2B \
   --local-dir models/Qwen3.5-2B \
   --local-dir-use-symlinks False
 ```
+
+> **Note:** The launch scripts default to passing the HF repo IDs (`Qwen/Qwen3.5-2B-Base` / `Qwen/Qwen3.5-2B`) directly to vLLM, which resolves them via the HF cache populated by the downloads above. To pin to a specific local copy instead, pass `policy.model_name=$PWD/training/models/Qwen3.5-2B-Base` (absolute path) on the CLI.
 
 ## Configure W&B (one-time per Vast instance)
 

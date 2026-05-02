@@ -11,6 +11,7 @@ These are not load-bearing for running the pipeline. The runbook + configs are t
 | [RNG.md](RNG.md) | What a random number generator actually is — pseudo-random vs true random, why they're stateful, the four+ separate RNGs in our stack, and why "fully reproducible" is approximate. Read first if the term `RNG` is unfamiliar. |
 | [SEED.md](SEED.md) | What `--seed` controls, where it propagates in the pipeline, what it does *not* fix, and why we run 3 seeds × 2 variants in Phase 2. |
 | [GPU_MEMORY.md](GPU_MEMORY.md) | What lives in VRAM during GRPO training — always-resident state vs. rollout-phase vs. training-phase, with concrete numbers for our 1× A100 80GB config. |
+| [GRPO_STEP_LIFECYCLE.md](GRPO_STEP_LIFECYCLE.md) | What runs (and when) inside one GRPO training step — the two forward-pass surfaces (vLLM rollout vs. training policy), micro-batch gradient accumulation, weight refit, and the importance ratio. Companion to GPU_MEMORY.md. |
 
 ## See also
 
