@@ -358,14 +358,14 @@ logger:
   swanlab_enabled: false
   monitor_gpus: true
   wandb:
-    project: "reason-over-search-training"
+    project: "reason-over-search"
     name: "qwen3.5-2b-base-search_r1-qwen_native-2xa100-seed42"
   swanlab:
-    project: "reason-over-search-training"
+    project: "reason-over-search"
     name: "qwen3.5-2b-base-search_r1-qwen_native-2xa100-seed42"
   tensorboard: {}
   mlflow:
-    experiment_name: "reason-over-search-training"
+    experiment_name: "reason-over-search"
     run_name: "qwen3.5-2b-base-search_r1-qwen_native-2xa100-seed42"
     tracking_uri: "http://localhost:5000"
   gpu_monitoring:

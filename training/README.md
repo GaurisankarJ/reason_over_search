@@ -94,7 +94,7 @@ huggingface-cli download Qwen/Qwen3.5-2B \
 cat > training/.env <<'EOF'
 WANDB_API_KEY=...
 WANDB_ENTITY=...
-WANDB_PROJECT=reason-over-search-training
+WANDB_PROJECT=reason-over-search
 EOF
 source training/.env
 ```
