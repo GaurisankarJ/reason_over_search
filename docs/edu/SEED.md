@@ -1,6 +1,8 @@
 # What `--seed` controls in our GRPO pipeline
 
 > Educational deep-dive on RNG seeding — what it locks in, what it doesn't, where in the codebase it actually propagates. Reading this is *not* required to run training; the [Phase 2 runbook](../milestone_two/PHASE_2_RUNBOOK.md) is.
+>
+> **Background**: if "RNG" is unfamiliar, read [`RNG.md`](RNG.md) first.
 
 ## ELI5
 
