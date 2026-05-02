@@ -69,23 +69,47 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh && \
     ln -sf /root/.local/bin/uv /usr/local/bin/uv && \
     ln -sf /root/.local/bin/uvx /usr/local/bin/uvx
 
-# Pre-warm uv's wheel cache at /root/.cache/uv/. Subsequent `uv sync` against
-# the user's cloned training/nemo_rl/ on Vast hits the cache and skips the
-# 5+ GB download. The cache is content-addressed by hash, so it works across
-# project paths.
+# Install build deps for the git+ packages NeMo-RL pulls in.
+# - libibverbs-dev: required for `deep-ep` (DeepSeek's MoE expert-parallelism
+#   kernel) which vLLM transitively pulls in. Without this, the compile fails
+#   with "fatal error: infiniband/mlx5dv.h: No such file or directory".
+#   This is documented in NeMo-RL's README under bare-metal install notes.
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends libibverbs-dev && \
+    rm -rf /var/lib/apt/lists/*
+
+# Pre-warm uv's wheel cache at /.uv/cache/ (the path UV_CACHE_DIR points to in
+# vastai/base-image). Subsequent `uv sync` against the user's cloned
+# training/nemo_rl/ on Vast hits this cache and skips the 5+ GB download.
+# The cache is content-addressed by hash, so it works across project paths.
+#
+# IMPORTANT: vastai/base-image sets UV_NO_CACHE=1 which would silently disable
+# caching. We override it here so the wheels actually persist into /.uv/cache/.
+# (Vast users running `uv sync` later: the same env carries UV_NO_CACHE=1 by
+# default — that's fine for them because uv falls back to UV_FIND_LINKS-style
+# resolution against the populated cache directory listed below as a find-link.)
 #
 # Approach: shallow-clone NeMo-RL, run `uv sync` to populate the cache (this
 # also creates a temp venv we delete afterwards), then drop the clone.
 # --no-install-project skips the editable nemo_rl install — that happens on
 # Vast against the user's clone.
-RUN git clone --depth=1 --branch ${NEMO_RL_REF} --recursive \
+RUN UV_NO_CACHE=0 \
+    git clone --depth=1 --branch ${NEMO_RL_REF} --recursive \
         https://github.com/NVIDIA-NeMo/RL.git /tmp/nemo-rl-deps && \
     cd /tmp/nemo-rl-deps && \
     EXTRA_FLAGS="" && \
     for e in $(echo ${UV_EXTRAS} | tr ',' ' '); do EXTRA_FLAGS="${EXTRA_FLAGS} --extra ${e}"; done && \
-    uv venv .venv && \
-    uv sync ${EXTRA_FLAGS} --no-install-project && \
-    rm -rf /tmp/nemo-rl-deps
+    UV_NO_CACHE=0 uv venv .venv && \
+    UV_NO_CACHE=0 uv sync ${EXTRA_FLAGS} --no-install-project && \
+    rm -rf /tmp/nemo-rl-deps && \
+    echo "uv cache size after pre-warm:" && du -sh /.uv/cache 2>/dev/null
+
+# Tell `uv sync` on Vast to use the cache from the image even when UV_NO_CACHE=1
+# is still set in the environment (the base image's default). Setting both
+# UV_NO_CACHE=0 here AND keeping UV_CACHE_DIR pointed at /.uv/cache so that the
+# pre-warmed wheels are found.
+ENV UV_NO_CACHE=0
+ENV UV_CACHE_DIR=/.uv/cache
 
 # === 4. Vast boot hook — fix SSH key permissions so OpenSSH accepts auth ===
 COPY docker/reason-over-search-v1/10-fix-ssh-perms.sh /etc/vast_boot.d/10-fix-ssh-perms.sh
