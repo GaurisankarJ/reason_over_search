@@ -135,3 +135,10 @@ Retriever: separate process on `127.0.0.1:3005`, ~65 GB host RAM (Wiki-18 FAISS-
 - **What to run** (commands, args, env vars): [`training/README.md`](../../training/README.md)
 - **Vast.ai sequence** (boot, retriever setup, smoke run, monitoring, eval gate): [`../milestone_two/PHASE_2_RUNBOOK.md`](../milestone_two/PHASE_2_RUNBOOK.md)
 - **Milestone scope + status**: [`../milestone_two/MILESTONE_2.md`](../milestone_two/MILESTONE_2.md)
+
+## Going deeper (educational)
+
+For when you want to understand what's actually happening, not just what to set:
+
+- [`../edu/SEED.md`](../edu/SEED.md) — what `--seed` controls, where it propagates, why we run 3 seeds × 2 variants
+- [`../edu/GPU_MEMORY.md`](../edu/GPU_MEMORY.md) — what's in VRAM during GRPO (rollout vs training), with concrete numbers for our A100 80GB config and an OOM recovery ladder
