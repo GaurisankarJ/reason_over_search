@@ -37,10 +37,10 @@ The reframing of the research questions is in `SUPERVISOR_MEETING.md` § 1 ("Pro
 
 | File | What |
 |---|---|
-| [`LITERATURE_REVIEW.md`](./LITERATURE_REVIEW.md) | Original RLVR + tool-use lit review. Working notes, paper list, tagged "important" papers. |
-| [`SURVEY.md`](./SURVEY.md) | Comprehensive survey, deep version. |
-| [`SURVEY_FOCUSED.md`](./SURVEY_FOCUSED.md) | Focused subset with paper cards. The next-steps recipe (E2H, S-GRPO, MC-GRPO) is sourced from § 2 and § 5 here. |
-| [`SURVEY_OVERFLOW.md`](./SURVEY_OVERFLOW.md) | Out-of-scope-but-relevant references. |
+| [`LITERATURE_REVIEW.md`](./LITERATURE_REVIEW.md) | Project-personal working notebook. Thesis framing, introduction outline, per-paper annotations with `==notes==` and `⭐` markers, and five appendices preserving thinking-as-it-happened. Drove the v0 / v1 decisions. |
+| [`SURVEY.md`](./SURVEY.md) | Reference-style survey of the RLVR field. 14 thematic sections (Foundations, Verifier Design, Policy Optimization, Exploration, Reward Hacking, Self-Verification, Multi-Task, Open-Ended, Tool-Use, Mechanism Studies, Theoretical Foundations, Measurement, Open Challenges, Bibliography). Each section ends with paper cards in standardised Summary / Problem / Method / Result / Takeaway / ELI5 format. 96 cards total. |
+| [`SURVEY_FOCUSED.md`](./SURVEY_FOCUSED.md) | Project-specific subset of `SURVEY.md`: only the papers relevant to Qwen3.5-2B / single-A100 / search-augmented. Source of the next-steps recipe (E2H curriculum + S-GRPO + MC-GRPO) used in § 2 of `SUPERVISOR_MEETING.md`. |
+| [`SURVEY_OVERFLOW.md`](./SURVEY_OVERFLOW.md) | 15 adjacent papers (foundational priors, surveys, alternative directions) kept for completeness. |
 
 ## Assets
 
