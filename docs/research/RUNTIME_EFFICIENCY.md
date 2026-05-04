@@ -2,6 +2,8 @@
 
 **Companion to [`PARADIGM_REVIEW.md`](PARADIGM_REVIEW.md).** That doc covers the *algorithmic* literature (KL, Dr. GRPO, DAPO, LoRA, spec-dec). This one covers the *systems* knobs: vLLM config, optimizer kernels, colocation cost, dynamic batching, fused AdamW, gpu_memory_utilization, prefix caching. The two compose — engineering wins are mostly orthogonal to algorithm wins.
 
+**How to use**: If you want a clear decision path through all three research rounds + both systems/algorithms tracks, see [`INTEGRATION_GUIDE.md`](INTEGRATION_GUIDE.md). It cross-references both PARADIGM_REVIEW and this doc, explains why recommendations evolved, and provides a checklist before running.
+
 **Status**: v1, drafted 2026-05-03. Grounded in the measured per-step numbers from [`SMOKE_RESULTS.md:1623-1634`](../training/SMOKE_RESULTS.md#L1623-L1634).
 
 ---

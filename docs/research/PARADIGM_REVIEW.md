@@ -6,7 +6,9 @@
 
 **Status**: v1, drafted 2026-05-03. A v2 deeper-pass (alphaxiv / connected-papers traversal, ablation-number pulls, counter-evidence) is appended below as §10 once the second-round agent returns.
 
-**Companion doc**: [`RUNTIME_EFFICIENCY.md`](RUNTIME_EFFICIENCY.md) — systems / engineering levers (vLLM prefix caching, async engine, colocation cost, fused AdamW, dynamic batching, gpu_memory_utilization). The two compose; engineering wins are mostly orthogonal to the algorithmic wins reviewed here.
+**Companion docs**:
+- [`RUNTIME_EFFICIENCY.md`](RUNTIME_EFFICIENCY.md) — systems / engineering levers (vLLM prefix caching, async engine, colocation cost, fused AdamW, dynamic batching, gpu_memory_utilization). Engineering wins compose orthogonally with algorithmic wins.
+- [`INTEGRATION_GUIDE.md`](INTEGRATION_GUIDE.md) — Navigate the three rounds of research (v1 → v2 → v3), decision trees for your specific constraints, failure modes + mitigations, and a complete checklist before running. **Start here if you want a clear path to action.** See this guide for how the v1 recommendations evolved, why, and what changed.
 
 ---
 
