@@ -1,21 +1,29 @@
 # Training docs
 
-This directory documents the training-side reproduction of [Search-R1](https://www.alphaxiv.org/abs/2503.09516) on **Qwen3.5-2B** via [NeMo-RL](https://github.com/NVIDIA-NeMo/RL). Owned by [Milestone 2](../milestone_two/MILESTONE_2.md).
+This directory documents our training-side reproduction of [Search-R1](https://www.alphaxiv.org/abs/2503.09516) on **Qwen3.5-2B** via [NeMo-RL](https://github.com/NVIDIA-NeMo/RL). Owned by [Milestone 2](../milestone_two/MILESTONE_2.md).
 
-> Code lives at [`training/`](../../training/); these docs explain the *why*.
+> Code lives at [`training/`](../../training/). These docs explain the **why**.
 
 ---
 
 ## Index
 
-| File | What it covers | Read when |
+| File | What it covers | Read when... |
 |---|---|---|
-| [TRAINING_DATA.md](TRAINING_DATA.md) | `PeterJinGo/nq_hotpotqa_train` schema, our reshape (strip prebaked template, `prompt → messages`), NeMo-RL row-schema mapping | working on the dataset prep script or wondering about `messages[0].content` |
-| [CHAT_TEMPLATE.md](CHAT_TEMPLATE.md) | Two chat-template arms — Qwen3.5 native `<tool_call>` (default) vs. paper's `<search>` (ablation) — with verbatim Qwen3.5 jinja | wiring the tokenizer / prompt; choosing an arm |
-| [PAPER_VS_OURS_TRAINING.md](PAPER_VS_OURS_TRAINING.md) | The canonical hyperparameter audit — every knob in our run vs. the upstream verl yaml that produced the paper's published checkpoints | before launching a training run |
-| [VERL_REFERENCE.md](VERL_REFERENCE.md) | verl-side references porting to NeMo-RL: HTTP retriever contract, KL/GRPO mappings, FSDP→DTensor translations, JSONL log shape to mirror | reading verl scripts; resolving a NeMo-RL config knob |
-| [VALIDATION.md](VALIDATION.md) | In-loop validation plan — datasets, cadence, metrics, sampling | wiring W&B; deciding val_period |
-| [NEMO_RL_KNOBS.md](NEMO_RL_KNOBS.md) | Memory + throughput + algorithm knobs with our recommended starting values for A100 80GB; concrete starting yaml | tuning a config |
+| [TRAINING_DATA.md](TRAINING_DATA.md) | Dataset schema (`PeterJinGo/nq_hotpotqa_train`), our reshape, and NeMo-RL row-schema mapping. | ...working on dataset prep. |
+| [CHAT_TEMPLATE.md](CHAT_TEMPLATE.md) | Two arms — Qwen3.5 native `<tool_call>` (default) vs. paper's `<search>` (ablation) — with verbatim Qwen3.5 jinja. | ...wiring the tokenizer or choosing an arm. |
+| [PAPER_VS_OURS_TRAINING.md](PAPER_VS_OURS_TRAINING.md) | Canonical hyperparameter audit — every knob vs. the upstream verl yaml that produced the paper's published checkpoints. | ...before launching a run. |
+| [VERL_REFERENCE.md](VERL_REFERENCE.md) | verl-side references: HTTP retriever contract, KL/GRPO mappings, FSDP→DTensor translations, JSONL log shape. | ...reading verl scripts or resolving a NeMo-RL knob. |
+| [VALIDATION.md](VALIDATION.md) | In-loop validation plan: datasets, cadence, metrics, sampling. | ...wiring W&B or deciding `val_period`. |
+| [NEMO_RL_KNOBS.md](NEMO_RL_KNOBS.md) | Memory + throughput + algorithm knobs with recommended starting values for A100 80GB. | ...tuning a config. |
+
+---
+
+## Running training
+
+- **Commands, args, env vars** → [`training/README.md`](../../training/README.md)
+- **Vast.ai sequence** (boot, retriever, smoke, monitoring, eval gate) → [`../milestone_two/PHASE_2_RUNBOOK.md`](../milestone_two/PHASE_2_RUNBOOK.md)
+- **Milestone scope + status** → [`../milestone_two/MILESTONE_2.md`](../milestone_two/MILESTONE_2.md)
 
 ---
 
@@ -53,29 +61,35 @@ This directory documents the training-side reproduction of [Search-R1](https://w
                              next-turn generation
 ```
 
-Each layer is decoupled — chat template lives in the processor + env, reward lives in `rewards/`, retrieval contract lives in the env. Swapping arms is a config flip; swapping the reward (M3 ablation) is a one-file change.
+Each layer is decoupled:
+
+- Chat template lives in the **processor + env**.
+- Reward lives in **`rewards/`**.
+- Retrieval contract lives in the **env**.
+
+Swapping arms is a config flip; swapping the reward (M3 ablation) is a one-file change.
 
 ---
 
-## Step-5 audit summary
+## Hyperparameter audit (paper vs. ours)
 
-Lock-in mapping between [`Search-R1/scripts/nq_hotpotqa/v0.2/train_grpo.sh`](https://github.com/PeterGriffinJin/Search-R1/blob/main/scripts/nq_hotpotqa/v0.2/train_grpo.sh) (the EM-only baseline that produced the published GRPO checkpoints we evaluated in M1) and our NeMo-RL setup.
+Lock-in mapping between [`Search-R1/scripts/nq_hotpotqa/v0.2/train_grpo.sh`](https://github.com/PeterGriffinJin/Search-R1/blob/main/scripts/nq_hotpotqa/v0.2/train_grpo.sh) — the EM-only baseline behind the published GRPO checkpoints we evaluated in M1 — and our NeMo-RL setup.
 
 | Knob | verl value (v0.2 yaml) | NeMo-RL key | Our value | Status |
 |---|---|---|---|---|
 | Optimizer LR | `1e-6` | `policy.optimizer.kwargs.lr` | `1e-6` | match |
 | Warmup ratio | `0.285` | `policy.scheduler` LinearLR `total_iters` | `286` (= 0.285 × 1005) | match |
 | Total steps | `total_training_steps=1005` | `grpo.max_num_steps` | `1005` | match — paper text says 500; verl yaml + published checkpoints are 1005 |
-| Save cadence | `save_freq=100` | `checkpointing.save_period` | `100` (but `checkpointing.enabled: false` first-pass) | **paper-match planned**; first-pass disables checkpointing |
-| Val cadence | `test_freq=100` | `grpo.val_period` | **`0` first-pass; `100` planned** | **first-pass disables validation** — re-enable per [VALIDATION.md §7](VALIDATION.md#7-re-enabling-validation-planned-not-active) |
-| Val at start | `val_before_train=true` | `grpo.val_at_start` | **`false` first-pass; `true` planned** | first-pass disables validation |
+| Save cadence | `save_freq=100` | `checkpointing.save_period` | `100` | **paper-match planned**; first-pass disables checkpointing |
+| Val cadence | `test_freq=100` | `grpo.val_period` | `0` first-pass; `100` planned | **first-pass disables validation** — re-enable per [VALIDATION.md §7](VALIDATION.md#7-re-enabling-validation-planned-not-active) |
+| Val at start | `val_before_train=true` | `grpo.val_at_start` | `false` first-pass; `true` planned | first-pass disables validation |
 | KL coef (β) | `kl_loss_coef=0.001` | `loss_fn.reference_policy_kl_penalty` | `0.001` | match |
 | **KL estimator** | `kl_loss_type=low_var_kl` | `loss_fn.reference_policy_kl_type` | `k3` (NeMo-RL default) | **byte-identical** — both compute Schulman 2020 k3 |
-| **State masking** | `state_masking=true` (`<information>` zero-masked) | role-based `token_loss_mask` ([grpo.py:1685-1693](../../training/nemo_rl/nemo_rl/algorithms/grpo.py#L1685-L1693)) | automatic | **equivalent**, no config knob — env emits `role: tool`, gradient masks it |
+| **State masking** | `state_masking=true` (`<information>` zero-masked) | role-based `token_loss_mask` ([grpo.py:1685-1693](../../training/nemo_rl/nemo_rl/algorithms/grpo.py#L1685-L1693)) | automatic | **equivalent** — env emits `role: tool`, gradient masks it (no config knob) |
 | Clip ratio (ε) | `0.2` | `loss_fn.ratio_clip_min` / `ratio_clip_max` | `0.2` | match |
 | Group size G | `n_agent=5` | `grpo.num_generations_per_prompt` | `5` | match |
-| Trajectories / step | 512 (`train_batch_size=512`) | `num_prompts_per_step × num_generations_per_prompt` | `102 × 5 = 510` | 2-traj rounding; harmless with `force_on_policy_ratio: false` |
-| Train global batch | n/a | `policy.train_global_batch_size` | `510` | matches the trajectories-per-step (upstream convention) |
+| Trajectories / step | `train_batch_size=512` | `num_prompts_per_step × num_generations_per_prompt` | `102 × 5 = 510` | 2-traj rounding; harmless with `force_on_policy_ratio: false` |
+| Train global batch | n/a | `policy.train_global_batch_size` | `510` | matches trajectories-per-step (upstream convention) |
 | Train micro batch | `ppo_micro_batch_size=64` (verl-only) | `policy.train_micro_batch_size` | `4` (1× and 2× A100) | conservative for 2B@seq=4096 with `activation_checkpointing: true` |
 | Max prompt len | `4096` | `policy.max_total_sequence_length` | `4096` | match |
 | Max response len | `500` | `policy.generation.max_new_tokens` | `500` | match |
@@ -85,26 +99,38 @@ Lock-in mapping between [`Search-R1/scripts/nq_hotpotqa/v0.2/train_grpo.sh`](htt
 | **Max obs len** | `max_obs_length=500` tokens | `env.search_r1.max_obs_chars` | `2000` chars | **char proxy** (~4 char/token; pure-Python parsers, no tokenizer) |
 | Reward function | EM-based (`flashrag/search_r1/reward.py`) | `training/src/rewards/search_r1.py` | byte-identical port | verified by 15 parity tests |
 
-**Knowing divergences from the paper** (recorded in [PAPER_VS_OURS_TRAINING.md §9](PAPER_VS_OURS_TRAINING.md#9-divergence-summary-one-place-to-glance)): model family (Qwen3.5-2B vs Qwen2.5-3B), chat template (qwen_native vs paper), variant naming (hybrid vs instruct), hardware (1×–2× A100 vs 8× H100), framework (NeMo-RL vs verl). Everything else matches.
+### Known divergences from the paper
+
+Recorded in [PAPER_VS_OURS_TRAINING.md §9](PAPER_VS_OURS_TRAINING.md#9-divergence-summary-one-place-to-glance):
+
+- **Model family** — Qwen3.5-2B vs Qwen2.5-3B
+- **Chat template** — qwen_native vs paper
+- **Variant naming** — hybrid vs instruct
+- **Hardware** — 1×–2× A100 vs 8× H100
+- **Framework** — NeMo-RL vs verl
+
+Everything else matches.
 
 ---
 
-## training/src/ overlay architecture
+## Overlay architecture (`training/src/`)
 
-NeMo-RL is vendored at [`training/nemo_rl/`](../../training/nemo_rl/) at pinned `v0.6.0`. We **never edit it directly** — Search-R1-specific behavior lives as a pure overlay under [`training/src/`](../../training/src/) that registers itself with NeMo-RL's pluggable registries at startup.
+NeMo-RL is vendored at [`training/nemo_rl/`](../../training/nemo_rl/) at pinned `v0.6.0`. **We never edit it directly.** Search-R1-specific behavior lives as a pure overlay under [`training/src/`](../../training/src/) that registers itself with NeMo-RL's pluggable registries at startup.
 
 | Overlay file | Role | Plugged into |
 |---|---|---|
 | [`rewards/search_r1.py`](../../training/src/rewards/search_r1.py) | Byte-identical port of M1 EM scorer (`compute_search_r1_reward`, `em_check`, `extract_solution`, ...) | imported by env actor |
-| [`prompts/search_r1_paper.txt`](../../training/src/prompts/search_r1_paper.txt) | Paper instruction string (`{}` placeholder) | loaded as `task_data_spec.prompt` for `paper` arm only |
-| [`chat_template/tools.py`](../../training/src/chat_template/tools.py) | OpenAI-style `search` tool schema (qwen_native arm) | passed as `tools=[SEARCH_TOOL]` to `tokenizer.apply_chat_template` |
+| [`prompts/search_r1_paper.txt`](../../training/src/prompts/search_r1_paper.txt) | Paper instruction string (`{}` placeholder) | `task_data_spec.prompt` for `paper` arm only |
+| [`chat_template/tools.py`](../../training/src/chat_template/tools.py) | OpenAI-style `search` tool schema (qwen_native arm) | `tools=[SEARCH_TOOL]` in `tokenizer.apply_chat_template` |
 | [`datasets/search_r1.py`](../../training/src/datasets/search_r1.py) | `SearchR1Dataset(RawDataset)` — loads our parquet, sets `task_name = f"search_r1_{arm}"` | `DATASET_REGISTRY["search_r1"]` (monkey-patched — no `register_dataset` upstream) |
-| [`processors/search_r1.py`](../../training/src/processors/search_r1.py) | `search_r1_processor` — reads `messages[0].content` + `golden_answers`, dispatches qwen_native vs paper arms | `register_processor("search_r1_processor", ...)` |
+| [`processors/search_r1.py`](../../training/src/processors/search_r1.py) | `search_r1_processor` — reads `messages[0].content` + `golden_answers`, dispatches qwen_native vs paper | `register_processor("search_r1_processor", ...)` |
 | [`environments/parsers.py`](../../training/src/environments/parsers.py) | Pure-Python `parse_query`, `format_docs_*`, `retriever_failed_message` (testable without torch/ray/nemo_rl) | re-exported by env |
-| [`environments/search_r1_env.py`](../../training/src/environments/search_r1_env.py) | `SearchR1Env` (testable plain class) + `SearchR1Environment = ray.remote(SearchR1Env)` | `register_env("search_r1", "training.src.environments.search_r1_env.SearchR1Environment")` |
-| [`registry.py`](../../training/src/registry.py) | Single import-side-effect module that populates DATASET / PROCESSOR / ENV registries idempotently | imported once by the launch script |
+| [`environments/search_r1_env.py`](../../training/src/environments/search_r1_env.py) | `SearchR1Env` (plain testable class) + `SearchR1Environment = ray.remote(SearchR1Env)` | `register_env("search_r1", "training.src.environments.search_r1_env.SearchR1Environment")` |
+| [`registry.py`](../../training/src/registry.py) | Single import-side-effect module — populates DATASET / PROCESSOR / ENV registries idempotently | imported once by the launch script |
 
-**Wiring contract** — the launch script does:
+### Wiring contract
+
+The launch script does:
 
 ```python
 import training.src.registry  # populates DATASET_REGISTRY, PROCESSOR_REGISTRY, ENV_REGISTRY
@@ -114,7 +140,17 @@ main()
 
 After that, the training loop sees `dataset_name: search_r1`, `processor: search_r1_processor`, `env_name: search_r1` as if they were built-in.
 
-**Tests** — [`training/tests/`](../../training/tests/) covers reward parity (15 tests, byte-identical to the M1 eval pipeline), parser dispatch (per-arm regex behavior), format helpers (Qwen3.5 chat-template marker construction), env-step against a mocked retriever (search/answer/exhausted paths), and dataset adapter (column preservation, `task_name` correctness, validation split). Pure-Python tests run anywhere; tests needing torch/ray/nemo_rl skip cleanly outside the training venv.
+### Tests
+
+[`training/tests/`](../../training/tests/) covers:
+
+- **Reward parity** — 15 tests, byte-identical to the M1 eval pipeline.
+- **Parser dispatch** — per-arm regex behavior.
+- **Format helpers** — Qwen3.5 chat-template marker construction.
+- **Env-step** against a mocked retriever (search / answer / exhausted paths).
+- **Dataset adapter** — column preservation, `task_name` correctness, validation split.
+
+Pure-Python tests run anywhere; tests needing torch/ray/nemo_rl skip cleanly outside the training venv.
 
 ---
 
@@ -122,23 +158,22 @@ After that, the training loop sees `dataset_name: search_r1`, `processor: search
 
 Projected (high uncertainty until first run; see [`PAPER_VS_OURS_TRAINING.md §7`](PAPER_VS_OURS_TRAINING.md#7-compute) for derivation):
 
-- **1× A100 80GB**: 50–150 h / run → **$50–300 / run**
-- **2× A100 80GB**: 30–90 h / run → **$60–360 / run** (faster wall-clock, higher GPU-hours)
-- **Phase 2 total** (3 seeds × {base, hybrid} = 6 runs): **$300–1800** on 1× A100
+| Setup | Wall-clock / run | Cost / run |
+|---|---|---|
+| 1× A100 80GB | 50–150 h | **$50–300** |
+| 2× A100 80GB | 30–90 h | **$60–360** (faster wall-clock, higher GPU-hours) |
 
-**First-run gate** ([§7 Derivation](PAPER_VS_OURS_TRAINING.md#first-run-gate)): run one seed on 1× A100; at step 100 (~1 h in if going well, much later if not), project end-to-end wall-clock and decide whether to commit to the full 6-run plan or scale up to 2× A100.
+**Phase 2 total** — 3 seeds × {base, hybrid} = 6 runs → **$300–1800** on 1× A100.
 
-Retriever: separate process on `127.0.0.1:3005`, ~65 GB host RAM (Wiki-18 FAISS-flat). See [`local_retriever/README.md`](../../local_retriever/README.md).
+**First-run gate** ([§7 Derivation](PAPER_VS_OURS_TRAINING.md#first-run-gate)) — run one seed on 1× A100. At step 100 (~1 h in if going well, much later if not), project end-to-end wall-clock and decide whether to commit to the full 6-run plan or scale up to 2× A100.
 
-## Running training
+**Retriever** — separate process on `127.0.0.1:3005`, ~65 GB host RAM (Wiki-18 FAISS-flat). See [`local_retriever/README.md`](../../local_retriever/README.md).
 
-- **What to run** (commands, args, env vars): [`training/README.md`](../../training/README.md)
-- **Vast.ai sequence** (boot, retriever setup, smoke run, monitoring, eval gate): [`../milestone_two/PHASE_2_RUNBOOK.md`](../milestone_two/PHASE_2_RUNBOOK.md)
-- **Milestone scope + status**: [`../milestone_two/MILESTONE_2.md`](../milestone_two/MILESTONE_2.md)
+---
 
 ## Going deeper (educational)
 
 For when you want to understand what's actually happening, not just what to set:
 
-- [`../edu/SEED.md`](../edu/SEED.md) — what `--seed` controls, where it propagates, why we run 3 seeds × 2 variants
-- [`../edu/GPU_MEMORY.md`](../edu/GPU_MEMORY.md) — what's in VRAM during GRPO (rollout vs training), with concrete numbers for our A100 80GB config and an OOM recovery ladder
+- [`../edu/SEED.md`](../edu/SEED.md) — what `--seed` controls, where it propagates, why we run 3 seeds × 2 variants.
+- [`../edu/GPU_MEMORY.md`](../edu/GPU_MEMORY.md) — what's in VRAM during GRPO (rollout vs training), with concrete numbers for our A100 80GB config and an OOM recovery ladder.
