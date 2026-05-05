@@ -38,3 +38,13 @@ results.tsv
 
 # Internship
 docs/internship/
+
+# Zeta Alpha meeting prep (private)
+docs/zeta_alpha/
+
+# Sankar (private)
+docs/sankar/
+
+# Local tooling: Obsidian vault config and Claude Code workspace state
+.obsidian/
+.claude/
