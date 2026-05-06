@@ -31,6 +31,7 @@ Storyline plot used in the supervisor doc lives at `supervisor_assets/storyline_
 | File | What |
 |---|---|
 | [`CODE_SETUP_v0.md`](./CODE_SETUP_v0.md) | What changed in the ReSearch port vs. paper code: Qwen2.5-7B → Qwen3-0.6B, verl pin → verl_latest, faiss-gpu → faiss-cpu, 4-GPU → 1-GPU profiles, prompt and reward rewrites. Hyperparameter matrices side-by-side with paper. |
+| [`CODE_SETUP_v1.md`](./CODE_SETUP_v1.md) | What changed from v0 to the M2 NeMo-RL pipeline: Qwen3.5-2B, NeMo-RL replaces verl, EM-only reward, two prompt arms, 6 smoke-run bugs fixed, Qwen3.5 architecture constraints (sequence packing off, enable_thinking), IVF-SQ8 retriever default, bootstrap.sh env setup. Quick-summary format. |
 
 ## Original plan (frozen, historical)
 

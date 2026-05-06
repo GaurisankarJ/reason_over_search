@@ -45,6 +45,9 @@ docs/zeta_alpha/
 # Sankar (private)
 docs/sankar/
 
+# ALICE cluster reference (machine-specific, local-only)
+docs/alice/
+
 # Local tooling: Obsidian vault config and Claude Code workspace state
 .obsidian/
 .claude/

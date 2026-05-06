@@ -9,9 +9,12 @@ updated: 2026-05-04
 # Code Setup v0 — ReSearch Port: What Changed vs the Paper
 
 **Date**: 2026-05-03  
+**Updated**: 2026-05-06 (see §12 for reward/script changes; §13 for items not previously documented at all)
+
+> **Before retiring this repo:** Rotate the WANDB_API_KEY in `/home/s4374886/omega/re-search/.env` and `/home/s4374886/omega/re-search/verl_latest/.env`. The key `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` is live and in both files. Entity: `gaurisankarj1996-leiden-university`.
 **Scope**: Documents the experimental changes I made over the original ReSearch paper code (Agent-RL/ReSearch, alphaxiv 2503.19470) to fit a single-A100 / single-GPU regime with reward and prompt ablations.  
 **Cluster**: All experiments below were run on the **ALICE** HPC cluster (Leiden University). ALICE will not be used for further experiments.  
-**Source repo**: `/Users/somedude/Documents/Obsidian/code/omega/research/`
+**Source repo**: `/home/s4374886/omega/re-search/` (current local path; originally Mac path in this doc)
 
 ---
 
@@ -281,4 +284,172 @@ Qwen3-specific floors (Qwen docs): `transformers>=4.51.0`, `sglang>=0.4.6.post1`
 - Paper repo (upstream): `Agent-RL/ReSearch` — the original `README-OLD.md` in this repo is its README, kept for reference.
 - Paper-vs-port code-level audit: `research/docs/reports/legacy_vs_verl_latest_research.md` (Apr 3, 2026).
 - Baseline reproduction (different repo, evaluation-side only): `reason_over_search/docs/milestone_one/COMPARISON_PLAN_B_v1.md`.
+
+---
+
+## 12. Updates Since This Doc Was Written (code as of 2026-05-06)
+
+Reviewed from `/home/s4374886/omega/re-search/` (branch `sbatch`). The §10 "Open Items" have been resolved; three areas changed.
+
+### 12.1 Reward function rewritten — v1 (resolves §10 "reward-shape ablations")
+
+`verl_latest/verl/utils/reward_score/re_search.py` is no longer the 3-tier (F1 / 0.1 / 0) described in §5. It is now the **v1 reward** documented in `REWARD_V1.md` alongside it. Key changes:
+
+| Aspect | v0 doc (original re_search.py) | v1 (current re_search.py) |
+|---|---|---|
+| Correct answer score | `f1` (0 to 1) | `min(1.0, 0.55 * F1 + format_score)` |
+| Wrong but well-formed | flat `0.1` | `min(0.12, 0.01 + 0.25 * format_score)` |
+| Format score range | implicit / binary | `[0, 0.45]` decomposed into 4 components (see below) |
+| Think tag | `<think>` | `<redacted_thinking>` |
+| Answer gate | `\boxed{}` required | `\boxed{}` still required; returns ≤0.02 if absent |
+| Original preserved | — | saved as `re_search_original.py` |
+
+Format score components (sum to [0, 0.45]):
+- Tag pairing and hygiene: `0.10 × clamp(pair_score)`
+- Cycle reward (think → tool_call → tool_response → think window): `0.18 × cycle_score`
+- Query quality (valid JSON, non-repeated, non-overlong): `0.07 × query_quality_score`
+- Thinking quality (non-empty, non-repeated): `0.05 × reasoning_quality_score`
+- Sequence bonus (no transition violations): `+0.03`
+- Answer closure: `+0.01` non-empty body, `+0.01` answer is last block
+
+### 12.2 Format reward ablation family added (the actual Phase-1 experiments)
+
+Four new reward files implement the ablation series run in W&B `research` and `research_revamp`:
+
+| File | Description |
+|---|---|
+| `r1_searcher_format_zero.py` | 5-tier milestone reward: first-think (0.10), tool_call (0.20), post-tool think (0.20), answer block (0.20), boxed content (0.30). Score floor -0.50 (negative if language mixing). |
+| `r1_searcher_format_one.py` | Component-weighted with pairing (0.12), transition (0.34), cycle (0.22), tool JSON (0.12), answer (0.10), think quality (0.10). Floor -0.50. |
+| `r1_searcher_format_two.py` | Variant of format_one with adjusted weights (not inspected in detail). |
+| `r1_searcher_format_three.py` | Variant with different mixing penalty and component balance. |
+| `r1_searcher_answer.py` | Answer-only F1 (no format component); pure semantic credit. |
+| `search_r1_like_qa_em.py` | EM-only (adapted from Search-R1 `qa_em.py`). **This is what gets ported to M2 NeMo-RL.** |
+
+The "format reward separated from answer reward" and "pure EM" items from §10 are now implemented here.
+
+### 12.3 New base model training script
+
+`verl_latest/x_base_min_run_qwen3_0.6b_grpo_vllm_gpu_1_a100_40gb.sh` — a smoke/iteration script for the **base model** specifically (vs the instruct/hybrid scripts in §3). This corresponds to the 5/5 failed base-model cold-start attempts documented in `RESULTS_v1.md` (run id family `base_state_machine_a`).
+
+### 12.4 What §10 items remain open
+
+- **Hybrid thinking on/off**: flag was exercised in v1 runs; results frozen in `RESULTS_v1.md`.
+- **Full vs minimal prompt template**: comparative numbers are in `RESULTS_v0.md`/`RESULTS_v1.md`.
+- **Reward EOS strict vs relaxed**: still not explicitly ablated as a standalone experiment.
+
+---
+
+## 13. Items Not Previously Documented (retirement audit 2026-05-06)
+
+These exist in the repo but were never written up. Captured here before the codebase is retired.
+
+### 13.1 Experiment folder pattern and submit system
+
+The repo has a self-contained per-ablation config injection system. Each folder under `experiments/` contains:
+
+```
+experiments/<ablation_name>/
+  config.yaml    — Hydra overrides: experiment_name, sbatch variant (z/x_min), output_root, temperature, top_p
+  prompt.txt     — system prompt body (replaces re_search_template_sys for this run)
+  reward.py      — Python module with compute_score(); typically thin wrapper around one of the r1_searcher_format* files
+  runs/          — dated run subdirs created at submit time (each has inputs/ logs/ checkpoints/ rollouts/ snapshots)
+```
+
+Submission via `scripts/submit_experiment_sbatch.py experiments/<name>/config.yaml [--dry-run | --smoke-test]`. The script stages a dated run dir, snapshots config/prompt/reward, and calls sbatch. Supports dry-run (stage only) and smoke-test (mock trainer/retriever to validate orchestration).
+
+Active experiments at retirement:
+
+| Folder | Reward used | Notes |
+|---|---|---|
+| `example_single_config_ablation/` | (template) | Reference only |
+| `ablation_zero/` | `r1_searcher_format.py` (v1) | First live run; 2 dated runs in `runs/` (2026-04-14) |
+| `ablation_one/` | `r1_searcher_format.py` (v1) | **Last active config** (pointed to by `verl_latest/.env`) |
+| `ablation_one_base/` | same | Base-model variant of ablation_one |
+| `ablation_two/` | different format variant | Alternative; no completed runs |
+| `ablation_xxx/` | (discarded) | Placeholder pattern for rejected ablations |
+
+The `ablation_one` prompt (`experiments/ablation_one/prompt.txt`) is a structured tool-call system prompt with numbered steps, `<tools>` schema, `\boxed{}` termination rule, and `<answer>` block. This is the prompt that was wired into the last Slurm runs.
+
+### 13.2 Slurm orchestration (sbatch/)
+
+Two `.sbatch` files handle the ALICE two-stage workflow (retriever must be healthy before trainer starts):
+
+| File | Partition | GPU | Notes |
+|---|---|---|---|
+| `retriever_then_z_run_qwen3_0.6b_grpo_vllm_instruct_gpu_1_a100_80gb.sbatch` | gpu-a100-80g | 1 | 8 CPUs, 120 GB RAM, 8-hour limit. Stage 1: bootstrap env + start retriever in `r_e` venv. Stage 2: wait for `/health`, launch trainer via `srun --overlap` in `r_t` venv. |
+| `retriever_then_x_min_run_qwen3_0.6b_grpo_vllm_instruct_gpu_1_a100_40gb.sbatch` | gpu-a100-mig | 1 | 40 GB MIG variant. Supports `RETRIEVER_CONFIG=retriever_config_mini.yaml` override for fast iteration. |
+| `test_retriever_then_training_mock.sh` | (no Slurm) | — | Local mock: validates the health-poll + handoff logic without real retriever/trainer. Pre-flight check. |
+
+### 13.3 Automated prompt ablation — results
+
+`scripts/evaluation/autoresearch_prompt/` ran a Codex-driven loop that generated and scored candidate prompts against the **base model** on Bamboogle (125 rows). Findings (frozen in `CURRENT_BEST.json`):
+
+| Metric | Value |
+|---|---|
+| Candidates tried | 4 (base model path) |
+| Best exact EM | 0/125 = 0.000 (all candidates) |
+| Best hybrid avg | 78.97% (baseline prompt, candidate_0) |
+| Dominant failure mode | `not_end_with_answer` (model stops early without outputting `<answer>`) |
+| Conclusion | Baseline `re_search_template_sys` was not improved by any of the 4 prompt variants tried |
+
+The instruct/hybrid path (`autoresearch_prompt/`) has a longer run history (139 KB `prompts.jsonl`) but the same conclusion: baseline prompt is best. The failure mode `not_end_with_answer` is a base model cold-start issue, not a prompt issue; consistent with the Phase-1 finding that base model cannot bootstrap format from cold start.
+
+### 13.4 `verl_latest/.env` experiment injection pattern
+
+The `verl_latest/.env` file (not committed to the paper's repo but present here) overrides two keys for experiment-specific prompt and reward:
+
+```
+PROMPT_TEMPLATE_PATH=../experiments/ablation_one/prompt.txt
+RE_SEARCH_REWARD_FUNCTION_PATH=../experiments/ablation_one/reward.py
+```
+
+The training scripts read these and pass them as Hydra overrides. This is the mechanism that lets `experiments/ablation_one/` be "active" without editing the training script. To switch ablation: change both paths in `.env` (or use `--prompt_template_name` / custom reward path flags directly on the script).
+
+### 13.5 Legacy parity audit (key risk: EOS handling)
+
+`docs/reports/legacy_vs_verl_latest_research.md` (2026-04-03) documents the code-level differences between `src/verl_legacy` and `verl_latest`. The one non-trivial behavioral risk:
+
+- **Legacy `compute_score`**: if the response does not end with `tokenizer.eos_token`, returns `0` with reason `"over length"`. Truncated rollouts get zero reward.
+- **Latest `compute_score`**: EOS is stripped if present but **not required**. Truncated rollouts can still earn reward.
+
+This was an **intentional relaxation** for single-GPU where max_response_length is sometimes lower. But it means v0 Phase-1 runs (latest) may have rewarded some rollouts that legacy would have scored 0. Noted here as a potential training distribution shift; not re-run to confirm impact.
+
+### 13.6 Training data
+
+`data/` at repo root (747 MB total). Primary training set is **MuSiQue** (multi-hop QA):
+
+| Path | Format | Size | Purpose |
+|---|---|---|---|
+| `data/musique/train.parquet` | parquet | 1.6 MB | Training data for GRPO (MuSiQue) |
+| `data/musique/test.parquet` | parquet | 16 KB | Validation during training |
+| `data/musique/train.jsonl` | jsonl | 39 MB | Raw JSONL source |
+| `data/musique_sft/` | parquet + jsonl | ~90 MB | **SFT variant** (never used in RL runs; staged for potential SFT warm-start) |
+| `data/bamboogle/test.jsonl` | jsonl | 17 KB | Eval dataset (primary for Phase-1 ablations) |
+| `data/hotpotqa/train.jsonl` | jsonl | 544 MB | Training-time val (not used; available) |
+| `data/data.ipynb` | notebook | 2.9 KB | Dataset exploration / prep notebook |
+| `data/prepare_musique.py` | python | 1.7 KB | Preprocesses MuSiQue parquet from raw downloads |
+| `data/download_dataset.sh` | bash | 0.9 KB | Downloads official parquet/jsonl files |
+
+`data/musique_sft/` was staged for a potential SFT warm-start for the base model (to address the cold-start format failure). It was never used in any run; the Phase-1 conclusion was to use hybrid model instead.
+
+### 13.7 `verl_latest/stable/` — tested configs
+
+Two scripts marked as "stable" (tested, not just smoke-validated):
+
+- `stable/run_qwen3_0.6b_grpo_vllm_instruct_gpu_4_l4_24gb_0.sh` — 4×L4-24GB tested stable config
+- `stable/run_qwen3_0.6b_grpo_vllm_instruct_gpu_1_a100_40gb_0.sh` — 1×A100-40GB tested stable config
+
+These are snapshots of configs that were confirmed to run without OOM errors; the `_0` suffix indicates the first stable version. The production profile scripts (`x_run`, `z_run`, etc.) in the parent dir are the current defaults and supersede these.
+
+### 13.8 `train_base.sh` — canonical production script
+
+`verl_latest/train_base.sh` is the primary parameterized launcher (11 KB). The profile scripts (x_min/x_run/z_min/z_run/zz/y) in §3 of this doc are **thin wrappers** that set hardware-specific defaults and call it. Key CLI flags it exposes:
+
+- `--prompt_template_name` — which template to use (`re_search_template_sys`, `re_search_template`, etc.)
+- `--actor_model_path` — override model path
+- `--rollout_n` — GRPO group size (default 5)
+- `--add_qwen_chat` — use manual `<|im_start|>` string (bypass `apply_chat_template`)
+- `--add_thinking` — `enable_thinking=True` path (vs empty closed `<think>` block default)
+
+The base model variant uses `re_search_use_chat_format=False` (no chat wrapper during prompt encoding); the instruct/hybrid variant uses `re_search_use_chat_format=True`. This flag was the equivalent of the `apply_chat` divergence fixed in M1 eval (D1 in REPRODUCIBILITY.md).
 
