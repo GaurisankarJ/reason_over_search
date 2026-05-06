@@ -400,7 +400,7 @@ There are **no `<|im_start|>` / `<|im_end|>` boundaries** in the env's appended 
 | Concern | qwen_native | paper |
 |---|---|---|
 | Each retrieval round is | a separate `user` (tool response) + `assistant` continuation pair | text appended inside one continuous assistant turn |
-| Assistant turn boundaries (`<|im_end|>`) | one per `<tool_call>` round + one for the final `<answer>` | one — at the very end of the rollout |
+| Assistant turn boundaries (`<\|im_end\|>`) | one per `<tool_call>` round + one for the final `<answer>` | one — at the very end of the rollout |
 | Context tokens spent on protocol | ~330 tokens at turn 1 — system: tool block + role intro (~270); user: protocol+question (~60) | ~133 tokens of user-message instructions+question, paid once at turn 1 |
 | Context tokens spent on retrieved docs | `<tool_response>` markers (~10 tokens overhead per round) + docs | `<information>` markers (~5 tokens overhead per round) + docs |
 | Loss masking ([`grpo.py:1685-1693`](../../training/nemo_rl/nemo_rl/algorithms/grpo.py#L1685-L1693)) | every assistant span gets loss=1, every user (tool_response) span gets loss=0 — clean separation | every token after the initial user prompt gets loss=1 (it's all one assistant turn). `<information>` blocks are NOT zero-masked unless we do something custom. |

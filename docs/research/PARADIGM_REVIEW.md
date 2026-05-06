@@ -14,7 +14,7 @@
 
 ## 0. Your setting in one paragraph (the constraint we're optimizing for)
 
-Qwen3.5-2B base (or hybrid with soft-switch reasoning), GRPO via NeMo-RL, leave-one-out advantage, group size G=5, lr=1e-6, β (KL coefficient) = 0.001, ε (clip) = 0.2, 1005 steps × 510 trajectories/step ≈ 515k trajectories per run, pure-EM reward (1.0 / 0.0). Hardware: 1× A100 80GB or 1× H100 80GB SXM. Budget: ~$200-400 per run, ~5-15 days wall-clock. Plan: 3 seeds × 2 variants = 6 runs. Pain points: full-finetune of 2B is tight on 80GB with vLLM colocated for rollout; sequence packing disabled (Qwen3.5 Mamba layers crash); per-step time dominated by rollout (multi-turn search) and the weight-refit between rollout and training mode swaps. See [`SMOKE_RESULTS.md:1623-1634`](../training/SMOKE_RESULTS.md#L1623-L1634) for the per-step measurements this is built on.
+Qwen3.5-2B base (or hybrid with soft-switch reasoning), GRPO via NeMo-RL, leave-one-out advantage, group size G=5, lr=1e-6, β (KL coefficient) = 0.001, ε (clip) = 0.2, 1005 steps × 510 trajectories/step ≈ 515k trajectories per run, pure-EM reward (1.0 / 0.0). Hardware: 1× A100 80GB or 1× H100 80GB SXM. Budget: ~$200-400 per run, ~5-15 days wall-clock. Plan: 3 seeds × 2 variants = 6 runs. Pain points: full-finetune of 2B is tight on 80GB with vLLM colocated for rollout; sequence packing disabled (Qwen3.5 Mamba layers crash); per-step time dominated by rollout (multi-turn search) and the weight-refit between rollout and training mode swaps. See [`SMOKE_RESULTS_2026-05-06.md` "Full-training wall-clock + cost"](../training/SMOKE_RESULTS_2026-05-06.md#full-training-wall-clock--cost-phase-2-real-config) for the per-step measurements this is built on.
 
 ---
 

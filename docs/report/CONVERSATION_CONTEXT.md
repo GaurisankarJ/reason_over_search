@@ -44,7 +44,7 @@ Things that are easy to lose track of:
 - **Two repos**: `reason_over_search` (thesis) and `research` (training infrastructure, Qwen3-0.6B port). Both reference each other.
 - **Two W&B projects**: `research` (v0, 26 runs) and `research_revamp` (v1, 15 runs). All Qwen3-0.6B; analysis frozen.
 - **CSVs of all 29 v0/v1 runs** are saved at `results_v0_assets/csv/` and `results_v1_assets/csv/` so the analysis can be regenerated without W&B access.
-- **Reward function gotcha**: Search-R1's GitHub ships `qa_em.py` (paper-faithful EM-only) and `qa_em_format.py` (shaped 6-tier with non-zero defaults). Earlier project docs conflated them; caught in `training/SMOKE_RESULTS_V4.md`. Phase-2 NeMo-RL port uses EM-only.
+- **Reward function gotcha**: Search-R1's GitHub ships `qa_em.py` (paper-faithful EM-only) and `qa_em_format.py` (shaped 6-tier with non-zero defaults). Earlier project docs conflated them; caught in `training/SMOKE_RESULTS_2026-05-06.md` (renamed from _V4). Phase-2 NeMo-RL port uses EM-only.
 - **`base_breakthrough` (v1, b8vv0qe2)** showing reward 0.7 is a reward-function-code change artifact, not learning. Configs are identical to `base_state_machine_a` which scored 0.0. Treat as instrumented, not earned.
 
 ## 6. Doc inventory

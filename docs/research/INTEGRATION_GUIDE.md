@@ -115,7 +115,7 @@ PARADIGM_REVIEW and RUNTIME_EFFICIENCY are **orthogonal**. They compose multipli
 
 **Scope**: vLLM config (prefix caching, async engine, gpu_memory_utilization, generation_batch_size), optimizer kernels (fused AdamW), colocation overhead, dynamic batching, torch.compile.
 
-**Measured baseline** (1× A100 80GB, from SMOKE_RESULTS.md):
+**Measured baseline** (1× A100 80GB, from [`SMOKE_RESULTS_2026-05-06.md`](../training/SMOKE_RESULTS_2026-05-06.md#full-training-wall-clock--cost-phase-2-real-config)):
 - **Per-step**: 15–24 minutes (linear vs sub-linear scaling estimate).
 - **1005 steps**: 11–17 days wall-clock.
 
@@ -128,7 +128,7 @@ PARADIGM_REVIEW and RUNTIME_EFFICIENCY are **orthogonal**. They compose multipli
 
 **Stacked together**: ~2–3× on rollout phase alone, which is 50–65% of step time → ~1.5–2× overall step time → **11–17 days → ~6–12 days**.
 
-**Caveats**: Colocation (vLLM ⇄ DTensor swap, ~35 GiB per step) is the #2 bottleneck (SMOKE_RESULTS.md:1619). Systems wins are nearly free; algorithmic wins require careful validation (see JustRL).
+**Caveats**: Colocation (vLLM ⇄ DTensor swap, ~35 GiB per step) is the #2 bottleneck ([SMOKE_RESULTS_2026-05-06.md "Bottlenecks identified"](../training/SMOKE_RESULTS_2026-05-06.md#bottlenecks-identified)). Systems wins are nearly free; algorithmic wins require careful validation (see JustRL).
 
 ---
 
@@ -387,7 +387,7 @@ Your current config trains on NQ+HotpotQA. MuSiQue is harder (3-hop, lower base 
 
 **Systems & speedup**:
 - RUNTIME_EFFICIENCY.md (this project) — vLLM config, async, colocation.
-- SMOKE_RESULTS.md (this project) — Measured per-step baseline.
+- [SMOKE_RESULTS_2026-05-06.md](../training/SMOKE_RESULTS_2026-05-06.md) (this project) — Measured per-step baseline.
 
 ---
 

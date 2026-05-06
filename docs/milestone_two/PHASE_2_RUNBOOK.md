@@ -2,7 +2,9 @@
 
 Concrete sequence to run Search-R1 GRPO training on Vast.ai. Phase 1 (build the training pipeline) is documented in [MILESTONE_2.md](MILESTONE_2.md) §"Step-by-step"; this runbook covers Phase 2 (actually run training + smoke-eval).
 
-> **TL;DR** — boot the docker image on Vast.ai, set up retriever, source `training/.env`, run `bash training/scripts/run_grpo_1xa100.sh --variant base --seed 42`. Repeat for hybrid + 3 seeds. Eval on Bamboogle through the Milestone-1 pipeline.
+> **TL;DR** — boot the docker image on Vast.ai, run [`bash training/scripts/bootstrap.sh`](../../training/scripts/bootstrap.sh) (idempotent: pulls LFS, downloads Qwen weights + v2 venv tarball, starts retriever), then `bash training/scripts/run_grpo_1xa100.sh --variant base --seed 42 -- policy.sequence_packing.enabled=false policy.dynamic_batching.enabled=true policy.train_micro_batch_size=2`. Eval on Bamboogle through the Milestone-1 pipeline.
+
+> **Plan pivot (2026-05-04 onwards).** The original "3 seeds × {base, hybrid} = 6 runs" plan is **superseded by the recipe-ablation plan in [`docs/TODO_2026-05-04.md`](../TODO_2026-05-04.md)**. With smoke-anchored wall-clock at 11–17 d / run on 1× A100 80GB and a $1000 USD budget, that supports ~2–3 runs (the JustRL plain-GRPO control + the E2H+S-GRPO+MC-GRPO stack), not 6. The "6-run plan" subsection below is kept for reference but is no longer the live target.
 
 ---
 
@@ -46,7 +48,7 @@ docker push pantomiman/reason-over-search-v1:v1
 - **GPU**: 1× or 2× A100 80GB. Match the launch script you intend to use.
 - **Persistent storage**: ≥ **150 GB** for indexes (~25 GB) + model weights (~15 GB) + checkpoints (~10–30 GB per run).
 - **Disk**: container disk ≥ 60 GB (for the venv at `training/nemo_rl/.venv/` + uv cache + working set).
-- **CPU/RAM**: ≥ 16 cores / **≥ 100 GB RAM** (retriever flat FAISS holds ~65 GB in host RAM; leave headroom).
+- **CPU/RAM**: ≥ 16 cores / **≥ 150 GB RAM**. The retriever uses 8 workers × the 16 GB IVF-SQ8 index ≈ **128 GB resident** (each worker calls `flashrag.utils.get_retriever()` independently → separate FAISS handles, separate index loads). Bootstrap.sh warns at < 150 GB. Do not use the flat IP index for training — it needs ~65 GB per worker × 8 = unworkable, and times out under rollout HTTP load even at 1 worker.
 
 ### 2. Clone repo + materialize the training venv
 
@@ -90,10 +92,9 @@ huggingface-cli download PeterJinGo/wiki-18-corpus \
 gunzip -f corpus/wiki-18.jsonl.gz
 mv corpus/wiki-18.jsonl corpus/wiki18_100w.jsonl
 
-huggingface-cli download PeterJinGo/wiki-18-e5-index \
-  --repo-type dataset --local-dir indexes --local-dir-use-symlinks False
-cat indexes/part_aa indexes/part_ab > indexes/wiki18_100w_e5_flat_inner.index.gz
-gunzip -f indexes/wiki18_100w_e5_flat_inner.index.gz
+# IVF-SQ8 index (~16 GB; required for training — flat IP times out under rollout load).
+curl -L "https://huggingface.co/datasets/pantomiman/reason-over-search/resolve/main/retriever/wiki18_100w_e5_ivf4096_sq8.index" \
+  -o indexes/wiki18_100w_e5_ivf4096_sq8.index
 
 huggingface-cli download intfloat/e5-base-v2 \
   --local-dir models/e5-base-v2 --local-dir-use-symlinks False
@@ -110,7 +111,7 @@ Start it in a `tmux` / `screen` session so it survives:
 tmux new -s retriever
 /venv/retriever/bin/python local_retriever/retriever_serving.py \
     --config local_retriever/retriever_config.yaml \
-    --num_retriever 1 \
+    --num_retriever 8 \
     --port 3005
 # Ctrl-b d to detach
 ```
@@ -127,7 +128,7 @@ curl -sS -X POST http://127.0.0.1:3005/batch_search \
 # Expect a list[list[{id, contents}]] with 3 docs.
 ```
 
-If retriever startup fails: check RAM (flat FAISS index needs ~65 GB resident), check the corpus + index files exist at the paths in `retriever_config.yaml`.
+If retriever startup fails: check that `indexes/wiki18_100w_e5_ivf4096_sq8.index` exists (~16 GB on disk), confirm `retriever_config.yaml` points to it, and verify ≥ 16 GB free RAM. Do not use the flat IP index for training — it needs ~65 GB RAM and times out under rollout load.
 
 ### 5. Download model weights
 
@@ -185,38 +186,58 @@ If anything blows up here, fix it before committing real GPU-hours.
 
 ---
 
-## Real runs — 6-run plan
+## Real runs — recipe ablation plan (current target)
 
-### 1× A100 (default; cheapest)
+The active plan: **C-minimal control + the optimised stack** (~2 runs, fits the $1000 budget). See [`docs/TODO_2026-05-04.md`](../TODO_2026-05-04.md) for full ordering. Each run is one launch of [`run_grpo_1xa100.sh`](../../training/scripts/run_grpo_1xa100.sh) with the always-required Qwen3.5 overrides:
 
 ```bash
-# Three seeds for base, qwen_native arm
-bash training/scripts/run_grpo_1xa100.sh --variant base --seed 42
-bash training/scripts/run_grpo_1xa100.sh --variant base --seed 7
-bash training/scripts/run_grpo_1xa100.sh --variant base --seed 1337
+# JustRL plain-GRPO control (no tricks; recipe baseline)
+bash training/scripts/run_grpo_1xa100.sh --variant base --seed 42 \
+  -- policy.sequence_packing.enabled=false \
+     policy.dynamic_batching.enabled=true \
+     policy.train_micro_batch_size=2
 
-# Three seeds for hybrid, qwen_native arm
-bash training/scripts/run_grpo_1xa100.sh --variant hybrid --seed 42
-bash training/scripts/run_grpo_1xa100.sh --variant hybrid --seed 7
-bash training/scripts/run_grpo_1xa100.sh --variant hybrid --seed 1337
+# Optimised stack: E2H curriculum + S-GRPO + MC-GRPO (overrides depend on the
+# stack-block code; placeholders here — fill in once each block lands)
+bash training/scripts/run_grpo_1xa100.sh --variant base --seed 42 \
+  -- policy.sequence_packing.enabled=false \
+     policy.dynamic_batching.enabled=true \
+     policy.train_micro_batch_size=2 \
+     <stack-specific Hydra overrides>
 ```
 
 Each run:
-- 1005 steps, **~50–150 h projected on 1× A100** (high uncertainty — see [`PAPER_VS_OURS_TRAINING.md §7`](../training/PAPER_VS_OURS_TRAINING.md#7-compute) and the first-run gate below).
-- **No validation, no checkpoints written** in the current first-pass configs (see VALIDATION.md / the YAML's `[DISABLED for first-pass training]` blocks). Final weights live in W&B run artifacts only until checkpointing is re-enabled.
+- 1005 steps × 510 trajectories/step. Smoke-anchored wall-clock: **11–17 d on 1× A100 80GB SXM** (~$300–490 / run at $1.20/h Vast median); see [`PAPER_VS_OURS_TRAINING.md §7`](../training/PAPER_VS_OURS_TRAINING.md#7-compute) and [`SMOKE_RESULTS_2026-05-06.md`](../training/SMOKE_RESULTS_2026-05-06.md#full-training-wall-clock--cost-phase-2-real-config) for the derivation.
+- **No validation, no checkpoints written** in the current first-pass configs (see [`VALIDATION.md`](../training/VALIDATION.md) and the YAML's `[DISABLED for first-pass training]` blocks). Re-enable per VALIDATION.md §7 before kicking off long ablations — final weights live only in W&B run artifacts until then.
 
-> **First-run gate**: launch ONE seed first (`--variant base --seed 42`). At step 100 (~1 h in if going well, much longer if not), check the W&B `gpu_monitoring` panel + step rate + `train/reward_mean` curve. If wall-clock projects to land under 50 h end-to-end and `train/reward_mean` is climbing (not flat at 0), commit to the 6-run plan on 1× A100. If 50–150 h, weigh cost-vs-time and consider switching the remaining 5 runs to 2× A100. If >150 h or `train/reward_mean` stays flat at ~0 (model not finding any rewardable trajectories), abort and debug.
+> **Step-100 gate**: launch ONE run first (`--variant base --seed 42`, no stack overrides → C-minimal). At step 100 (~2.5 h on 1× A100 if going well; on 1× H100 ~1 h), check the W&B `gpu_monitoring` panel + step rate + `train/reward_mean` curve. If wall-clock projects ≤17 d and `train/reward_mean` is climbing (not flat at 0), continue. If flat at ~0 (model not finding any rewardable trajectories), abort and debug — cheap is better than complete.
 
-### 2× A100 (faster; if 1× takes too long)
+### Hardware choice (smoke-anchored, see [`SMOKE_RESULTS_2026-05-06.md`](../training/SMOKE_RESULTS_2026-05-06.md#full-training-wall-clock--cost-phase-2-real-config))
+
+| Hardware | Wall-clock / run | $ / run | Notes |
+|---|---|---|---|
+| **1× A100 80 GB SXM** *(current default)* | 11–17 d | $300–490 | viable; slow |
+| **1× H100 80 GB SXM** *(recommended)* | 5–8.5 d | $240–410 | best $/run; same single-GPU config |
+| **2× A100 80 GB SXM** | 6.5–9.5 d | $370–550 | use [`run_grpo_2xa100.sh`](../../training/scripts/run_grpo_2xa100.sh); decolocates vLLM/DTensor |
+| 1× H200 141 GB SXM | 4–7 d | $270–470 | fastest; small marginal $$ over H100 |
+
+**Training params are byte-identical between 1× and 2× A100 configs** — only `cluster.gpus_per_node`, `vllm.tensor_parallel_size`, and `gpu_memory_utilization` differ ([diff](../../training/configs/)). Switching mid-experiment doesn't change the GRPO trajectory.
+
+### Original 6-run plan (superseded)
+
+Kept for reference. Replaced by the recipe-ablation plan above (≤3 runs total) once the smoke-anchored wall-clock made 6 paired runs unaffordable.
 
 ```bash
-bash training/scripts/run_grpo_2xa100.sh --variant base --seed 42
-# ...etc.
+# Three seeds × {base, hybrid} × qwen_native arm — NOT current plan
+for v in base hybrid; do
+  for s in 42 7 1337; do
+    bash training/scripts/run_grpo_1xa100.sh --variant $v --seed $s \
+      -- policy.sequence_packing.enabled=false \
+         policy.dynamic_batching.enabled=true \
+         policy.train_micro_batch_size=2
+  done
+done
 ```
-
-Wall-clock ~1.7× faster than 1× A100 (~30–90 h / run), total GPU-hours ~20% higher per run (see [PAPER_VS_OURS_TRAINING.md §7](../training/PAPER_VS_OURS_TRAINING.md#7-compute)).
-
-**Training params are byte-identical between 1× and 2× configs** — only `cluster.gpus_per_node`, `vllm.tensor_parallel_size`, and `gpu_memory_utilization` differ ([diff](../../training/configs/)). So switching from 1× to 2× mid-experiment doesn't change the GRPO trajectory; you'd just resume from a checkpoint with a different config.
 
 ### Sequential vs concurrent
 
@@ -248,11 +269,11 @@ CPU saturation on the retriever node is the most likely throughput bottleneck. I
 
 ### Failure modes + recovery
 
-Configs ship with conservative defaults (`train_micro_batch_size=4`, `gpu_memory_utilization=0.6` on 1× A100 / `0.7` on 2× A100, `activation_checkpointing=true`) to make the first-run launch survivable. If something still goes wrong:
+Configs ship with conservative defaults (`train_micro_batch_size=2` — required for Qwen3.5-2B with `sequence_packing: false`; `gpu_memory_utilization=0.6` on 1× A100 / `0.7` on 2× A100, `activation_checkpointing=true`) to make the first-run launch survivable. If something still goes wrong:
 
 | Symptom | Likely cause | Fix (override on the CLI) |
 |---|---|---|
-| OOM in policy forward / backward | `train_micro_batch_size` too high for activations | `policy.train_micro_batch_size=2` (and `policy.logprob_batch_size=2` follows automatically). If still OOM: `policy.dtensor_cfg.cpu_offload=true` |
+| OOM in policy forward / backward | activations too tight even at micro=2 | `policy.train_micro_batch_size=1`. If still OOM: `policy.dtensor_cfg.cpu_offload=true` |
 | OOM at vLLM init or first rollout | `gpu_memory_utilization` reserves more than the policy + adam + grad + ref leaves free | Drop by 0.05: `policy.generation.vllm_cfg.gpu_memory_utilization=0.55` (1× A100) or `0.65` (2× A100) |
 | Retriever HTTP timeout / connection errors | retriever overloaded (CPU pegged) or down | Check `tmux attach -t retriever`. Bump `env.search_r1.request_timeout_s=60`. If retriever is healthy but slow, drop concurrent rollout pressure: `grpo.num_prompts_per_step=64` (lower trajectories/step temporarily). |
 | `val/accuracy` stays at 0 after step 100 | format-validity ≈ 0 (model not emitting `<answer>`) | Inspect a few val rollouts in W&B (`logger.num_val_samples_to_print: 5`). Likely needs longer warmup or a slightly higher LR (`policy.optimizer.kwargs.lr=2.0e-6`). |
@@ -266,10 +287,10 @@ Configs ship with conservative defaults (`train_micro_batch_size=4`, `gpu_memory
 The first-pass training run is **mechanics verification only** — checkpointing and validation are off. After the first 1005-step run finishes cleanly:
 
 1. **Confirm `train/reward_mean` climbed** above 0 over the run, and the loss/KL/grad-norm curves are sane. That's the first-pass success criterion.
-2. **Fill the TBD rows** in [PAPER_VS_OURS_TRAINING.md §7](../training/PAPER_VS_OURS_TRAINING.md#7-compute): observed wall-clock, GPU-hours, $/run.
-3. **Re-enable validation + checkpointing** — flip the `[DISABLED for first-pass training]` blocks in both YAMLs back to `enabled: true` / `val_period: 100` / `val_at_start: true` / restore `data.validation`. See [`VALIDATION.md`](../training/VALIDATION.md) for the planned re-enable.
-4. **Then run the full 6-run plan** (3 seeds × 2 variants) with checkpointing on, smoke-eval the best checkpoint on Bamboogle through the M1 eval pipeline ([`MILESTONE_1.1_QWEN_BASELINES.md`](../milestone_one/MILESTONE_1.1_QWEN_BASELINES.md) gives you the untrained baseline to beat).
-5. **Aggregate** across seeds, side-by-side vs. paper Table 3, decide on M3 (reward ablations).
+2. **Update §7 of [PAPER_VS_OURS_TRAINING.md](../training/PAPER_VS_OURS_TRAINING.md#7-compute) "Ours — observed"** with measured wall-clock, GPU-hours, $/run from the W&B run summary. Replaces the linear/sub-linear smoke extrapolation with a real anchor.
+3. **Re-enable validation + checkpointing** — flip the `[DISABLED for first-pass training]` blocks in both YAMLs back to `enabled: true` / `val_period: 100` / `val_at_start: true` / restore `data.validation`. See [`VALIDATION.md §7`](../training/VALIDATION.md#7-re-enabling-validation-planned-not-active) for the planned re-enable.
+4. **Run the recipe-ablation plan** ([`docs/TODO_2026-05-04.md`](../TODO_2026-05-04.md)): JustRL plain-GRPO control + the optimised stack (E2H curriculum + S-GRPO + MC-GRPO). 2 to 3 runs total — the original 6-run plan is superseded by smoke-anchored wall-clock making it unaffordable. Smoke-eval each finished checkpoint on Bamboogle through the M1 eval pipeline ([`MILESTONE_1.1_QWEN_BASELINES.md`](../milestone_one/MILESTONE_1.1_QWEN_BASELINES.md) gives you the untrained baseline to beat).
+5. **Aggregate** across runs, side-by-side vs. paper Table 3 + the JustRL control, write up.
 
 ---
 

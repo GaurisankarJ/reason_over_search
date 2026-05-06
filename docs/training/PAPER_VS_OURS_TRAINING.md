@@ -40,7 +40,7 @@ No format penalty, no process reward, no learned reward model. ([arXiv 2503.0951
 
 **Ours:** matches the paper — **pure EM, no shaping**. `r = 1.0` if normalized-EM hits, else `r = 0.0`.
 
-> **Paper-vs-Search-R1-repo gap (important).** The Search-R1 GitHub repo ships **two** reward functions: [`qa_em.py`](https://github.com/PeterGriffinJin/Search-R1/blob/main/verl/utils/reward_score/qa_em.py) (paper-faithful, EM only) and [`qa_em_format.py`](https://github.com/PeterGriffinJin/Search-R1/blob/main/verl/utils/reward_score/qa_em_format.py) (a 6-tier shaped variant exposing `structure_format_score`, `final_format_score`, `retrieval_score`). The shaped variant is *not* what the paper describes. Earlier in this project we ported `qa_em_format.py` (with non-zero shaping defaults of 0.2 / 0.1 / 0.1, the values exposed in FlashRAG's CLI flags) and described it as "identical to the paper" — that was a documentation error caught in early-May smoke testing (see `docs/training/SMOKE_RESULTS_V4.md` for the trail). The shaping was producing visible partial-credit reward signal on rollouts where EM=0, masking what was actually a flat learning curve.
+> **Paper-vs-Search-R1-repo gap (important).** The Search-R1 GitHub repo ships **two** reward functions: [`qa_em.py`](https://github.com/PeterGriffinJin/Search-R1/blob/main/verl/utils/reward_score/qa_em.py) (paper-faithful, EM only) and [`qa_em_format.py`](https://github.com/PeterGriffinJin/Search-R1/blob/main/verl/utils/reward_score/qa_em_format.py) (a 6-tier shaped variant exposing `structure_format_score`, `final_format_score`, `retrieval_score`). The shaped variant is *not* what the paper describes. Earlier in this project we ported `qa_em_format.py` (with non-zero shaping defaults of 0.2 / 0.1 / 0.1, the values exposed in FlashRAG's CLI flags) and described it as "identical to the paper" — that was a documentation error caught in early-May smoke testing (see [`docs/training/SMOKE_RESULTS_2026-05-06.md`](SMOKE_RESULTS_2026-05-06.md) for the trail; raw observations are in the archived 2026-05-02 + 2026-05-04 smoke runs at [`docs/archive/training/`](../archive/training/)). The shaping was producing visible partial-credit reward signal on rollouts where EM=0, masking what was actually a flat learning curve.
 >
 > **Resolution:** the multi-tier scaffold remains in [`training/src/rewards/search_r1.py`](../../training/src/rewards/search_r1.py) (and the eval-side mirror), but **all three shaping coefficients default to 0.0**, collapsing the function to pure EM. The scaffold stays so that M3 ablations can re-introduce shaping by passing non-zero coefficients explicitly without rewriting the state-machine format walker.
 
@@ -104,39 +104,49 @@ Paper values from Appendix B.2; verl values from [`Search-R1/scripts/nq_hotpotqa
 
 ## 7. Compute
 
-> **High uncertainty until first run.** The projections below are derived from upstream NeMo-RL math benchmarks scaled by model-size + sequence-length + multi-turn factors, with a wide range to reflect the unknowns (retrieval HTTP latency, DTensor-vs-FSDP throughput, multi-turn batched generation efficiency). **Replace with observed numbers after the first 100 training steps complete on real Vast.ai hardware** — that's enough signal to project accurately.
+> **Numbers are smoke-anchored** (2026-05-02 1× A100 80GB SXM run, 20 traj/step, mean ~57 s/step) and extrapolated linearly + sub-linearly to the real config. Source: [`SMOKE_RESULTS_2026-05-06.md` "Timing, GPU utilization, and bottlenecks"](SMOKE_RESULTS_2026-05-06.md#timing-gpu-utilization-and-bottlenecks). The "TBD" / "high uncertainty" framing of earlier revisions is gone — we have the per-step measurement and the only remaining unknown is how reward / format-validity evolves over hundreds of steps.
 
-| | Paper | Ours — projected (1× A100) | Ours — projected (2× A100) | Ours — observed |
-|---|---|---|---|---|
-| Hardware | 1 node × 8× H100 | 1× A100 80GB | 2× A100 80GB | TBD |
-| Training steps | 1005 | 1005 | 1005 | TBD |
-| Trajectories / step | 512 (verl) | 510 (102 × 5) | 510 | — |
-| Total trajectories | ~515k | ~513k | ~513k | — |
-| **Wall-clock / run** | ~24 h | **~50–150 h** | **~30–90 h** | **TBD** |
-| GPU-hours / run | ~192 GPU-h | 50–150 GPU-h | 60–180 GPU-h | TBD |
-| Vast.ai A100 80GB rate | n/a | ~$1–2 / GPU-h | ~$1–2 / GPU-h | check at launch |
-| **$ / run** | n/a | **$50–300** | **$60–360** | TBD |
-| Multi-seed plan | single-seed | 3 seeds × {base, hybrid} = 6 runs | same | — |
-| **Total Phase-2 budget** | n/a | **$300–1800** | **$360–2160** | — |
+| | Paper (8× H100) | Paper config on 1× A100 | Ours — measured + extrapolated (1× A100) | Ours — extrapolated (2× A100) | Ours — extrapolated (1× H100) | Ours — extrapolated (1× H200) |
+|---|---|---|---|---|---|---|
+| Hardware | 1 node × 8× H100 | 1× A100 80GB | 1× A100 80GB SXM | 2× A100 80GB SXM | 1× H100 80GB SXM | 1× H200 141GB SXM |
+| Training steps | 1005 | 1005 | 1005 | 1005 | 1005 | 1005 |
+| Prompts / step | 512 | 512 | 102 | 102 | 102 | 102 |
+| Generations / prompt | 5 | 5 | 5 | 5 | 5 | 5 |
+| Trajectories / step | **2560** (512 × 5) | **2560** | **510** (102 × 5) | **510** | **510** | **510** |
+| Total trajectories | **~2.57M** (= 2560 × 1005) | ~2.57M | **~513k** (= 510 × 1005 = 512,550) | ~513k | ~513k | ~513k |
+| Total prompts seen | ~515k (= 512 × 1005 = 514,560) | ~515k | ~103k (= 102 × 1005 = 102,510) | ~103k | ~103k | ~103k |
+| Epochs over 169,615-row corpus | **~3.03×** (= 514,560 / 169,615) | ~3.03× | **~0.604×** (= 102,510 / 169,615) | ~0.604× | ~0.604× | ~0.604× |
+| Gradient updates / step | 10 (verl `ppo_mini_batch_size=256` over 2560 trajectories) | 10 (gbs=256) | 1 (gbs=510 == prompts × gen → one optimizer.step()) | 1 | 1 | 1 |
+| Total gradient updates | ~10,050 | ~10,050 | ~1,005 | ~1,005 | ~1,005 | ~1,005 |
+| Per-step time, linear est. | n/a | ≈ 25.5 × 57 s × 5 ≈ 121 min | **24 min** (= 25.5 × 57 s) | 14 min | 12 min | 10 min |
+| Per-step time, sub-linear est. | n/a | ~75 min | ~15 min | ~9 min | ~7 min | ~6 min |
+| **Wall-clock / run** | ~24 h | **~250–750 h** (10–30 d) | **17 d / 11 d** = 264–408 h | **9.5 d / 6.5 d** = 156–228 h | **8.5 d / 5 d** = 120–204 h | **7 d / 4 d** = 96–168 h |
+| GPU-hours / run | ~192 GPU-h | 250–750 GPU-h | 264–408 GPU-h | 312–456 GPU-h | 120–204 GPU-h | 96–168 GPU-h |
+| Vast on-demand $/hr (typical, ±50%) | n/a | ~$1.20 | ~$1.20 | ~$2.40 (2× rate) | ~$2.00 | ~$2.80 |
+| **$ / run** | n/a | **$300–900** (= 250 × $1.20 to 750 × $1.20) | **$300–490** (= 264 × $1.20 to 408 × $1.20) | **$370–550** (= 156 × $2.40 to 228 × $2.40) | **$240–410** (= 120 × $2.00 to 204 × $2.00) | **$270–470** (= 96 × $2.80 to 168 × $2.80) |
+| Recommended for Phase 2 | n/a | **infeasible** (>$1k/run, 30 d) | viable but slow | solid alternative | **best $/run** | fastest, marginal $$ |
 
 ### Derivation
 
-**Paper baseline.** 8× H100 takes ~24 h to do 1005 steps with 512 trajectories per step (≈ 24 GPU-h × 8 = 192 GPU-h, rough estimate from arXiv Fig. 4). Per trajectory: ~1.3 GPU-sec.
+**Smoke anchor.** Mean per-step time on 1× A100 80GB SXM at 20 trajectories/step was **~57 s** (8 step measurements across 4 combos, geometric mean of ratios; raw table at [`SMOKE_RESULTS_2026-05-06.md` "Per-step wall-time"](SMOKE_RESULTS_2026-05-06.md#per-step-wall-time-smoke-shape-20-trajectoriesstep)). Real config is 510 trajectories/step = 25.5× the smoke shape.
 
-**1× A100 scaling.** A100 bf16 is ~1.6× slower than H100. Single-GPU loses parallelism vs the paper's 8 GPUs but doesn't pay communication overhead. Net: **~10–12× slower per trajectory**. 1005 steps × 510 trajectories × ~13 sec/traj ≈ 1.8M GPU-sec ≈ 500 GPU-h … but that's worst-case. Realistic with vLLM batched generation + sequence packing: **50–150 h**. The wide range covers retrieval HTTP latency (CPU-bound on the same instance) and rollout-generation efficiency for the multi-turn loop.
+**Linear extrapolation (upper bound).** Per-step time scales ~linearly with trajectory count when the GPU is generation-bound (rollouts dominate ~34% of the per-step trace; the remaining 66% is logprobs + training + retrieval-wait + weight-refit which scale with batch size too). 25.5 × 57 s = **1453 s ≈ 24.2 min/step**. × 1005 steps = **24,303 min = 405 h ≈ 16.9 days ≈ 17 d**.
 
-**2× A100 scaling.** DDP across 2 GPUs cuts per-step train time ~2×; TP=2 vLLM rollout cuts per-step rollout ~1.5–2×. Net: ~1.7× wall-clock speedup over 1× A100, but 2× GPU-hours per wall-clock hour. Projection: **30–90 h × 2 = 60–180 GPU-h**.
+**Sub-linear extrapolation (lower bound).** Larger micro-batches utilise the GPU better, but with `policy.sequence_packing.enabled: false` (Qwen3.5 GatedDeltaNet kernel crashes with packed sequences; see [`training/fix/CHANGES.md`](../../training/fix/CHANGES.md) §5) the gain is modest. Empirical heuristic: ~15 min/step. × 1005 = **15,075 min = 251 h ≈ 10.5 d ≈ 11 d**.
+
+**Cost.** 1× A100 80GB SXM on Vast.ai medians ~$1.20/GPU-h. `264 × $1.20 = $317`; `408 × $1.20 = $490`. So `$300–490 / run`. Same arithmetic produces the other hardware columns; cited in the rightmost table column.
+
+**Paper config on 1× A100 (hypothetical).** Run the paper's exact batch sizes (`num_prompts_per_step=512`, `gbs=256` → 10 gradient updates / step) on our hardware. Rollout produces 2560 trajectories per step (5× current); training does 10 gradient updates per step. Per-step time scales ~5× from the rollout blowup (rollout dominates wall-clock); training overhead is modest because gradient accumulation already chunks the work. Net: 5× the 264–408 h baseline = **~1300–2000 h ≈ 55–85 days per run**. (Earlier "250–750 h / 10–30 d" was a rough estimate before the smoke baseline existed — keeping the qualitative point: this is infeasible on 1× A100. Cross-ref: [`docs/edu/BATCH_MATH.md`](../edu/BATCH_MATH.md).) The cheap alternative for closing the **gradient-update** gap (without the rollout blowup) is `gbs=51` on the current 102-prompt config — 10 updates/step at no extra rollout cost; epoch coverage stays at 0.604×.
+
+**Multi-hardware extrapolation.** Cross-vendor relative throughput: H100 ≈ 2× A100 bf16 prefill at this batch size; H200 ≈ 1.2× H100; 2× A100 ≈ 1.7× single A100 wall-clock once the vLLM ⇄ DTensor split eliminates the colocation swap (the largest single idle gap on 1× A100 — [`SMOKE_RESULTS_2026-05-06.md` "Bottlenecks identified"](SMOKE_RESULTS_2026-05-06.md#bottlenecks-identified) #2). All four columns derived directly from these factors against the 1× A100 anchor.
 
 ### First-run gate
 
-Run **one seed on 1× A100** first. After step 100 (first validation point):
-- If wall-clock so far ≤ 5 h → projects ~50 h end-to-end, proceed with 6-run plan on 1× A100.
-- If wall-clock 5–15 h → projects 50–150 h, evaluate cost-vs-time trade-off; consider 2× A100 for the remaining 5 runs.
-- If > 15 h or `train/reward_mean` is flat at ~0 (model not finding any rewardable trajectories — first-pass has no `val/*` to lean on) → abort, debug.
+Wall-clock projection is now smoke-anchored (not "TBD"), so the first-run gate is mostly obsolete; one remaining live decision is whether to commit to 1× A100 or pay the H100 premium up front:
+- **Already-decided hardware.** 1× H100 80GB SXM if Vast supply has it (~$400/run, 5–8.5 d). Else 1× A100 80GB SXM (~$300–490/run, 11–17 d).
+- **Step-100 health-check.** Regardless of hardware, at step 100 (~1 h H100 / ~2.5 h A100) check W&B `train/reward_mean` curve. If flat at ~0 (no rewardable trajectories) → abort and debug, don't burn the rest of the run.
 
-Update this table from the W&B run summary once the first run completes.
-
-**Throughput delta:** the paper's 8× H100 setup is roughly 4–6× our 1× A100 (rough rule of thumb: H100 ≈ 1.6× A100 for bf16, × 8 GPUs / 1 GPU). Expect our wall-clock per run to be ~4–6× the paper's. The 500-step training is short enough that this is acceptable; if it's not, we'll move to 2× A100 or rent H100 fleet on Vast.ai.
+**Phase-2 budget reality.** ~$1000 USD total → **2–3 full runs**, not the 6 of the original 3-seed × 2-variant plan. The recipe-ablation pivot in [`docs/TODO_2026-05-04.md`](../TODO_2026-05-04.md) reflects this.
 
 ## 8. Data
 
@@ -144,7 +154,7 @@ Update this table from the W&B run summary once the first run completes.
 |---|---|---|
 | Training corpus | NQ-train + HotpotQA-train (mixed) — released as [`PeterJinGo/nq_hotpotqa_train`](https://huggingface.co/datasets/PeterJinGo/nq_hotpotqa_train) (170k train + 51.7k test) | **Identical source**; prompt rewritten during conversion to use Qwen3.5's `<tool_call>` template (the dataset's `prompt[0].content` ships with paper's `<search>` tags) |
 | Format | parquet (verl's expected format) | parquet → NeMo-RL row format (mapping pinned in [`TRAINING_DATA.md`](TRAINING_DATA.md)) |
-| Retrieval index | E5-base-v2 + Wiki-18 FAISS Flat IP | **Identical** — same index from Milestone 1 |
+| Retrieval index | E5-base-v2 + Wiki-18 FAISS Flat IP | **IVF4096-SQ8** (`wiki18_100w_e5_ivf4096_sq8.index`, ~16 GB RAM) — Flat IP times out under training rollout HTTP load; IVF-SQ8 is 3–10× faster. M1 eval still uses Flat IP for paper-fidelity. |
 
 ## 9. Divergence summary (one place to glance)
 

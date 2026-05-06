@@ -57,7 +57,7 @@ A complete decision guide covering:
 ### 3. [`RUNTIME_EFFICIENCY.md`](RUNTIME_EFFICIENCY.md) — Systems & engineering
 
 **What it covers**:
-- Measured baseline from SMOKE_RESULTS.md: 15–24 min/step on 1× A100 → 11–17 days for 1005 steps
+- Measured baseline from [SMOKE_RESULTS_2026-05-06.md](../training/SMOKE_RESULTS_2026-05-06.md): 15–24 min/step on 1× A100 → 11–17 days for 1005 steps
 - 21 engineering levers (R1-R7 rollout, C1 colocation, G1-G3 algorithm, O1-O6 optimizer, M1-M3 misc) with speedups and risks
 - Detailed explanations for rollout optimizations (prefix caching 1.5–2.0×, async vLLM 1.3–1.5×, GPU memory util 1.2–1.4×)
 - Suggested ordering: safe stack (~2 days) gives ~2× speedup on rollout phase → 11–17 days → 6–12 days overall
@@ -142,7 +142,7 @@ Read **INTEGRATION_GUIDE.md** all the way through. It's self-contained; it cites
 
 ---
 
-## Measured baseline (from SMOKE_RESULTS.md)
+## Measured baseline (from SMOKE_RESULTS_2026-05-06.md)
 
 | Hardware | Per-step | 1005 steps |
 |---|---:|---:|
@@ -158,7 +158,7 @@ With algorithmic wins (if they help): **→ 3–8 days** depending on how much D
 
 ## Links to related docs
 
-- **Training**: [`docs/training/SMOKE_RESULTS.md`](../training/SMOKE_RESULTS.md) — Measured per-step numbers and bottleneck analysis (co-location swap is #2 cost).
+- **Training**: [`docs/training/SMOKE_RESULTS_2026-05-06.md`](../training/SMOKE_RESULTS_2026-05-06.md) — Measured per-step numbers and bottleneck analysis (co-location swap is #2 cost).
 - **Training**: [`docs/training/PAPER_VS_OURS_TRAINING.md`](../training/PAPER_VS_OURS_TRAINING.md) — How the training recipe compares to Search-R1 paper.
 - **Training**: [`docs/training/VALIDATION.md`](../training/VALIDATION.md) — How to re-enable validation for early stopping.
 - **Config**: [`training/configs/grpo_qwen3.5_2b_1xa100.yaml`](../../training/configs/grpo_qwen3.5_2b_1xa100.yaml) — The current config (base for both Variant C and C-minimal).

@@ -120,15 +120,20 @@ After that, the training loop sees `dataset_name: search_r1`, `processor: search
 
 ## Hardware + runtime expectations
 
-Projected (high uncertainty until first run; see [`PAPER_VS_OURS_TRAINING.md §7`](PAPER_VS_OURS_TRAINING.md#7-compute) for derivation):
+Smoke-anchored (1× A100 80GB SXM, ~57 s/step at 20 traj/step → linearly extrapolated to 510 traj/step × 1005 steps); full derivation in [`PAPER_VS_OURS_TRAINING.md §7`](PAPER_VS_OURS_TRAINING.md#7-compute) and [`SMOKE_RESULTS_2026-05-06.md` "Full-training wall-clock + cost"](SMOKE_RESULTS_2026-05-06.md#full-training-wall-clock--cost-phase-2-real-config):
 
-- **1× A100 80GB**: 50–150 h / run → **$50–300 / run**
-- **2× A100 80GB**: 30–90 h / run → **$60–360 / run** (faster wall-clock, higher GPU-hours)
-- **Phase 2 total** (3 seeds × {base, hybrid} = 6 runs): **$300–1800** on 1× A100
+| Hardware | Wall-clock / run | $ / run (Vast on-demand) |
+|---|---|---|
+| **1× A100 80 GB SXM** *(current default)* | **11–17 d** (264–408 h) | **$300–490** at ~$1.20/h |
+| **1× H100 80 GB SXM** *(best $/run)* | **5–8.5 d** (120–204 h) | **$240–410** at ~$2.00/h |
+| **2× A100 80 GB SXM** | **6.5–9.5 d** (156–228 h) | **$370–550** at ~$2.40/h |
+| **1× H200 141 GB SXM** | **4–7 d** (96–168 h) | **$270–470** at ~$2.80/h |
 
-**First-run gate** ([§7 Derivation](PAPER_VS_OURS_TRAINING.md#first-run-gate)): run one seed on 1× A100; at step 100 (~1 h in if going well, much later if not), project end-to-end wall-clock and decide whether to commit to the full 6-run plan or scale up to 2× A100.
+The original Phase-2 plan (3 seeds × {base, hybrid} = 6 runs) is **superseded** by the recipe-ablation pivot in [`docs/TODO_2026-05-04.md`](../TODO_2026-05-04.md): with $1000 budget total, that supports ~2–3 runs. Recommended hardware: 1× H100 if available, 1× A100 otherwise.
 
-Retriever: separate process on `127.0.0.1:3005`, ~65 GB host RAM (Wiki-18 FAISS-flat). See [`local_retriever/README.md`](../../local_retriever/README.md).
+**Step-100 health check.** Regardless of hardware, at step 100 (~1 h H100 / ~2.5 h A100) check the W&B `train/reward_mean` curve. If flat at ~0, abort and debug rather than burning the rest of the run.
+
+Retriever: separate process on `127.0.0.1:3005`. **IVF4096-SQ8 index** (`wiki18_100w_e5_ivf4096_sq8.index`, ~16 GB on disk); 8 workers each load their own copy of the index ⇒ ~128 GB host RAM (≥150 GB instance recommended). The flat IP index (~65 GB single copy) times out under training rollout HTTP load; M1 eval still uses Flat IP for paper-fidelity. See [`local_retriever/README.md`](../../local_retriever/README.md).
 
 ## Running training
 

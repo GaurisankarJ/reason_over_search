@@ -4,7 +4,7 @@
 
 **How to use**: If you want a clear decision path through all three research rounds + both systems/algorithms tracks, see [`INTEGRATION_GUIDE.md`](INTEGRATION_GUIDE.md). It cross-references both PARADIGM_REVIEW and this doc, explains why recommendations evolved, and provides a checklist before running.
 
-**Status**: v1, drafted 2026-05-03. Grounded in the measured per-step numbers from [`SMOKE_RESULTS.md:1623-1634`](../training/SMOKE_RESULTS.md#L1623-L1634).
+**Status**: v1, drafted 2026-05-03. Grounded in the measured per-step numbers from [`SMOKE_RESULTS_2026-05-06.md` "Full-training wall-clock + cost"](../training/SMOKE_RESULTS_2026-05-06.md#full-training-wall-clock--cost-phase-2-real-config).
 
 ---
 
@@ -14,7 +14,7 @@ From the smoke run scaled up to the real config (510 trajectories/step, 1005 ste
 
 | Hardware | Per-step | 1005 steps | Reference |
 |---|---:|---:|---|
-| **1× A100 80GB SXM** | **15–24 min** | **11–17 days** | [SMOKE_RESULTS.md:1631](../training/SMOKE_RESULTS.md#L1631) |
+| **1× A100 80GB SXM** | **15–24 min** | **11–17 days** | [SMOKE_RESULTS_2026-05-06.md "Full-training wall-clock"](../training/SMOKE_RESULTS_2026-05-06.md#full-training-wall-clock--cost-phase-2-real-config) |
 | 1× H100 80GB SXM | 7–12 min | 5–8.5 days | same |
 | 2× A100 80GB SXM | 9–14 min | 6.5–9.5 days | same |
 
@@ -23,7 +23,7 @@ From the smoke run scaled up to the real config (510 trajectories/step, 1005 ste
 - **Rollout (vLLM gen + retrieval + KV setup): ~50–65% of step.** Multi-turn dominates because every turn needs a fresh prefill of the appended retrieval block.
 - **Logprob passes (current + reference): ~15–25% of step.**
 - **Train fwd+bwd+optim: ~20–30% of step.** With activation checkpointing on (current default), the recompute pass is non-trivial.
-- **Colocation swap (vLLM ⇄ DTensor mode flip, ~35 GiB freed each step): single largest idle gap.** Called out as bottleneck #2 in [SMOKE_RESULTS.md:1619](../training/SMOKE_RESULTS.md#L1619).
+- **Colocation swap (vLLM ⇄ DTensor mode flip, ~35 GiB freed each step): single largest idle gap.** Called out as bottleneck #2 in [SMOKE_RESULTS_2026-05-06.md "Bottlenecks identified"](../training/SMOKE_RESULTS_2026-05-06.md#bottlenecks-identified).
 
 **MuSiQue caveat**: train data is currently NQ+HotpotQA ([`grpo_qwen3.5_2b_1xa100.yaml:376`](../../training/configs/grpo_qwen3.5_2b_1xa100.yaml#L376)). MuSiQue is harder (3-hop, lower base EM → more zero-gradient groups), so wall-clock estimates above are a *floor* if you swap in MuSiQue. Mitigation is on the algorithmic side — see PARADIGM_REVIEW §6 (sample-efficient training) and §5 (dynamic sampling).
 
@@ -98,7 +98,7 @@ The clip ratio ε=0.2 bounds the off-policy correction. One step of staleness is
 
 Current `gpu_memory_utilization: 0.6` is conservative — chosen for safety on the first run ([config comment, line 346–350](../../training/configs/grpo_qwen3.5_2b_1xa100.yaml#L346-L350)). Once W&B `gpu_monitoring` shows the actual peak, push to 0.80–0.85. With more KV cache headroom, raise `generation_batch_size` 32 → 64 (or 96 if W&B confirms headroom).
 
-The constraint is co-location: the training side needs to grab back ~35 GiB during the optimizer step ([SMOKE_RESULTS.md:1619](../training/SMOKE_RESULTS.md#L1619)). If you decolocate (C1), you can push utilization to ~0.92.
+The constraint is co-location: the training side needs to grab back ~35 GiB during the optimizer step ([SMOKE_RESULTS_2026-05-06.md "Bottlenecks identified"](../training/SMOKE_RESULTS_2026-05-06.md#bottlenecks-identified)). If you decolocate (C1), you can push utilization to ~0.92.
 
 ### R6. Retrieval LRU
 
@@ -116,11 +116,11 @@ See [`PARADIGM_REVIEW.md` §7](PARADIGM_REVIEW.md#7-rollout-side-savings) for th
 
 ## 3. Colocation swap — the hidden tax
 
-[SMOKE_RESULTS.md:1619](../training/SMOKE_RESULTS.md#L1619) flags this as the #2 bottleneck: each step the `CuMemAllocator` releases ~35.72 GiB to swap modes between vLLM (rollout) and DTensor (training). The swap itself is the largest idle gap in the per-step trace.
+[SMOKE_RESULTS_2026-05-06.md "Bottlenecks identified"](../training/SMOKE_RESULTS_2026-05-06.md#bottlenecks-identified) flags this as the #2 bottleneck: each step the `CuMemAllocator` releases ~35.72 GiB to swap modes between vLLM (rollout) and DTensor (training). The swap itself is the largest idle gap in the per-step trace.
 
 Three options:
 
-1. **2-GPU split** (`run_grpo_2xa100.sh` exists): vLLM on GPU 0, DTensor on GPU 1. Eliminates the swap. ~1.5–1.7× total wall-clock vs 1× A100 — best $/run if Vast supply has 2× A100 boxes ([SMOKE_RESULTS.md:1633](../training/SMOKE_RESULTS.md#L1633)).
+1. **2-GPU split** (`run_grpo_2xa100.sh` exists): vLLM on GPU 0, DTensor on GPU 1. Eliminates the swap. ~1.5–1.7× total wall-clock vs 1× A100 — best $/run if Vast supply has 2× A100 boxes ([SMOKE_RESULTS_2026-05-06.md "Full-training wall-clock"](../training/SMOKE_RESULTS_2026-05-06.md#full-training-wall-clock--cost-phase-2-real-config)).
 2. **Async GRPO with `in_flight_weight_updates: true`**: amortizes the swap across overlapping rollout/train. Combine with R3.
 3. **Stay colocated, accept the cost**: today's config. Cheapest hardware, slowest wall-clock.
 

@@ -1,6 +1,18 @@
-# Smoke Test Results — Phase 2 First-Pass Mechanics (v4 run)
+# Smoke Test Results — Phase 2 First-Pass Mechanics
 
-Run on Vast.ai 1× A100 80 GB, image `pantomiman/reason-over-search-v1:v1`. Retriever: IVF-SQ8 + 8 workers (the flat IP default times out under training rollout load). Smoke shape: 8 outer steps × 8 prompts × group=5 = 320 trajectories per combo (40 per step jsonl line). **Seed = 43** (v2 used seed=42); same code, same data, same hyperparameters — only the seed differs.
+> **Canonical smoke-results doc.** Latest sample dump = the v4 (seed=43) run; the timing / wall-clock / cost analysis at the bottom comes from the **2026-05-02 small-shape run** (40-traj/combo). Both archived; see "Provenance + archive" below.
+
+Run on Vast.ai 1× A100 80 GB, image `pantomiman/reason-over-search-v1:v1`. Retriever: IVF-SQ8 + 8 workers (the flat IP default times out under training rollout load). Sample dump shape (this file's body): 8 outer steps × 8 prompts × group=5 = 320 trajectories per combo (40 per step jsonl line). **Seed = 43** (v2 used seed=42); same code, same data, same hyperparameters — only the seed differs.
+
+## Provenance + archive
+
+| File | Date | Shape | What it has | Where it lives |
+|---|---|---|---|---|
+| **SMOKE_RESULTS_2026-05-06.md** *(this file)* | 2026-05-06 | 8×8×5 = 320 traj/combo, seed=43 | latest sample dump + v2-vs-v4 seed-variance comparison + appended timing/cost analysis | [`docs/training/`](.) |
+| SMOKE_RESULTS_2026-05-04_v2_seed42.md | ~2026-05-04 | 8×8×5 = 320 traj/combo, seed=42 | sample dump only (no timing) | [`docs/archive/training/`](../archive/training/SMOKE_RESULTS_2026-05-04_v2_seed42.md) |
+| SMOKE_RESULTS_2026-05-02_smoke_shape.md | ~2026-05-02 | 2×4×5 = 40 traj/combo | **source of all timing / wall-clock / cost numbers cited throughout the project** + GPU utilisation trace + bottleneck inventory | [`docs/archive/training/`](../archive/training/SMOKE_RESULTS_2026-05-02_smoke_shape.md) |
+
+The Timing / GPU / Bottlenecks / Vast-sizing sections at the bottom of this file are **lifted verbatim** from the 2026-05-02 run (40-traj smoke shape, single 1× A100 80GB SXM box). Cited line ranges in [`docs/research/RUNTIME_EFFICIENCY.md`](../research/RUNTIME_EFFICIENCY.md), [`docs/research/INTEGRATION_GUIDE.md`](../research/INTEGRATION_GUIDE.md), and [`docs/research/PARADIGM_REVIEW.md`](../research/PARADIGM_REVIEW.md) point at this file's "Timing, GPU utilization, and bottlenecks" section below.
 
 **Required smoke overrides** (Qwen3.5 + multimodal + Mamba layers):
 
@@ -1671,3 +1683,80 @@ Both runs use identical code, data, hyperparameters, and shape (8 × 8 × group=
 - **Tag dispatch works**: `qwen_native` arm emits `<tool_call>` (Qwen's native tool-call schema); `paper` arm emits `<search>` (Search-R1 paper schema). The reward function uses paper tags, so `qwen_native` trajectories that wrap their answer in `<think>...</think>` + `<answer>...</answer>` can still hit reward=1.0 on EM. See `training/src/rewards/search_r1.py`.
 - **No learning trend at 8 steps**: per-step means are flat or noisy in both v2 and v4. Confirmed expected behaviour — GRPO needs O(100s) of steps before signal emerges.
 - **No retriever timeouts** in the IVF runs — 8 workers + IVF-SQ8 cleared the bottleneck that the flat IP default had.
+
+---
+
+## Timing, GPU utilization, and bottlenecks
+
+> Carried forward from the **2026-05-02 small-shape run** (40 traj/combo; archived as [`docs/archive/training/SMOKE_RESULTS_2026-05-02_smoke_shape.md`](../archive/training/SMOKE_RESULTS_2026-05-02_smoke_shape.md)). Numbers below are the empirical anchor for every wall-clock / cost figure cited elsewhere (PAPER_VS_OURS_TRAINING.md §7, README.md, PHASE_2_RUNBOOK.md, docs/research/RUNTIME_EFFICIENCY.md). Re-measure after any major config change.
+
+### Per-step wall-time (smoke shape: 20 trajectories/step)
+
+Pulled from each run's "X.XXs (NN%)" timing breakdown in W&B. Step time = `generation_time / generation_pct`:
+
+| Combo | Step | Generation | Generation % of step | Inferred step time |
+|---|---|---:|---:|---:|
+| base × qwen_native | 1 | 20.99 s | 34.1 % | ~61.5 s |
+| base × qwen_native | 2 |  9.60 s | 13.6 % | ~70.6 s |
+| base × paper       | 1 | 16.89 s | 37.7 % | ~44.8 s |
+| base × paper       | 2 | 18.53 s | 33.5 % | ~55.3 s |
+| hybrid × qwen_native | 1 | 20.87 s | 34.4 % | ~60.7 s |
+| hybrid × qwen_native | 2 | 24.23 s | 33.9 % | ~71.5 s |
+| hybrid × paper     | 1 | 16.35 s | 33.6 % | ~48.7 s |
+| hybrid × paper     | 2 |  3.00 s |  6.9 % | ~43.5 s |
+
+**Mean step time across all combos & both steps: ~57 s for 20 trajectories.**
+
+End-to-end wall-clock per combo (init + 2 steps + teardown): **~200 s** (combo 4 measured directly).
+- vLLM venv build + Ray bootstrap + model load + cudagraph capture: **~100–120 s** (one-off per run; warm vLLM venv reuses across combos).
+- Two training steps: **~80–100 s** combined.
+
+### GPU utilization (1× A100 80 GB SXM)
+
+Sampled during step-2 of combo 3 at 2 s intervals:
+
+```
+mem        util   power
+53175 MiB  99 %   229 W      ← training forward/backward
+53175 MiB  92 %   243 W      ← logprobs
+ 9063 MiB  27 %    88 W      ← waiting on retriever / Ray sync
+48657 MiB  78 %   222 W      ← rollout (vLLM)
+64181 MiB  91 %    92 W      ← weight refit (CPU/PCIe limited at low W)
+```
+
+Peak ~99 % util / ~245 W. Idle troughs to 27 % util / 88 W. Average ~70 % util.
+
+**A100-SXM4-80GB TDP is 400 W**, so we're nowhere near power-bound. Compute is the right primary resource; the trough is real CPU↔GPU coordination cost, not bandwidth saturation.
+
+### Bottlenecks identified
+
+1. **Retriever was the original blocker.** Flat IP + 2 workers timed out on >80 % of `/batch_search` calls under the smoke load → most rollouts came back with `Retriever failed: Read timed out` and rewards collapsed to 0. **Fix:** IVF-SQ8 + 8 workers (3-query batch latency dropped from 30 s timeout to ~1.7 s). This is now the v1 retriever default; see [`local_retriever/README.md`](../../local_retriever/README.md).
+2. **vLLM ⇄ DTensor colocation** (`policy.generation.colocated.enabled: true`) means GPU swaps modes between rollout and training each step (`CuMemAllocator: sleep freed 35.72 GiB`). That swap is the largest fraction of the per-step idle gap. With 1× A100 80 GB this is the only sane setup; on 2× A100 you can split (vLLM on GPU 0, DTensor on GPU 1) and get higher utilization.
+3. **Sequence packing disabled** (`policy.sequence_packing.enabled=false`) is required for Qwen3.5 (Mamba layers crash with packed sequences during `get_logprobs`). This costs some throughput because micro-batches aren't filled densely. If we ever migrate to a non-Mamba 2 B model, re-enable packing.
+4. **CUDA-aware install in Ray actors.** `_env_builder` Ray actors are spawned with no GPU allocation, so any uv-extra that imports CUDA at install-time (`nv-grouped-gemm`'s `setup.py`) dies immediately. Pre-building the v2 (automodel) venv from the host shell (where CUDA is visible) is the workaround. Long-term fix: bake the v2 venv into the docker image.
+
+### Full-training wall-clock + cost (Phase-2 real config)
+
+The real config is **102 prompts × group 5 = 510 trajectories per step** (25.5× the smoke shape) for **1005 steps** (`grpo.max_num_steps`). The smoke step time was measured at 20 traj/step → linear extrapolation = `25.5 × 57 s ≈ 1453 s ≈ 24 min/step`. Sub-linear ≈ `~15 min/step` (the GPU is utilisation-bound, not throughput-bound at 20 traj/step, so larger micro-batches utilise it better; with sequence packing disabled the gain is modest, so we quote both bounds).
+
+Hardware scaling factors below are cross-vendor relative throughput estimates (H100 ≈ 2× A100 bf16 prefill; H200 ≈ 1.2× H100 for our batch size; 2× A100 ≈ 1.7× single A100 once decolocated). Vast on-demand `$/hr` is the median of recent listings, not a quote — fluctuates ±50% with supply.
+
+| Hardware | Per-step (linear) | Per-step (sub-linear) | 1005 steps wall-clock | Vast on-demand $/hr (typical) | Cost / run | Cost derivation |
+|---|---:|---:|---:|---:|---:|---|
+| **1× A100 80 GB SXM** *(this box)* | 25.5 × 57 s ≈ 24 min | ~15 min | **17 d / 11 d** (= 408 h / 264 h) | ~$1.20 | **$300–490** | 264 × $1.20 = $317; 408 × $1.20 = $490 |
+| **1× H100 80 GB SXM** | ≈ 12 min | ~7 min | 8.5 d / 5 d (= 204 h / 120 h) | ~$2.00 | **$240–410** | 120 × $2.00 = $240; 204 × $2.00 = $408 |
+| **2× A100 80 GB SXM** | ≈ 14 min (vLLM ⇄ DTensor split) | ~9 min | 9.5 d / 6.5 d (= 228 h / 156 h) | ~$2.40 | **$370–550** | 156 × $2.40 = $374; 228 × $2.40 = $547 |
+| **1× H200 141 GB SXM** | ≈ 10 min | ~6 min | 7 d / 4 d (= 168 h / 96 h) | ~$2.80 | **$270–470** | 96 × $2.80 = $269; 168 × $2.80 = $470 |
+
+Caveats:
+- These are **single-run** numbers. The original Phase-2 plan (3 seeds × 2 variants = 6 runs) is **superseded** by the recipe-ablation pivot in [`docs/TODO_2026-05-04.md`](../TODO_2026-05-04.md): with 11–17 d / run on 1× A100, the budget supports ~2–3 runs total (the C-minimal control + the stack), not 6.
+- Vast prices fluctuate ±50% by supply; the `$/hr` column is a median, not a quote.
+- Seq-packing-off is conservative; if a future Qwen3.5 patch makes packing safe with Mamba layers, expect another 15–25% speedup.
+
+### Recommendation
+
+**For Phase-2 sweep: 1× H100 80 GB SXM.** Best wall-clock for the dollar (8 d × $2/hr ≈ $400/run vs A100's $300–490 over 17 d). Single-GPU keeps the existing config (no need to flip to 2× A100 wrappers / TP). H200 is fastest but only marginally so for our model size.
+
+**Alternative if H100 supply is bad:** 2× A100 80 GB SXM with the 2× wrapper ([`run_grpo_2xa100.sh`](../../training/scripts/run_grpo_2xa100.sh)). About 1.7× faster than 1× A100, similar $/run as H100 but more elastic capacity on Vast.
+
+**Avoid:** 1× A100 40 GB (won't fit Qwen3.5 + vLLM + KV cache without aggressive offload), single 4090 (24 GB VRAM is too tight; the 22 GB 3B-model footprint leaves no room for FAISS/optimizer).
