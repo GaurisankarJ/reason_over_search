@@ -165,7 +165,7 @@ The overlay's wiring contract: at launch, [`run_grpo.py`](../../training/scripts
 - **Numbers cite their source.** When you write a wall-clock or $/run figure, link to the table or paragraph that derives it (smoke step time, scaling factor, $/h rate, multiplication). PAPER_VS_OURS_TRAINING.md §7 and SMOKE_RESULTS_2026-05-06.md "Full-training wall-clock + cost" are the two canonical sources for compute math.
 - **Paper-vs-ours framing is consistent**: the paper-side row uses `512` prompts/step (`n_agent=5` → 2560 trajectories); our row uses `102` prompts/step (`n_agent=5` → 510 trajectories). Don't conflate "trajectories" and "prompts"; that bug surfaced in May 2026 and the §7 table fix is the lesson.
 - **Validation/checkpointing are documented as DISABLED first-pass everywhere they appear** (configs, README, NEMO_RL_KNOBS, VALIDATION). When you re-enable, keep all four files in sync.
-- **No em-dashes** in any prose written for the user (project-wide style rule, see [`.claude/CLAUDE.md`](../../.claude/CLAUDE.md)).
+- **No em-dashes** in any prose written for the user (project-wide style rule, see [`claude/CLAUDE.md`](../../claude/CLAUDE.md)).
 
 ---
 

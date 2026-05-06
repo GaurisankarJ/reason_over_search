@@ -3,7 +3,10 @@
 
 Categories:
   - broken_links: relative `](path.md)` links that do not resolve on disk.
-                  Hard error (exit 1).
+                  Hard error (exit 1). Targets matching INTENTIONAL_BROKEN
+                  patterns (gitignored env-specific paths, sibling
+                  workspaces, forward-references to unauthored files) are
+                  reported separately as warnings.
   - orphans:      pages under docs/ that nothing else links to. Excludes
                   docs/raw/, README.md, CONVERSATION_CONTEXT.md, log.md,
                   SCHEMA.md, TODO_*.md (these are deliberate roots).
@@ -37,6 +40,18 @@ def strip_code(text: str) -> str:
     return text
 STALE_DAYS = 90
 ROOT_BASENAMES = {"README.md", "CONVERSATION_CONTEXT.md", "log.md", "SCHEMA.md"}
+
+# Substrings in link targets that are intentionally unresolvable in the
+# repo. Matched as substrings (after stripping any `../` prefix). See
+# claude/CLAUDE.md "Wiki link conventions" for context.
+INTENTIONAL_BROKEN = (
+    "internship/",                      # gitignored, private
+    "RESULTS_QWEN3_BASELINE.md",        # forward-reference, file not yet authored
+)
+
+
+def is_intentional(target: str) -> bool:
+    return any(pat in target for pat in INTENTIONAL_BROKEN)
 
 
 def has_frontmatter(text: str) -> bool:
@@ -75,8 +90,10 @@ def collect_md(docs_root: Path) -> list[Path]:
     return sorted(p for p in docs_root.rglob("*.md"))
 
 
-def lint_broken_links(files: list[Path]) -> list[tuple[Path, str, str]]:
+def lint_broken_links(files: list[Path]) -> tuple[list[tuple[Path, str, str]], list[tuple[Path, str, str]]]:
+    """Return (broken, intentional). broken triggers FAIL; intentional is a warning only."""
     broken = []
+    intentional = []
     for f in files:
         text = strip_code(f.read_text(encoding="utf-8"))
         for m in LINK_RE.finditer(text):
@@ -85,8 +102,11 @@ def lint_broken_links(files: list[Path]) -> list[tuple[Path, str, str]]:
                 continue
             resolved = (f.parent / target).resolve()
             if not resolved.exists():
-                broken.append((f, target, str(resolved)))
-    return broken
+                if is_intentional(target):
+                    intentional.append((f, target, str(resolved)))
+                else:
+                    broken.append((f, target, str(resolved)))
+    return broken, intentional
 
 
 def lint_orphans(files: list[Path], docs_root: Path) -> list[Path]:
@@ -104,7 +124,10 @@ def lint_orphans(files: list[Path], docs_root: Path) -> list[Path]:
             referenced.add(resolved)
     orphans = []
     for f in files:
-        if "raw" in f.relative_to(docs_root).parts[:1]:
+        rel_parts = f.relative_to(docs_root).parts
+        if rel_parts and rel_parts[0] in {"raw", "templates"}:
+            # raw: ingested papers + drafts; templates: Obsidian/Karpathy
+            # boilerplate. Neither is meant to be linked from prose.
             continue
         if is_root_page(f):
             continue
@@ -173,7 +196,7 @@ def main() -> int:
         return 2
 
     files = collect_md(docs_root)
-    broken = lint_broken_links(files)
+    broken, intentional = lint_broken_links(files)
     orphans = lint_orphans(files, docs_root)
     stale = lint_stale(files)
     bad_fm = lint_frontmatter(files, docs_root)
@@ -182,6 +205,11 @@ def main() -> int:
 
     print(f"## broken links ({len(broken)})")
     for f, target, _ in broken:
+        print(f"  {fmt(f)} -> {target}")
+    print()
+
+    print(f"## intentional broken links ({len(intentional)})  [warning, env-specific or forward-ref]")
+    for f, target, _ in intentional:
         print(f"  {fmt(f)} -> {target}")
     print()
 

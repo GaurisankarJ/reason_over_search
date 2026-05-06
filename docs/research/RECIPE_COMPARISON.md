@@ -122,7 +122,7 @@ ReSearch reports EM and LJ for both 7B and 32B sizes; the row above is the 32B-I
   1. **R1-Searcher's 2-stage curriculum** to bypass the cold-start failure we hit on 0.6B base. Drop-in.
   2. **R1-Searcher's `+0 / -2` asymmetric format penalty** late in training to prevent format collapse.
   3. **R1-Searcher's `init_kl_coef=0.0`** to free reference-model GPU memory if stable. Compute win, not algorithmic.
-  4. Replace ReSearch's 0.1 partial-credit floor with binary 0/1 (Search-R1 style) and measure the tool-use signal sharpening. This is the most ablation-worthy line in our recipe per [`../../.claude/CLAUDE.md`](../../.claude/CLAUDE.md) gotcha #4.
+  4. Replace ReSearch's 0.1 partial-credit floor with binary 0/1 (Search-R1 style) and measure the tool-use signal sharpening. This is the most ablation-worthy line in our recipe per [`../../claude/CLAUDE.md`](../../claude/CLAUDE.md) gotcha #4.
 - **Tricks not worth borrowing**:
   - R1-Searcher's G=16 rollouts (compute-prohibitive at our scale).
   - R1-Searcher's 29k generate-max (no obvious gain at our context lengths).

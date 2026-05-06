@@ -186,6 +186,13 @@ Single RTX 4090 (24 GB), AMD EPYC 7642 (48c/96t), 503 GB RAM. No NVLink, single 
 
 Conventions: relative markdown links (no `[[wikilinks]]`); YAML frontmatter on every page outside `raw/` (`title`, `tags`, `source`, `created`, `updated`); seed new pages with `python scripts/wiki_frontmatter_init.py`. The `log.md` is append-only (newest day on top); never rewrite past entries.
 
+**Intentional broken links** (env-specific, gitignored, or forward-references). Allowlist lives in `scripts/wiki_lint.py` `INTENTIONAL_BROKEN`. These are warnings only, not failures, and are kept in prose deliberately:
+
+- `internship/`: gitignored (private). Lives on the user's own machines.
+- `RESULTS_QWEN3_BASELINE.md`: forward-reference to a file not yet authored (Jose-owned task per [`docs/log.md`](../docs/log.md)).
+
+If a path you're tempted to link to is gitignored or lives outside the repo, either add it to the allowlist with a one-line comment explaining why, or describe it in prose without a markdown link. Adding to the allowlist is fine when the reference is meaningful for collaborators on a different machine; using prose is fine when only you will read it.
+
 ### Gotchas to remember
 
 - **Reward function**: Search-R1's GitHub ships **two** reward modules, `qa_em.py` (paper-faithful EM-only) and `qa_em_format.py` (shaped 6-tier with non-zero defaults that produces visible reward even at EM=0). Earlier docs in this project conflated them. The Phase-2 NeMo-RL port uses **EM-only**. If you see surprising reward curves, check which one is wired in; surfaced in [`docs/training/SMOKE_RESULTS_2026-05-06.md`](../docs/training/SMOKE_RESULTS_2026-05-06.md).

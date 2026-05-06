@@ -38,7 +38,7 @@ What you can swap in via `--index` / yaml. All numbers are for E5-base-v2 at top
 |---|---|---|---|---|---|---|---|
 | `Flat,IP` | 65 GB | 100 % | exact | 100–300 ms | n/a — 32.5 GB fp16 > 24 GB | 10–25 ms | 5–12 ms |
 | `HNSW32,Flat` | ~70 GB | 97–99 % | exact | 0.5–3 ms | n/a — no FAISS GPU HNSW | n/a | n/a |
-| `IVF4096,SQ8` *(default; download from HF [`pantomiman/reason-over-search`](https://huggingface.co/datasets/pantomiman/reason-over-search/blob/main/retriever/wiki18_100w_e5_ivf4096_sq8.index), or build via [/workspace/index_creation](../../../index_creation/))* | ~16 GB | 96–99 % | very close | 30–100 ms | 5–15 ms | 3–8 ms | 2–6 ms |
+| `IVF4096,SQ8` *(default; download from HF [`pantomiman/reason-over-search`](https://huggingface.co/datasets/pantomiman/reason-over-search/blob/main/retriever/wiki18_100w_e5_ivf4096_sq8.index))* | ~16 GB | 96–99 % | very close | 30–100 ms | 5–15 ms | 3–8 ms | 2–6 ms |
 | `IVF65536,SQ8` | ~16 GB | 96–99 % | very close | 20–80 ms | 3–10 ms | 2–6 ms | 1–4 ms |
 | `IVF65536,PQ96` | ~3 GB | 88–95 % | approximate | 5–30 ms | 1–4 ms | 0.5–2 ms | 0.5–1.5 ms |
 | `IVF65536,PQ32` | ~1 GB | 75–88 % | coarse | 2–15 ms | <1–3 ms | <1 ms | <1 ms |

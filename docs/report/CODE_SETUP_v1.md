@@ -1,3 +1,11 @@
+---
+title: Code Setup v1 (M2 NeMo-RL pipeline)
+tags: [report, training, m2]
+source: internal
+created: 2026-05-06
+updated: 2026-05-06
+---
+
 # Code Setup v1 — M2 NeMo-RL Training Pipeline: What Changed vs v0
 
 **Date**: 2026-05-06

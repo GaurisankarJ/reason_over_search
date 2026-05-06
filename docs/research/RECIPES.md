@@ -206,7 +206,7 @@ Implementation cost on top of an existing GRPO trainer: a single dataloader chan
 - **Per-step cost grows with the curriculum**. As MuSiQue (longer chains, more search calls per rollout) becomes the dominant sample late in training, per-step time increases. Wall-clock budgeting must account for this; E2H is not free at our scale even though it's free in the paper's closed-book setting.
 - **Compute claim is light**. Paper does not state total wall-clock or GPU type explicitly in our reading. Treat reproduction-cost claims with caution; we have to budget against our own per-step measurements, not the paper's.
 - **Validated only at 1.5B**. Effect at our 2B scale is extrapolated, not measured. Plausible but not confirmed.
-- **JustRL counter-evidence applies**. Per [arxiv 2512.16649](https://arxiv.org/abs/2512.16649), curriculum stacks can hurt OOD performance; format / partial-credit rewards and curricula degrade the advantage signal in some settings. The Phase-2 ablation plan therefore runs a plain-GRPO C-minimal control alongside the stack ([`../../.claude/CLAUDE.md`](../../.claude/CLAUDE.md) §"Active ablation plan"); if C-minimal beats the E2H run on val EM, the curriculum is hurting and we strip it.
+- **JustRL counter-evidence applies**. Per [arxiv 2512.16649](https://arxiv.org/abs/2512.16649), curriculum stacks can hurt OOD performance; format / partial-credit rewards and curricula degrade the advantage signal in some settings. The Phase-2 ablation plan therefore runs a plain-GRPO C-minimal control alongside the stack ([`../../claude/CLAUDE.md`](../../claude/CLAUDE.md) §"Active ablation plan"); if C-minimal beats the E2H run on val EM, the curriculum is hurting and we strip it.
 
 ### Borrow-worthy tricks (in priority order)
 
@@ -217,7 +217,7 @@ Implementation cost on top of an existing GRPO trainer: a single dataloader chan
 
 ### Our results
 
-None yet. Phase-2 ablation #5 will run E2H curriculum on top of the Search-R1 GRPO baseline (with MC-GRPO + S-GRPO already stacked); see the table at [`../../.claude/CLAUDE.md`](../../.claude/CLAUDE.md) §"Active ablation plan". When run, file results in `docs/training/` and link from here.
+None yet. Phase-2 ablation #5 will run E2H curriculum on top of the Search-R1 GRPO baseline (with MC-GRPO + S-GRPO already stacked); see the table at [`../../claude/CLAUDE.md`](../../claude/CLAUDE.md) §"Active ablation plan". When run, file results in `docs/training/` and link from here.
 
 ### Learnings in our setting
 
@@ -260,7 +260,7 @@ These are findings from our training runs that apply across recipes or explain t
 **What happened**: The reward function returns 0.1 when F1 = 0 but the response is well-formatted. At Qwen3-0.6B scale, the model converged to producing plausible-looking but wrong answers, maintaining reward ~0.10-0.14. Tool-using and non-tool-using runs clustered in the same 0.14-0.22 band, making it impossible to distinguish learning from format gaming.
 **Measured gap**: 3-6 pp between runs that used the tool and those that did not, at the same reward level.
 **Implication**: the reward signal cannot cleanly assign credit to tool use. Fix: use outcome-only binary EM (as Search-R1 does) and remove any partial-credit component.
-**Filed in**: [`../report/RESULTS_v0.md`](../report/RESULTS_v0.md), [`../report/RESULTS_v1.md`](../report/RESULTS_v1.md); flagged as the most actionable lever in [`../../.claude/CLAUDE.md`](../../.claude/CLAUDE.md) §"Gotchas".
+**Filed in**: [`../report/RESULTS_v0.md`](../report/RESULTS_v0.md), [`../report/RESULTS_v1.md`](../report/RESULTS_v1.md); flagged as the most actionable lever in [`../../claude/CLAUDE.md`](../../claude/CLAUDE.md) §"Gotchas".
 
 ### L2: Base model fails cold-start without warm-up
 
@@ -268,14 +268,14 @@ These are findings from our training runs that apply across recipes or explain t
 **What happened**: `Qwen3-0.6B-Base` never emitted `<tool_call>` tokens across all 5 runs (longest: 2301 steps). `tool_call_counts/mean` stayed at 0.00 throughout. The base model's prior over the tag tokens is not strong enough for GRPO to lift from zero.
 **Attempted mitigations in v1**: varied prompt (state-machine, with-example, without-example); none worked.
 **Implication**: at this scale, base models need either SFT warm-start or a Stage-1 retrieval reward (see R1-Searcher, L1 borrow). Instruct models have a usable prior over tool-call structure and can bootstrap from GRPO alone.
-**Filed in**: [`../report/RESULTS_v1.md §1`](../report/RESULTS_v1.md), [`../../.claude/CLAUDE.md`](../../.claude/CLAUDE.md) §"Gotchas".
+**Filed in**: [`../report/RESULTS_v1.md §1`](../report/RESULTS_v1.md), [`../../claude/CLAUDE.md`](../../claude/CLAUDE.md) §"Gotchas".
 
 ### L3: Tag schema does not matter at equal step count
 
 **Source**: Phase-1 v0 (`<search>` / `<result>` paper schema) vs v1 (`<tool_call>` / `<tool_response>` in-distribution schema).
 **What happened**: Switching from the paper `<search>` tags to Qwen3's in-distribution `<tool_call>` format produced the same reward range (0.14-0.18 in v1 vs 0.16-0.22 in v0; the small gap is attributable to the smaller v1 batch and shorter prompts, not the tag change). Tool-use counts were equivalent.
 **Implication**: the model learns structural patterns, not specific token strings. Do not over-engineer the tag choice; match whatever the target model's in-distribution format is, for minimal cold-start friction.
-**Filed in**: [`../../.claude/CLAUDE.md`](../../.claude/CLAUDE.md) §"What's been done", finding 5.
+**Filed in**: [`../../claude/CLAUDE.md`](../../claude/CLAUDE.md) §"What's been done", finding 5.
 
 ### L4: Prompt content drives early behaviour more than reward shape
 
@@ -289,13 +289,13 @@ These are findings from our training runs that apply across recipes or explain t
 **Source**: Phase-1 v1, run `b8vv0qe2` (`base_breakthrough`).
 **What happened**: this run showed reward 0.700 at step 2301, identical config to `base_state_machine_a` which finished at 0.0. On inspection: 0 tool calls, ~93-token responses. The reward-function code (`re_search` reward manager) was edited between 2026-04-17 and 2026-04-18. Conclusion: the reward function was relaxed, not the model learning.
 **Implication**: reward spikes that are not accompanied by tool-use signal (`tool_call_counts/mean > 0`) and reasonable response lengths should be investigated for reward-function changes before being treated as learning signal.
-**Filed in**: [`../report/RESULTS_v1.md §1`](../report/RESULTS_v1.md), [`../../.claude/CLAUDE.md`](../../.claude/CLAUDE.md) §"Gotchas".
+**Filed in**: [`../report/RESULTS_v1.md §1`](../report/RESULTS_v1.md), [`../../claude/CLAUDE.md`](../../claude/CLAUDE.md) §"Gotchas".
 
 ### L6: JustRL counter-evidence (arxiv 2512.16649)
 
 **Source**: literature, not our runs yet.
 **Claim**: ["RLVR Is Not RL" (arxiv 2512.16649)](https://arxiv.org/abs/2512.16649) argues that complex reward-shaping tricks can hurt compared to plain GRPO ("JustRL"). The paper's argument is that partial-credit rewards, curriculum, and multi-component reward signals may degrade the advantage signal rather than improve it.
-**Implication**: our Phase-2 ablation plan runs a **JustRL plain-GRPO control** alongside the recipe stack (E2H curriculum + S-GRPO + MC-GRPO). If the control beats the stack, the stack is hurting. Per [`../../.claude/CLAUDE.md`](../../.claude/CLAUDE.md) §"Active ablation plan", this is run #2 in the ablation order.
+**Implication**: our Phase-2 ablation plan runs a **JustRL plain-GRPO control** alongside the recipe stack (E2H curriculum + S-GRPO + MC-GRPO). If the control beats the stack, the stack is hurting. Per [`../../claude/CLAUDE.md`](../../claude/CLAUDE.md) §"Active ablation plan", this is run #2 in the ablation order.
 **Status**: planned; no runs yet.
 
 ### L7: FAISS flat-IP index times out under training rollout HTTP load
@@ -303,11 +303,11 @@ These are findings from our training runs that apply across recipes or explain t
 **Source**: Phase-2 smoke test setup.
 **What happened**: the flat inner-product FAISS index (used for paper-fidelity eval) timed out when called concurrently from the training rollout HTTP server. The IVF-SQ8 quantised index handles the load.
 **Implication**: use IVF-SQ8 for training even though paper-fidelity eval uses flat IP. The two indexes are not interchangeable.
-**Filed in**: [`../../.claude/CLAUDE.md`](../../.claude/CLAUDE.md) §"Gotchas", [`../training/SMOKE_RESULTS_2026-05-06.md`](../training/SMOKE_RESULTS_2026-05-06.md).
+**Filed in**: [`../../claude/CLAUDE.md`](../../claude/CLAUDE.md) §"Gotchas", [`../training/SMOKE_RESULTS_2026-05-06.md`](../training/SMOKE_RESULTS_2026-05-06.md).
 
 ### L8: Search-R1 GitHub ships two reward modules
 
 **Source**: code audit during Phase-2 setup.
 **What happened**: `PeterGriffinJin/Search-R1` ships `qa_em.py` (paper-faithful EM-only, binary) and `qa_em_format.py` (6-tier shaped reward with non-zero defaults producing visible reward even at EM=0). Our Phase-2 NeMo-RL port uses EM-only (`qa_em.py`). If the wrong module is wired in, the training will appear to converge (positive reward) even with no real learning.
 **Implication**: always verify which reward module is wired in before starting a run. Unexpected non-zero rewards at step 0 before any tool-use is a red flag.
-**Filed in**: [`../../.claude/CLAUDE.md`](../../.claude/CLAUDE.md) §"Gotchas".
+**Filed in**: [`../../claude/CLAUDE.md`](../../claude/CLAUDE.md) §"Gotchas".

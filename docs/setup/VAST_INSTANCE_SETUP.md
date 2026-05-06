@@ -99,15 +99,15 @@ gunzip -f indexes/wiki18_100w_e5_flat_inner.index.gz
 rm -f indexes/part_aa indexes/part_ab
 ```
 
-**Optional: IVF-SQ8 index** (faster, lower RAM — see [../retriever/RETRIEVER_INDEXING.md](../retriever/RETRIEVER_INDEXING.md)). Either build it from the flat index in ~10 min:
+**Optional: IVF-SQ8 index** (faster, lower RAM — see [../retriever/RETRIEVER_INDEXING.md](../retriever/RETRIEVER_INDEXING.md)). Download the pre-built one from HF:
 
 ```bash
-cd /workspace
-git clone https://github.com/<your-org>/index_creation.git   # or copy from this repo
-# follow /workspace/index_creation/README.md
+cd /workspace/reason_over_search
+hf download pantomiman/reason-over-search retriever/wiki18_100w_e5_ivf4096_sq8.index \
+  --repo-type dataset --local-dir local_retriever/indexes
+mv local_retriever/indexes/retriever/wiki18_100w_e5_ivf4096_sq8.index local_retriever/indexes/
+rmdir local_retriever/indexes/retriever
 ```
-
-Or copy a pre-built one from your own R2/S3 bucket if you have it staged.
 
 ### 4b. E5-base-v2 encoder (~0.5 GB)
 

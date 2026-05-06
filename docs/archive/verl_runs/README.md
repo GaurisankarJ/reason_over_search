@@ -1,3 +1,11 @@
+---
+title: verl_runs archived training outputs
+tags: [archive, verl]
+source: internal
+created: 2026-05-06
+updated: 2026-05-06
+---
+
 # verl_runs — Archived Training Run Outputs
 
 Local-only archive of all 29 W&B runs analysed in the v0 + v1 reports. Pruned from the original 306 GB `/home/s4374886/verl/` (which also contained smoke-tests, abandoned configs, and multi-GPU experiments not in any report) down to ~238 GB on 2026-05-06.
@@ -18,7 +26,7 @@ All contents are gitignored (see `.gitignore`); only this README and `.gitignore
 
 | Report name | W&B id | Folder | Size | Has ckpts? |
 |---|---|---|---:|---|
-| `setup_first_pipeline` | `h3ga5d0w` | [`v0/setup_first_pipeline_h3ga5d0w/`](./v0/setup_first_pipeline_h3ga5d0w/) | <1 KB | no — see `NOTE.md` |
+| `setup_first_pipeline` | `h3ga5d0w` | [`v0/setup_first_pipeline_h3ga5d0w/`](./v0/setup_first_pipeline_h3ga5d0w/) | <1 KB | no, see [`NOTE.md`](./v0/setup_first_pipeline_h3ga5d0w/NOTE.md) |
 | `setup_run0_old_prompt` | `0wx183ke` | [`v0/setup_run0_old_prompt_0wx183ke/`](./v0/setup_run0_old_prompt_0wx183ke/) | 20 M | no |
 | `setup_new_prompt_smoke` | `1oku1vc8` | [`v0/setup_new_prompt_smoke_1oku1vc8/`](./v0/setup_new_prompt_smoke_1oku1vc8/) | 3 M | no |
 | `setup_stable_regime` | `ykxpxapv` | [`v0/setup_stable_regime_ykxpxapv/`](./v0/setup_stable_regime_ykxpxapv/) | 10 M | no |
