@@ -1,12 +1,19 @@
-# Research: GRPO Efficiency & Algorithms
+# Research: Literature, Algorithms, Systems
 
-Three complementary documents covering the research on making GRPO training efficient and effective for 2B models on multi-hop search-augmented QA.
+Two strands live in this folder:
+
+1. **Literature** (`LITERATURE_REVIEW.md` + the three `SURVEY*.md` files): the RLVR paper landscape, project-personal annotations, and the project-specific recipe selection.
+2. **Algorithm + systems engineering** (`INTEGRATION_GUIDE.md`, `PARADIGM_REVIEW.md`, `RUNTIME_EFFICIENCY.md`): how to make GRPO training efficient and effective for a 2B model on multi-hop search-augmented QA on a single A100.
+
+Both strands feed the M2 ablation plan (E2H curriculum + S-GRPO + MC-GRPO with a JustRL plain-GRPO control); see [`CONVERSATION_CONTEXT.md`](CONVERSATION_CONTEXT.md) for the strand-level snapshot and [`../report/SUPERVISOR_MEETING_2026-05-07.md`](../report/SUPERVISOR_MEETING_2026-05-07.md) § 2 for the supervisor-facing version.
 
 ---
 
 ## Quick Navigation
 
-**Start here**: [`INTEGRATION_GUIDE.md`](INTEGRATION_GUIDE.md)
+**Strand status**: [`CONVERSATION_CONTEXT.md`](CONVERSATION_CONTEXT.md) — what's done, decisions, what feeds where.
+
+**Algorithm + systems entry point**: [`INTEGRATION_GUIDE.md`](INTEGRATION_GUIDE.md)
 
 A complete decision guide covering:
 - The evolution from v1 (original recommendations) → v2 (failure modes discovered) → v3 (latest papers & JustRL counter-evidence)
@@ -17,9 +24,22 @@ A complete decision guide covering:
 
 **Read this if**: You want a clear, actionable path forward and don't have time to read three long papers.
 
+**Literature entry point**: [`SURVEY_FOCUSED.md`](SURVEY_FOCUSED.md) — project-specific subset with full paper cards and the source of the candidate recipe.
+
 ---
 
-## The three documents
+## Literature documents
+
+| File | What |
+|---|---|
+| [`LITERATURE_REVIEW.md`](LITERATURE_REVIEW.md) | Project-personal working notebook. Thesis framing, introduction outline, per-paper annotations with `==notes==` and `⭐` markers, and five appendices preserving thinking-as-it-happened. Drove the v0 / v1 decisions. |
+| [`SURVEY.md`](SURVEY.md) | Reference-style survey of the RLVR field. 14 thematic sections (Foundations, Verifier Design, Policy Optimization, Exploration, Reward Hacking, Self-Verification, Multi-Task, Open-Ended, Tool-Use, Mechanism Studies, Theoretical Foundations, Measurement, Open Challenges, Bibliography). Each section ends with paper cards in standardised Summary / Problem / Method / Result / Takeaway / ELI5 format. 96 cards total. |
+| [`SURVEY_FOCUSED.md`](SURVEY_FOCUSED.md) | Project-specific subset of `SURVEY.md`: only the papers relevant to Qwen3.5-2B / single-A100 / search-augmented. Source of the next-steps recipe (E2H curriculum + S-GRPO + MC-GRPO) used in § 2 of `../report/SUPERVISOR_MEETING_2026-05-07.md`. |
+| [`SURVEY_OVERFLOW.md`](SURVEY_OVERFLOW.md) | 15 adjacent papers (foundational priors, surveys, alternative directions) kept for completeness. |
+
+---
+
+## The three algorithm/systems documents
 
 ### 1. [`INTEGRATION_GUIDE.md`](INTEGRATION_GUIDE.md) — Decision framework
 

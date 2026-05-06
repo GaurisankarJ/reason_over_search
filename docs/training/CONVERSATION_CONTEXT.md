@@ -15,7 +15,7 @@ Two parallel concerns:
 1. **Faithful reproduction** of Search-R1's GRPO training (paper-vs-ours audit, hyperparameter parity, EM reward, retrieval HTTP contract).
 2. **Engineering for our hardware** (1x A100 80GB SXM via Vast.ai; ~$1000 budget; thesis deadline 2026-06-15). Forces departures from the paper: smaller batch (102 prompts/step vs paper's 512), `sequence_packing: false` (Qwen3.5 GatedDeltaNet kernel crashes with packing), `train_micro_batch_size: 2` (without packing), IVF-SQ8 FAISS index (flat IP times out under rollout HTTP load).
 
-The active question (the supervisor-facing reframe of the thesis, see [`docs/report/SUPERVISOR_MEETING.md`](../report/SUPERVISOR_MEETING.md) §2): *"Is it feasible to post-train a small LM to Search-R1-level results under realistic resource constraints, and what is the optimised training recipe?"*. Candidate answer: a stack of E2H curriculum + S-GRPO + MC-GRPO on a Search-R1 GRPO baseline, with a JustRL plain-GRPO control alongside.
+The active question (the supervisor-facing reframe of the thesis, see [`docs/report/SUPERVISOR_MEETING_2026-05-07.md`](../report/SUPERVISOR_MEETING_2026-05-07.md) §2): *"Is it feasible to post-train a small LM to Search-R1-level results under realistic resource constraints, and what is the optimised training recipe?"*. Candidate answer: a stack of E2H curriculum + S-GRPO + MC-GRPO on a Search-R1 GRPO baseline, with a JustRL plain-GRPO control alongside.
 
 ---
 
@@ -146,7 +146,7 @@ The overlay's wiring contract: at launch, [`run_grpo.py`](../../training/scripts
 ## Active task pointers (2026-05-06)
 
 - **Active recipe-ablation plan**: [`docs/TODO_2026-05-04.md`](../TODO_2026-05-04.md). Stack candidate: E2H + S-GRPO + MC-GRPO; control: JustRL plain-GRPO. Budget: 2 to 3 runs.
-- **Thesis story so far**: [`docs/report/SUPERVISOR_MEETING.md`](../report/SUPERVISOR_MEETING.md) (two-page brief).
+- **Thesis story so far**: [`docs/report/SUPERVISOR_MEETING_2026-05-07.md`](../report/SUPERVISOR_MEETING_2026-05-07.md) (two-page brief).
 - **Phase-1 (Qwen3-0.6B on ALICE) findings the recipe choices are reacting to**: [`docs/report/RESULTS_v0.md`](../report/RESULTS_v0.md), [`docs/report/RESULTS_v1.md`](../report/RESULTS_v1.md). Most actionable lever surfaced: paper's partial-credit reward creates a 0.1 floor that masks the tool-use signal.
 - **Re-enable validation + checkpointing**: [`VALIDATION.md §7`](VALIDATION.md#7-re-enabling-validation-planned-not-active). Single config flip, no code changes; do this before kicking off long ablations.
 

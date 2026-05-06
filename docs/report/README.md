@@ -6,7 +6,7 @@ Thesis-facing record. Files at the top of this list are the canonical entry poin
 
 | File | Purpose |
 |---|---|
-| [`SUPERVISOR_MEETING.md`](./SUPERVISOR_MEETING.md) | Supervisor-facing summary. § 1 closes Phase-1 (Qwen3-0.6B); § 2 proposes the next-steps recipe (E2H curriculum + S-GRPO + MC-GRPO). Glanceable. |
+| [`SUPERVISOR_MEETING_2026-05-07.md`](./SUPERVISOR_MEETING_2026-05-07.md) | Supervisor-facing summary for the 2026-05-07 meeting. § 1 closes Phase-1 (Qwen3-0.6B); § 2 proposes the next-steps recipe (E2H curriculum + S-GRPO + MC-GRPO). Glanceable. PDF alongside. |
 | [`CONVERSATION_CONTEXT.md`](./CONVERSATION_CONTEXT.md) | Living snapshot of project status, decisions, compute, and a doc inventory. Update when something material changes. |
 
 ## Phase-1 results (Qwen3-0.6B, ALICE, frozen)
@@ -31,16 +31,11 @@ Storyline plot used in the supervisor doc lives at `supervisor_assets/storyline_
 | [`ORIGINAL_PLAN_A.md`](./ORIGINAL_PLAN_A.md) | Abstract / introduction draft (Feb 2026): three research threads. |
 | [`ORIGINAL_PLAN_B.md`](./ORIGINAL_PLAN_B.md) | Problem statement: extend RLVR to non-verifiable domains via tool-use. RQ1 to RQ4. |
 
-The reframing of the research questions is in `SUPERVISOR_MEETING.md` § 1 ("Proposed reframing").
+The reframing of the research questions is in `SUPERVISOR_MEETING_2026-05-07.md` § 1 ("Proposed reframing").
 
-## Literature
+## Literature (moved)
 
-| File | What |
-|---|---|
-| [`LITERATURE_REVIEW.md`](./LITERATURE_REVIEW.md) | Project-personal working notebook. Thesis framing, introduction outline, per-paper annotations with `==notes==` and `⭐` markers, and five appendices preserving thinking-as-it-happened. Drove the v0 / v1 decisions. |
-| [`SURVEY.md`](./SURVEY.md) | Reference-style survey of the RLVR field. 14 thematic sections (Foundations, Verifier Design, Policy Optimization, Exploration, Reward Hacking, Self-Verification, Multi-Task, Open-Ended, Tool-Use, Mechanism Studies, Theoretical Foundations, Measurement, Open Challenges, Bibliography). Each section ends with paper cards in standardised Summary / Problem / Method / Result / Takeaway / ELI5 format. 96 cards total. |
-| [`SURVEY_FOCUSED.md`](./SURVEY_FOCUSED.md) | Project-specific subset of `SURVEY.md`: only the papers relevant to Qwen3.5-2B / single-A100 / search-augmented. Source of the next-steps recipe (E2H curriculum + S-GRPO + MC-GRPO) used in § 2 of `SUPERVISOR_MEETING.md`. |
-| [`SURVEY_OVERFLOW.md`](./SURVEY_OVERFLOW.md) | 15 adjacent papers (foundational priors, surveys, alternative directions) kept for completeness. |
+The literature-review and survey strand (`LITERATURE_REVIEW.md`, `SURVEY.md`, `SURVEY_FOCUSED.md`, `SURVEY_OVERFLOW.md`) lives in [`docs/research/`](../research/) alongside the algorithm + systems research. See [`docs/research/README.md`](../research/README.md) and [`docs/research/CONVERSATION_CONTEXT.md`](../research/CONVERSATION_CONTEXT.md).
 
 ## Assets
 

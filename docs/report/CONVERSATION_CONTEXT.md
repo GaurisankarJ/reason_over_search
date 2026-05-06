@@ -2,19 +2,21 @@
 
 > Living snapshot of project status, decisions, and pointers to the canonical docs. Update this when something material changes; keep historical sections frozen below.
 
-**Last updated**: 2026-05-04
+**Last updated**: 2026-05-06
+
+> **Doc reorganisation 2026-05-06**: The literature-review strand (`LITERATURE_REVIEW.md`, `SURVEY.md`, `SURVEY_FOCUSED.md`, `SURVEY_OVERFLOW.md`) moved to [`docs/research/`](../research/) so this folder is purely thesis-writing. See [`docs/research/CONVERSATION_CONTEXT.md`](../research/CONVERSATION_CONTEXT.md) for the research-strand snapshot. The supervisor-meeting brief is now date-suffixed: `SUPERVISOR_MEETING_2026-05-07.md`.
 
 ---
 
 ## 1. Status (one paragraph)
 
-Phase-1 of the thesis (Qwen3-0.6B prompt + base-model ablations on 1× A100, ALICE) is closed and documented in `RESULTS_v0.md` and `RESULTS_v1.md`. The Search-R1 evaluation baseline is reproduced (`milestone_one/COMPARISON_PLAN_B_v1.md`, ±2.5 pp of paper). The Phase-2 NeMo-RL training pipeline for Qwen3.5-2B is built and launch-ready. Wall-clock is observed at 11 to 17 days per run on 1× A100-80GB, which kills the original reward-function-ablation plan. The thesis question is being reframed from "extending RLVR via tool-use" to "what is the optimised training recipe for a small LM under a single-A100 budget"; proposed recipe stacks E2H curriculum + S-GRPO + MC-GRPO on a Search-R1 GRPO baseline. Net is captured in `SUPERVISOR_MEETING.md`.
+Phase-1 of the thesis (Qwen3-0.6B prompt + base-model ablations on 1× A100, ALICE) is closed and documented in `RESULTS_v0.md` and `RESULTS_v1.md`. The Search-R1 evaluation baseline is reproduced (`milestone_one/COMPARISON_PLAN_B_v1.md`, ±2.5 pp of paper). The Phase-2 NeMo-RL training pipeline for Qwen3.5-2B is built and launch-ready. Wall-clock is observed at 11 to 17 days per run on 1× A100-80GB, which kills the original reward-function-ablation plan. The thesis question is being reframed from "extending RLVR via tool-use" to "what is the optimised training recipe for a small LM under a single-A100 budget"; proposed recipe stacks E2H curriculum + S-GRPO + MC-GRPO on a Search-R1 GRPO baseline. Net is captured in `SUPERVISOR_MEETING_2026-05-07.md`.
 
 ## 2. Hard timeline
 
 | Date | Milestone |
 |---|---|
-| ~2026-05-10 | Supervisor meeting (this is the doc bundle for it) |
+| 2026-05-07 | Supervisor meeting (`SUPERVISOR_MEETING_2026-05-07.md` is the brief) |
 | 2026-06-10 | Experimentation must be finished |
 | 2026-06-15 | Thesis submission |
 | ~2026-07-15 | Defense |
@@ -35,7 +37,7 @@ Phase-1 of the thesis (Qwen3-0.6B prompt + base-model ablations on 1× A100, ALI
 | Pivot from verl to NeMo-RL | Phase-2 setup | verl does not support Qwen3.5 |
 | FAISS Flat IP → IVF-SQ8 for training | Phase-2 smoke | Flat IP times out under rollout HTTP load |
 | Reframe thesis question | 2026-05-04 | Original RQs (reward modeling, meta-reasoning, curriculum) require a sweep that is not affordable; reframed to "is it feasible + what is the optimised recipe" |
-| Proposed training recipe | 2026-05-04 | E2H curriculum + S-GRPO + MC-GRPO on Search-R1 GRPO baseline; all drop-in, all from `SURVEY_FOCUSED.md` |
+| Proposed training recipe | 2026-05-04 | E2H curriculum + S-GRPO + MC-GRPO on Search-R1 GRPO baseline; all drop-in, all from [`docs/research/SURVEY_FOCUSED.md`](../research/SURVEY_FOCUSED.md) |
 
 ## 5. Working memory
 
@@ -49,7 +51,7 @@ Things that are easy to lose track of:
 
 ## 6. Doc inventory
 
-See `README.md` in this directory for the per-file index. The supervisor-facing summary is `SUPERVISOR_MEETING.md`.
+See `README.md` in this directory for the per-file index. The supervisor-facing summary is `SUPERVISOR_MEETING_2026-05-07.md`. Literature/survey strand lives in [`docs/research/`](../research/).
 
 ---
 
@@ -69,4 +71,4 @@ Original timeline: Feb (lit) → Mar (pipeline) → Apr (experiments) → May (a
 
 ### The pivot to ReSearch + Search-R1
 
-Picked as the entry papers because they are the cleanest concrete instance of "tool-use as the surrogate objective" in the lit review. ReSearch flagged as "EXACTLY WHAT I WANTED TO DO" in `LITERATURE_REVIEW.md`. The "non-verifiable domains" framing collapsed into "exact-match QA over Wikipedia" (verifiable via tool); the reframing in Section 4 above resolves this loose end by changing the question from "extend RLVR" to "find the optimised recipe".
+Picked as the entry papers because they are the cleanest concrete instance of "tool-use as the surrogate objective" in the lit review. ReSearch flagged as "EXACTLY WHAT I WANTED TO DO" in [`docs/research/LITERATURE_REVIEW.md`](../research/LITERATURE_REVIEW.md). The "non-verifiable domains" framing collapsed into "exact-match QA over Wikipedia" (verifiable via tool); the reframing in Section 4 above resolves this loose end by changing the question from "extend RLVR" to "find the optimised recipe".

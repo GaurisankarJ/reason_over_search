@@ -4,7 +4,7 @@ You are a helpful research assistant with years of experience. Your job is to he
 
 This file is a living source of truth; update it (or ask me to) whenever a load-bearing fact changes. **Style**: avoid em-dashes (`—`, `--`) in any prose you write for me; they read as LLM-generated. Use semicolons, colons, parentheses, or "X to Y" instead.
 
-**If you only read one thing after this file**: [docs/TODO_2026-05-04.md](../docs/TODO_2026-05-04.md) is the canonical catch-up doc with the active ablation path. State-of-the-world snapshots: [docs/report/CONVERSATION_CONTEXT.md](../docs/report/CONVERSATION_CONTEXT.md) (thesis status), [docs/internship/CONVERSATION_CONTEXT.md](../docs/internship/CONVERSATION_CONTEXT.md) (Alstom internship side), and [docs/training/CONVERSATION_CONTEXT.md](../docs/training/CONVERSATION_CONTEXT.md) (Phase-2 training pipeline; load this when working on training). [docs/report/SUPERVISOR_MEETING.md](../docs/report/SUPERVISOR_MEETING.md) is the two-page story so far for the supervisor (also as PDF in `docs/report/SUPERVISOR_MEETING.pdf` and `docs/report/PROGRESS_REPORT_01.pdf`).
+**If you only read one thing after this file**: [docs/TODO_2026-05-04.md](../docs/TODO_2026-05-04.md) is the canonical catch-up doc with the active ablation path. State-of-the-world snapshots: [docs/report/CONVERSATION_CONTEXT.md](../docs/report/CONVERSATION_CONTEXT.md) (thesis status), [docs/research/CONVERSATION_CONTEXT.md](../docs/research/CONVERSATION_CONTEXT.md) (literature + algorithm/systems research strand), [docs/internship/CONVERSATION_CONTEXT.md](../docs/internship/CONVERSATION_CONTEXT.md) (Alstom internship side), and [docs/training/CONVERSATION_CONTEXT.md](../docs/training/CONVERSATION_CONTEXT.md) (Phase-2 training pipeline; load this when working on training). [docs/report/SUPERVISOR_MEETING_2026-05-07.md](../docs/report/SUPERVISOR_MEETING_2026-05-07.md) is the two-page story so far for the supervisor (also as PDF in `docs/report/SUPERVISOR_MEETING_2026-05-07.pdf` and `docs/report/PROGRESS_REPORT_01.pdf`).
 
 ## What this project is
 
@@ -29,14 +29,14 @@ This work is a Master's thesis (Leiden University; supervisors track in `docs/re
 
 | Date | Milestone |
 |---|---|
-| ~2026-05-10 | Supervisor meeting (`SUPERVISOR_MEETING.md` is the brief) |
+| 2026-05-07 | Supervisor meeting (`SUPERVISOR_MEETING_2026-05-07.md` is the brief) |
 | 2026-06-10 | Experimentation must be finished |
 | 2026-06-15 | Thesis submission |
 | ~2026-07-15 | Defense |
 
 **Compute and budget**: 1× A100-80GB rented on Vast.ai (ALICE retired going forward). ~$1000 USD total training budget. Observed wall-clock for a full Search-R1-shape Qwen3.5-2B GRPO run is **11 to 17 days on 1× A100** (5 to 8.5 d on 1× H100, 6.5 to 9.5 d on 2× A100). That gives **2 to 3 full runs**, so reward-ablation sweeps are off the table.
 
-**Reframed thesis question** (after Phase-2 wall-clock reality landed): from "extend RLVR via tool-use" to **"is it feasible to post-train a small LM to Search-R1-level results under realistic resource constraints, and what is the optimised training recipe?"**. The candidate answer is a stack of three drop-in additions on a Search-R1 GRPO baseline run: **E2H curriculum + S-GRPO + MC-GRPO**, with a **JustRL plain-GRPO control** alongside (per [arxiv 2512.16649](https://arxiv.org/abs/2512.16649) "tricks may hurt"). Full proposal: [docs/report/SUPERVISOR_MEETING.md § 2](../docs/report/SUPERVISOR_MEETING.md).
+**Reframed thesis question** (after Phase-2 wall-clock reality landed): from "extend RLVR via tool-use" to **"is it feasible to post-train a small LM to Search-R1-level results under realistic resource constraints, and what is the optimised training recipe?"**. The candidate answer is a stack of three drop-in additions on a Search-R1 GRPO baseline run: **E2H curriculum + S-GRPO + MC-GRPO**, with a **JustRL plain-GRPO control** alongside (per [arxiv 2512.16649](https://arxiv.org/abs/2512.16649) "tricks may hurt"). Full proposal: [docs/report/SUPERVISOR_MEETING_2026-05-07.md § 2](../docs/report/SUPERVISOR_MEETING_2026-05-07.md).
 
 **Two repos** (this is easy to lose track of):
 - `reason_over_search` (this repo) — thesis writeup, eval reproduction (M1), training pipeline (M2 NeMo-RL port).
@@ -63,8 +63,8 @@ Paper targets we compare against (Qwen2.5-3B EM, Search-R1 v5 Table 3):
 
 - [`README.md`](../README.md) — Phase 1 milestone framing.
 - **Catch-up + active ablation path**: [`docs/TODO_2026-05-04.md`](../docs/TODO_2026-05-04.md). The single best entry point for a new contributor (or a fresh agent session). Contains the lean reading path, the active target (≤10 h per run on 1× A100), and the prioritised ablation list.
-- **Thesis writing / reporting**: [`docs/report/`](../docs/report/) — `CONVERSATION_CONTEXT.md` (status), `SUPERVISOR_MEETING.md` + `.pdf` (two-page story), `PROGRESS_REPORT_01.md` + `.pdf`, `RESULTS_v0.md` + `RESULTS_v1.md` (Phase-1 Qwen3-0.6B ablation blocks from sibling `research` repo), `SURVEY.md` / `SURVEY_FOCUSED.md` / `SURVEY_OVERFLOW.md` (paper survey; `SURVEY_FOCUSED` is the one to read for this project, with §8 Key Results + §9 TLDR), `LITERATURE_REVIEW.md`, `ORIGINAL_PLAN_A.md` / `ORIGINAL_PLAN_B.md`.
-- **Algorithm + systems research**: [`docs/research/`](../docs/research/) — `INTEGRATION_GUIDE.md` (decision tree, start here), `PARADIGM_REVIEW.md` (algorithmic levers, v1→v2→v3 with JustRL counter-evidence), `RUNTIME_EFFICIENCY.md` (systems levers R1–R7 + C1 + G1–G3 + O1–O6 + M1–M3 with measured speedups).
+- **Thesis writing / reporting**: [`docs/report/`](../docs/report/) — `CONVERSATION_CONTEXT.md` (status), `SUPERVISOR_MEETING_2026-05-07.md` + `.pdf` (two-page story), `PROGRESS_REPORT_01.md` + `.pdf`, `RESULTS_v0.md` + `RESULTS_v1.md` (Phase-1 Qwen3-0.6B ablation blocks from sibling `research` repo), `ORIGINAL_PLAN_A.md` / `ORIGINAL_PLAN_B.md`.
+- **Algorithm + systems + literature research**: [`docs/research/`](../docs/research/) — `CONVERSATION_CONTEXT.md` (research strand status), `INTEGRATION_GUIDE.md` (decision tree, start here), `PARADIGM_REVIEW.md` (algorithmic levers, v1→v2→v3 with JustRL counter-evidence), `RUNTIME_EFFICIENCY.md` (systems levers R1–R7 + C1 + G1–G3 + O1–O6 + M1–M3 with measured speedups), `SURVEY.md` / `SURVEY_FOCUSED.md` / `SURVEY_OVERFLOW.md` (paper survey; `SURVEY_FOCUSED` is the one to read for this project, with §8 Key Results + §9 TLDR), `LITERATURE_REVIEW.md` (project-personal working notebook with annotations).
 - **Internship strand**: [`docs/internship/`](../docs/internship/) — `CONVERSATION_CONTEXT.md`, `6_MONTH_PLAN.md` (rewritten 2026-05-04: M1–M2 done, M3 in progress, M4–M6 TBA), `TECH_IMRAD_MARCH_v1.md` + `TECH_IMRAD_APRIL_v0.md` (living technical reports, both holistically rewritten 2026-05-04 to reflect the recipe-search pivot), `BUSINESS_REVIEW_RCA_LITERATURE.md` (seven precedent papers for the synthetic-data plan; audience is Alireza + Erik).
 - **Education / deep-dives**: [`docs/edu/`](../docs/edu/) — `GRPO_STEP_LIFECYCLE.md`, `BATCH_MATH.md` (`gbs == prompts × gen` convention; verl vs ours), `GPU_MEMORY.md`, `RETRIEVER_FROM_SCRATCH.md`, `RNG.md`, `SEED.md`. Read when something below the abstraction line gets confusing.
 - [`evaluation_search_r1/`](../evaluation_search_r1/) — eval pipeline (FlashRAG fork + Search-R1 prompts/parsers).
@@ -198,7 +198,7 @@ In rough priority order; one ≤10 h run on 1× A100 each unless noted.
 | 4 | **+ S-GRPO** | Loss on 30 to 50 % of tokens per rollout (informativeness-sampled). ~2× backprop saving |
 | 5 | **+ E2H curriculum** | Data-side: NQ → HotpotQA → MuSiQue, ~300 steps/stage with fade |
 
-After (2) we know whether JustRL "tricks may hurt" holds in our setting. After (5) we have the supervisor-question answer in [`docs/report/SUPERVISOR_MEETING.md § 2`](../docs/report/SUPERVISOR_MEETING.md).
+After (2) we know whether JustRL "tricks may hurt" holds in our setting. After (5) we have the supervisor-question answer in [`docs/report/SUPERVISOR_MEETING_2026-05-07.md § 2`](../docs/report/SUPERVISOR_MEETING_2026-05-07.md).
 
 **Ground rules for ablations**:
 - Always run the JustRL control alongside any complex stack; if C-minimal beats the stack on val EM, the stack is hurting.
