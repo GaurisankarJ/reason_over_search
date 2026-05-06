@@ -1,3 +1,11 @@
+---
+title: TRAINING DATA
+tags: []
+source: internal
+created: 2026-05-01
+updated: 2026-05-01
+---
+
 # Training Data
 
 The Search-R1 RL training corpus, lifted directly from the paper authors' HF distribution. Used for both [Milestone 2](../milestone_two/MILESTONE_2.md) variants (base + hybrid).

@@ -1,3 +1,11 @@
+---
+title: COMPARISON PLAN B v1
+tags: []
+source: internal
+created: 2026-05-01
+updated: 2026-05-01
+---
+
 # Plan B v1 vs. Search-R1 paper
 
 > **Status (2026-05-01): final.** The v1 instruct sweep finished 2026-04-29 ~22:05 UTC. All 14 cells (7 datasets × 2 variants) are aggregated in [RESULTS_PLAN_B.md](RESULTS_PLAN_B.md) and locked. The frozen Plan-A reproducer config lives in [FROZEN_CONFIG_v1.md](FROZEN_CONFIG_v1.md).

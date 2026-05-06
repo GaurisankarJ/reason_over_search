@@ -1,3 +1,11 @@
+---
+title: MILESTONE 1
+tags: []
+source: internal
+created: 2026-05-01
+updated: 2026-05-01
+---
+
 # Milestone 1: Baseline [Search-R1](https://www.alphaxiv.org/abs/2503.09516)
 
 ## Phase 1 Context

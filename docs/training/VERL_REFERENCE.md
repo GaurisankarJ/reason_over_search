@@ -1,3 +1,11 @@
+---
+title: VERL REFERENCE
+tags: []
+source: internal
+created: 2026-05-01
+updated: 2026-05-06
+---
+
 # Verl Reference Settings (for porting to NeMo-RL)
 
 Stripped-down configuration reference distilled from the user's verl-tested launch scripts (`z_run_qwen3_0.6b_grpo_vllm_instruct_gpu_{1,2}_a100_80gb.sh` from `~/Documents/Obsidian/code/omega/research/verl_latest/`). Those scripts targeted **Qwen3-0.6B** + ReSearch-style retrieval; we cherry-pick the *transferable* settings (retriever HTTP contract, GRPO knobs, agent-loop pattern, rollout logging shape) and discard the model-size-specific tunings.
@@ -34,9 +42,10 @@ Cross-checked against `Search-R1/scripts/nq_hotpotqa/v0.2/train_grpo.sh` — the
 | Use KL loss? | `actor_rollout_ref.actor.use_kl_loss` | `True` | always-on in GRPO | match |
 | Group size | `actor_rollout_ref.rollout.n_agent` | `5` | `grpo.num_generations_per_prompt` | match |
 | State masking | `actor_rollout_ref.actor.state_masking` | `True` | automatic via role-based `token_loss_mask` | **equivalent, no config needed** (see below) |
-| Train batch size | `data.train_batch_size` | `512` | `policy.train_global_batch_size` | match |
-| PPO mini batch size | `actor_rollout_ref.actor.ppo_mini_batch_size` | `256` | n/a — different abstraction | NeMo-RL uses gradient accumulation differently; tune via `train_micro_batch_size` |
-| PPO micro batch size | `actor_rollout_ref.actor.ppo_micro_batch_size` | `64` | `policy.train_micro_batch_size` | start at 4 (NeMo default), raise post-first-run |
+| Train batch size (prompts/step) | `data.train_batch_size` | `512` (prompts) | `grpo.num_prompts_per_step` | **divergent** — ours is `102` (5× smaller; rollout fits on 1× A100); see [`PAPER_VS_OURS_TRAINING.md §7`](PAPER_VS_OURS_TRAINING.md#7-compute) |
+| Trajectories/step (derived) | n_agent × train_batch_size = `2560` | n/a | `policy.train_global_batch_size` | ours is `510` (= 102 × 5) — **5× fewer** |
+| PPO mini batch size | `actor_rollout_ref.actor.ppo_mini_batch_size` | `256` | n/a — different abstraction | verl: 10 gradient updates / step (2560 traj / 256 = 10); ours: 1 update / step (gbs == prompts × gen). The cheap fix to close that gap is `policy.train_global_batch_size: 51` (10 updates over 510 traj at no extra rollout cost); see [`docs/edu/BATCH_MATH.md`](../edu/BATCH_MATH.md). |
+| PPO micro batch size | `actor_rollout_ref.actor.ppo_micro_batch_size` | `64` | `policy.train_micro_batch_size` | ours: **`2`** (Qwen3.5-2B with `sequence_packing: false` required, `4` OOMs in get_logprobs); see [`training/fix/CHANGES.md`](../../training/fix/CHANGES.md) §5 |
 | Critic warmup | `trainer.critic_warmup` | `0` (no warmup) | n/a — GRPO has no critic | n/a |
 
 **KL loss type — `low_var_kl` ≡ NeMo-RL `k3`.** Both compute the Schulman 2020 k3 estimator: `exp(ref-log) - (ref-log) - 1` (verl: [`core_algos.py:kl_penalty`](https://github.com/PeterGriffinJin/Search-R1/blob/main/verl/trainer/ppo/core_algos.py); NeMo-RL: [`algorithms/utils.py:74-75`](../../training/nemo_rl/nemo_rl/algorithms/utils.py#L74-L75)). NeMo-RL clamps both input log-ratio (±20) and output (±10); verl clamps only output (±10). Functionally identical for normal training values. **NeMo-RL's default `kl_type="k3"` matches verl exactly — no override needed.**
@@ -47,7 +56,7 @@ These match what we have in [`PAPER_VS_OURS_TRAINING.md`](PAPER_VS_OURS_TRAINING
 
 ## 3. vLLM rollout knobs (verl-side; map to NeMo-RL `policy.generation.vllm_cfg.*`)
 
-These are starting values from the user's 80GB scripts. They were tuned for **0.6B**, so for **2B** you'll need to step them down on the memory-utilization side and up on the batch side once we observe actual VRAM usage:
+These are starting values from the user's 80GB scripts. They were tuned for **0.6B**; for our **Qwen3.5-2B** target, the actual values shipped in [`training/configs/grpo_qwen3.5_2b_{1,2}xa100.yaml`](../../training/configs/) are:
 
 | Knob | 1× A100 80GB (0.6B) | 2× A100 80GB (0.6B) | NeMo-RL key |
 |---|---|---|---|
@@ -59,7 +68,16 @@ These are starting values from the user's 80GB scripts. They were tuned for **0.
 | `enforce_eager` | `False` | `False` | match (CUDA graphs on) |
 | `enable_chunked_prefill` | `True` | `True` | match if available |
 
-For our **Qwen3.5-2B** target with paper's `max_response_length=500`, we can dial `vllm_max_model_len` down to `4096` (matching paper's max sequence length) and revisit `gpu_memory_utilization` upward toward `0.85` since 2B leaves more headroom than the verl scripts assumed.
+**Our shipped values for Qwen3.5-2B at paper's `max_response_length=500`** (configs at [`training/configs/`](../../training/configs/)):
+
+| Knob | 1× A100 80GB | 2× A100 80GB | NeMo-RL key |
+|---|---|---|---|
+| `gpu_memory_utilization` | `0.6` | `0.7` (TP=2 frees per-GPU weight footprint) | `policy.generation.vllm_cfg.gpu_memory_utilization` |
+| `max_model_len` | `4096` | `4096` | `policy.max_total_sequence_length` (vLLM inherits) |
+| `tensor_parallel_size` | `1` | `2` (rollout TP across both GPUs; training stays DDP at TP=1) | `policy.generation.vllm_cfg.tensor_parallel_size` |
+| `max_new_tokens` | `500` | `500` | `policy.generation.max_new_tokens` |
+
+Conservative first-run defaults; raise `gpu_memory_utilization` toward `0.8` after observing W&B `gpu_monitoring`. Revisit in [`NEMO_RL_KNOBS.md §8`](NEMO_RL_KNOBS.md#8-what-we-expect-to-retune-after-the-first-run).
 
 ## 4. FSDP / memory knobs (verl-side)
 
@@ -95,9 +113,9 @@ The user's verl scripts include knobs that **don't transfer** to NeMo-RL or that
 
 - `update_weights_bucket_megabytes=1024` — verl-internal weight-sync detail
 - `dataloader_num_workers=8` — NeMo-RL has its own dataloader config
-- `train_batch_size=8` and `ppo_mini_batch_size=8` — too small for our setup; stick with paper's `512` global batch
+- `train_batch_size=8` and `ppo_mini_batch_size=8` — too small for our setup; we use `102 prompts × 5 gen = 510` trajectories/step (vs paper's `512 × 5 = 2560`)
 - `MAX_RESPONSE_LENGTH=8192` — way above paper's `500`; we use the paper value
-- `total_epochs=2` and `test_freq=1000` — verl-specific schedule; we use paper's 500-step total
+- `total_epochs=2` and `test_freq=1000` — verl-specific schedule; we use **`grpo.max_num_steps: 1005`** (matches the published-checkpoint verl run; paper text's "500 steps" is superseded by the v0.2 yaml — see [`PAPER_VS_OURS_TRAINING.md §5`](PAPER_VS_OURS_TRAINING.md#5-validation-set--cadence))
 
 ## 7. Local-only files (not copied into the repo)
 

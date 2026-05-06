@@ -1,3 +1,11 @@
+---
+title: MILESTONE 2
+tags: []
+source: internal
+created: 2026-05-01
+updated: 2026-05-02
+---
+
 # Milestone 2: Training [Search-R1](https://www.alphaxiv.org/abs/2503.09516)
 
 > **Phase 1 status (2026-05-01):** Steps 1–8 complete. Pipeline ready for Phase 2.

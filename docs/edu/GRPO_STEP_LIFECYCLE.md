@@ -1,3 +1,11 @@
+---
+title: GRPO STEP LIFECYCLE
+tags: []
+source: internal
+created: 2026-05-02
+updated: 2026-05-02
+---
+
 # What happens in one GRPO training step
 
 > Educational deep-dive on the per-step compute flow during GRPO training. Concrete numbers for our 1× A100 80GB config (Qwen3.5-2B, group=5, global batch=512). Companion to [GPU_MEMORY.md](GPU_MEMORY.md) — that doc covers *what's in VRAM*; this one covers *what runs and when*.

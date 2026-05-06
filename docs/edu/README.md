@@ -1,3 +1,11 @@
+---
+title: README
+tags: []
+source: internal
+created: 2026-05-02
+updated: 2026-05-02
+---
+
 # Educational deep-dives
 
 Explainers that go deeper than the operational docs — for the moments where you want to understand *why* a particular knob exists, not just what to set it to.

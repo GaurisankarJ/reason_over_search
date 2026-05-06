@@ -1,3 +1,11 @@
+---
+title: NEMO RL KNOBS
+tags: []
+source: internal
+created: 2026-05-01
+updated: 2026-05-06
+---
+
 # NeMo-RL GPU Optimisation Knobs
 
 Reference for the NeMo-RL settings that matter when running GRPO on Qwen3.5-2B on **A100 80GB**. Sources: [NVIDIA-NeMo/RL repo](https://github.com/NVIDIA-NeMo/RL), [GRPO docs](https://docs.nvidia.com/nemo/rl/latest/about/algorithms/grpo.html), [GRPO on DeepScaler tutorial](https://docs.nvidia.com/nemo/rl/latest/guides/grpo-deepscaler.html), the [`grpo_math_1B.yaml` example](https://github.com/NVIDIA-NeMo/RL/blob/main/examples/configs/grpo_math_1B.yaml).
@@ -13,10 +21,10 @@ Reference for the NeMo-RL settings that matter when running GRPO on Qwen3.5-2B o
 | `policy.dtensor_cfg.activation_checkpointing` | DTensor backend | `false` | Gradient (activation) checkpointing — recomputes activations in backward, trades compute for memory. **Turn on for Qwen3.5-2B on A100 80GB at seq_len ≥ 4096.** |
 | `policy.dtensor_cfg.sequence_parallel` | DTensor backend | `false` | Splits activations along the sequence dim across TP ranks. Reduces per-GPU activation memory at the cost of extra all-gathers. |
 | `policy.dtensor_cfg.tensor_parallel_size` | DTensor backend | `1` | Tensor parallelism degree. For 2B on 1× A100 80GB, `1` is fine. For 2× A100, set `2` if memory pressure shows up; otherwise leave at `1` and use DDP. |
-| `policy.train_micro_batch_size` | Policy | `4` (1B example) | Per-GPU forward/backward chunk. Lower if OOM. |
+| `policy.train_micro_batch_size` | Policy | `4` (1B example); **ours: `2`** | Per-GPU forward/backward chunk. Qwen3.5-2B with `sequence_packing: false` (required, see below) needs `2` on A100 80GB — `4` OOMs in `get_logprobs`. Drop to `1` if still OOM under group=5. |
 | `policy.generation_batch_size` | Policy | `32` (1B example) | Rollout batch size during vLLM generation. |
 | `policy.max_total_sequence_length` | Policy | `512` (1B), `16384` (32B) | Hard cap on prompt + response length. **Set to `4096` for Search-R1 parity.** |
-| Sequence packing | DTensor | varies | Concatenates short sequences to fill the max length, raising effective throughput. Enable when most sequences are short. |
+| `policy.sequence_packing.enabled` | DTensor | `true` | Concatenates short sequences to fill the max length, raising effective throughput. **Must be `false` for Qwen3.5** — interleaved GatedDeltaNet (Mamba-style) layers crash with `CUDA illegal memory access` in `torch_chunk_gated_delta_rule` during `get_logprobs` when sequences are packed. See [`training/fix/CHANGES.md`](../../training/fix/CHANGES.md) §5. Replacement is `policy.dynamic_batching.enabled: true` (token-budget micro-batches). |
 | `policy.precision` | Policy | `"bfloat16"` | Mixed precision; keep at bf16 on A100. |
 
 **Multi-node thresholds** ([NeMo-RL GRPO docs](https://docs.nvidia.com/nemo/rl/latest/about/algorithms/grpo.html)): on 8× A100 80GB, **1 node for 8K** sequence length, **2 nodes for 16–24K**. Our 4K target fits well within 1× A100, so we do not need multi-node.
@@ -29,7 +37,7 @@ Reference for the NeMo-RL settings that matter when running GRPO on Qwen3.5-2B o
 |---|---|---|---|
 | `policy.generation.backend` | vLLM | `"vllm"` | Inference backend for rollouts. |
 | `policy.generation.vllm_cfg.tensor_parallel_size` | vLLM | `1` | TP for the rollout vLLM workers. Must divide `cluster.gpus_per_node`. |
-| `policy.generation.vllm_cfg.gpu_memory_utilization` | vLLM | `0.6` | Fraction of VRAM vLLM reserves for KV cache. **Sweet spot for a ~3B model on 80GB is ~0.8** ([GRPO+LoRA handbook](https://huggingface.co/blog/Weyaxi/engineering-handbook-grpo-lora-with-verl)). At 2B with 4K seq we should comfortably push 0.8. |
+| `policy.generation.vllm_cfg.gpu_memory_utilization` | vLLM | `0.6` | Fraction of VRAM vLLM reserves for KV cache. Conservative defaults shipped: `0.6` on 1× A100, `0.7` on 2× A100. Sweet spot for a ~3B model on 80GB is ~0.8 ([GRPO+LoRA handbook](https://huggingface.co/blog/Weyaxi/engineering-handbook-grpo-lora-with-verl)); raise after observing W&B `gpu_monitoring`. |
 | `policy.generation.vllm_cfg.enforce_eager` | vLLM | `false` | Disables CUDA graphs. Keep `false` for performance; flip to `true` only if hitting graph-related issues. |
 | `policy.generation.max_new_tokens` | vLLM | `512` | Per-rollout response cap. **Set to `500` for Search-R1 parity** (paper's max response length). |
 | `policy.generation.temperature` | vLLM | `1.0` | Rollout sampling temperature. **`1.0`** matches Search-R1 training rollouts. (Eval is greedy; that's the eval pipeline, not training.) |
@@ -106,12 +114,12 @@ The actual configs live at [`training/configs/grpo_qwen3.5_2b_{1,2}xa100.yaml`](
 | `policy.model_name` | `Qwen/Qwen2.5-1.5B` | `Qwen/Qwen3.5-2B-Base` | same | M2 target |
 | `policy.max_total_sequence_length` | `512` | `4096` | same | [paper] verl `max_prompt_length=4096` |
 | `policy.train_global_batch_size` | `512` | `510` | same | matches `num_prompts_per_step × num_generations_per_prompt` |
-| `policy.train_micro_batch_size` | `4` | `4` | `4` | identical (DDP doesn't reduce per-GPU memory) |
+| `policy.train_micro_batch_size` | `4` | `2` | `2` | Qwen3.5-2B with `sequence_packing: false` (required, see §1) — `4` OOMs in get_logprobs |
 | `policy.dtensor_cfg.activation_checkpointing` | `false` | `true` | `true` | [memory] bf16 + 4k seq + group=5 pressures activations |
 | `policy.generation.max_new_tokens` | `512` (≈ max_seq) | `500` | same | [paper] verl `max_response_length=500` |
 | `policy.generation.vllm_cfg.tensor_parallel_size` | `1` | `1` | `2` | [memory] split rollout weights on 2× A100 |
 | `policy.generation.vllm_cfg.gpu_memory_utilization` | `0.6` | `0.6` | `0.7` | conservative defaults; raise after observing W&B `gpu_monitoring` |
-| `grpo.num_prompts_per_step` | `32` | `102` | same | [paper] 102 × 5 = 510 ≈ verl's 512 trajectories |
+| `grpo.num_prompts_per_step` | `32` | `102` | same | [paper] 102 × 5 = 510 ≈ verl's 512 prompts × 5 = 2560 trajectories — **5× fewer trajectories per step than verl**; see PAPER_VS_OURS_TRAINING.md §7 |
 | `grpo.num_generations_per_prompt` | `16` | `5` | same | [paper] verl `n_agent=5` |
 | `grpo.max_num_steps` | `1000000` | `1005` | same | [paper] verl `total_training_steps=1005` |
 | `grpo.val_period` | `10` | **`0` (first-pass; planned 100)** | same | first-pass disables validation; `100` matches verl `test_freq` once re-enabled |

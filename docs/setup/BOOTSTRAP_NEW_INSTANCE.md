@@ -1,3 +1,11 @@
+---
+title: BOOTSTRAP NEW INSTANCE
+tags: []
+source: internal
+created: 2026-05-01
+updated: 2026-05-02
+---
+
 # Bootstrap a new instance
 
 Recreate the full `reason_over_search` runtime on a fresh box (Vast.ai, in-house GPU, or anywhere else) from scratch.

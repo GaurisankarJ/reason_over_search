@@ -1,3 +1,11 @@
+---
+title: RETRIEVER CONCURRENCY
+tags: []
+source: internal
+created: 2026-05-01
+updated: 2026-05-01
+---
+
 # Retriever Concurrency Audit
 
 Audit of the FastAPI retriever service ([`local_retriever/retriever_serving.py`](../../local_retriever/retriever_serving.py)) for concurrent-read correctness and throughput. For the architectural overview see [INDEX_ARCHITECTURE.md](INDEX_ARCHITECTURE.md); for index/RAM/recall tradeoffs see [RETRIEVER_INDEXING.md](RETRIEVER_INDEXING.md).

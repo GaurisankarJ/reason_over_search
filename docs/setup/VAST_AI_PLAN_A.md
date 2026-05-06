@@ -1,3 +1,11 @@
+---
+title: VAST AI PLAN A
+tags: []
+source: internal
+created: 2026-05-01
+updated: 2026-05-01
+---
+
 # Plan A on Vast.ai — cost comparison (≤ 24 h target)
 
 Goal: run **Plan A** (5 seeds × 7 datasets × 2 variants = 70 runs, ~517 K examples) end-to-end in **≤ 1 day**, as cheaply as possible.

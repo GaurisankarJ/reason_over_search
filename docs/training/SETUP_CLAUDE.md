@@ -1,3 +1,11 @@
+---
+title: SETUP CLAUDE
+tags: []
+source: internal
+created: 2026-05-02
+updated: 2026-05-06
+---
+
 # SETUP_CLAUDE.md — fresh-Vast bring-up, one-step
 
 > **For Claude (the agent):** this doc is your runbook. The user has just
@@ -79,7 +87,7 @@ Options (single-select):
 - `smoke hybrid × qwen_native` — Qwen3.5-2B (hybrid soft-switch), qwen-native
 - `smoke hybrid × paper` — Qwen3.5-2B (hybrid), paper template
 - `smoke all 4` — run all four sequentially (~30 min total)
-- `full base × qwen_native` — 1005 steps; ~17 d on this 1× A100 (see docs/training/SMOKE_RESULTS.md)
+- `full base × qwen_native` — 1005 steps; **11–17 d** on this 1× A100 (see docs/training/SMOKE_RESULTS_2026-05-06.md "Full-training wall-clock + cost")
 - `full custom` — they'll tell you variant + arm + seed + steps
 
 Map their answer:
@@ -155,7 +163,10 @@ If the user ran the four smoke combos and wants the consolidated report:
 
 ```bash
 python3 training/scripts/extract_smoke_samples.py
-# wrote /workspace/reason_over_search/docs/training/SMOKE_RESULTS.md
+# writes /workspace/reason_over_search/docs/training/SMOKE_RESULTS.md
+# (rename it to docs/training/SMOKE_RESULTS_<UTC-DATE>.md before committing
+#  and update CONVERSATION_CONTEXT.md to point at it; previous dated runs live
+#  under docs/archive/training/)
 ```
 
 The script picks 8–9 samples per combo (mix of correct + incorrect),
@@ -183,5 +194,5 @@ retrieval-call counts.
 - Bootstrap on a fresh Vast box (compile fallback, HF unavailable): **~35 min** (v2 venv compile is ~25 min).
 - Bootstrap on a re-used box: **< 1 min**.
 - Smoke combo (2 steps × 4 prompts × group 5): **~5 min** once v2 venv exists.
-- Full Phase-2 run (1005 steps × 510 trajectories) on this 1× A100: **~17 d** linear, ~11 d sub-linear.
-- Recommended hardware for full runs: **1× H100 80 GB SXM** (~8 d, ~$400/run). See `docs/training/SMOKE_RESULTS.md` "Vast sizing" section.
+- Full Phase-2 run (1005 steps × 510 trajectories) on this 1× A100: **~17 d** linear, ~11 d sub-linear; ~$300–490 / run at $1.20/h.
+- Recommended hardware for full runs: **1× H100 80 GB SXM** (~5–8.5 d, ~$240–410/run). See [`docs/training/SMOKE_RESULTS_2026-05-06.md` "Full-training wall-clock + cost"](SMOKE_RESULTS_2026-05-06.md#full-training-wall-clock--cost-phase-2-real-config).

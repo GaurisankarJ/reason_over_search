@@ -1,3 +1,11 @@
+---
+title: FROZEN CONFIG v1
+tags: []
+source: internal
+created: 2026-05-01
+updated: 2026-05-01
+---
+
 # Plan B v1 — frozen reproducer config
 
 > **Status (2026-05-01): locked.** This is the single source of truth for the Plan B v1 setup that produced [RESULTS_PLAN_B.md](RESULTS_PLAN_B.md) and serves as the configuration Plan A will scale to 5 seeds × full datasets. Anything that contradicts this file in another doc is wrong; fix the other doc.

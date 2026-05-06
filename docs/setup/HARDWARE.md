@@ -1,3 +1,11 @@
+---
+title: HARDWARE
+tags: []
+source: internal
+created: 2026-05-01
+updated: 2026-05-01
+---
+
 # Hardware Constraints & Accelerator Comparison
 
 ## This Machine (snapshot 2026-04-27)

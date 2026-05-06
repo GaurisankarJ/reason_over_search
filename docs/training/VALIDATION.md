@@ -1,3 +1,11 @@
+---
+title: VALIDATION
+tags: []
+source: internal
+created: 2026-05-01
+updated: 2026-05-06
+---
+
 # Validation Set & Cadence
 
 In-loop validation during GRPO training. Mirrors Search-R1's validation setup so the training dynamics are comparable to the paper.
@@ -12,9 +20,18 @@ Sources: [Search-R1 arXiv 2503.09516](https://arxiv.org/abs/2503.09516), [Search
 
 ## 1. Training corpus (for context)
 
-Search-R1 trains on a **mix of NQ-train and HotpotQA-train**, both from the standard FlashRAG / Search-R1 distribution. We use the same files in [`data/`](../../data/) (already present from Milestone 1).
+Search-R1 trains on a **mix of NQ-train and HotpotQA-train**, both from the standard FlashRAG / Search-R1 distribution. We use the same files in [`data/`](../../data/) (already present from Milestone 1). Training corpus committed to LFS at [`data/training/nq_hotpotqa_train/`](../../data/training/nq_hotpotqa_train/).
 
-Total training questions: ~170k. With verl's 1005 steps × global batch 512, the loop sees ~514k question instances — i.e., roughly 3 epochs over the training mix. (Paper text says "500 steps" but the published-checkpoint verl run is 1005 — see [`PAPER_VS_OURS_TRAINING.md`](PAPER_VS_OURS_TRAINING.md) §5.)
+Verified row counts (`pyarrow.parquet.read_metadata`):
+
+| Split | Rows |
+|---|---:|
+| `train` | 169,615 |
+| `test` (in-loop val + final eval) | 51,713 |
+
+**Paper / verl regime.** With `train_batch_size=512` × `n_agent=5` (= 2560 trajectories/step) × 1005 steps, the loop sees `512 × 1005 = 514,560` prompts — ~3.03× over the 169,615-row corpus (roughly 3 epochs). (Paper text says "500 steps" but the published-checkpoint verl run is 1005; see [`PAPER_VS_OURS_TRAINING.md`](PAPER_VS_OURS_TRAINING.md) §5.)
+
+**Our (NeMo-RL) regime.** With `num_prompts_per_step=102` × `num_generations_per_prompt=5` (= 510 trajectories/step; 5× fewer than verl) × 1005 steps, the loop sees `102 × 1005 = 102,510` prompts — **~0.604× over the corpus, well under 1 epoch**. Smaller rollout footprint per step is the price we pay to fit on 1× A100 80GB; full breakdown in [`PAPER_VS_OURS_TRAINING.md §7`](PAPER_VS_OURS_TRAINING.md#7-compute) and [`docs/edu/BATCH_MATH.md`](../edu/BATCH_MATH.md).
 
 ## 2. Validation dataset
 

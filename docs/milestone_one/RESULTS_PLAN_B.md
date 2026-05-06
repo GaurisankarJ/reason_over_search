@@ -1,3 +1,11 @@
+---
+title: RESULTS PLAN B
+tags: []
+source: internal
+created: 2026-05-01
+updated: 2026-05-01
+---
+
 # Search-R1 evaluation results
 
 _Source: `/workspace/reason_over_search/evaluation_search_r1/results/_archive_v1` (14 runs)_

@@ -1,0 +1,5 @@
+# Ignore all run output folders — large training artifacts, not committed to git.
+# The folder structure is preserved; file contents are local-only.
+*
+!.gitignore
+!README.md

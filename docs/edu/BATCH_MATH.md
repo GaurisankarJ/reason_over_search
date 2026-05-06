@@ -1,3 +1,11 @@
+---
+title: BATCH MATH
+tags: []
+source: internal
+created: 2026-05-02
+updated: 2026-05-02
+---
+
 # Batch math — `gbs`, `num_prompts_per_step`, `num_generations_per_prompt`
 
 > Educational deep-dive on the three batch-size knobs in our GRPO config and how they interact. The "convention" `gbs == num_prompts_per_step × num_generations_per_prompt` shows up in upstream NeMo-RL configs and in our YAMLs without much explanation — this doc is the explanation.

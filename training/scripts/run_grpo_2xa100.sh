@@ -9,13 +9,15 @@
 #   bash training/scripts/run_grpo_2xa100.sh \
 #        --variant {base,hybrid} \
 #        --seed N \
-#        [--arm {qwen_native,paper}]
+#        [--arm {qwen_native,paper}] \
+#        [-- HYDRA_OVERRIDE_1 HYDRA_OVERRIDE_2 ...]
 set -euo pipefail
 
 # ---- defaults ----
 VARIANT="base"
 SEED="42"
 ARM="qwen_native"
+EXTRA_OVERRIDES=()
 
 # ---- argparse ----
 while [[ $# -gt 0 ]]; do
@@ -23,6 +25,7 @@ while [[ $# -gt 0 ]]; do
         --variant) VARIANT="$2"; shift 2 ;;
         --seed) SEED="$2"; shift 2 ;;
         --arm) ARM="$2"; shift 2 ;;
+        --) shift; EXTRA_OVERRIDES=("$@"); break ;;
         -h|--help) sed -n '2,15p' "$0"; exit 0 ;;
         *) echo "unknown arg: $1" >&2; exit 2 ;;
     esac
@@ -66,7 +69,10 @@ OVERRIDES=(
     "policy.model_name=${MODEL}"
     "grpo.seed=${SEED}"
     "data.train.arm=${ARM}"
-    "data.validation.arm=${ARM}"
+    # NOTE: data.validation.arm is intentionally NOT overridden here. The first-pass
+    # config has data.validation: null, and Hydra cannot override a nested key under a
+    # null parent (errors with `ConfigCompositionException`). When validation is
+    # re-enabled per VALIDATION.md §7, restore this line.
     "env.search_r1.arm=${ARM}"
     "logger.wandb.name=${RUN_NAME}"
     "checkpointing.checkpoint_dir=${CKPT_DIR}"
@@ -88,4 +94,5 @@ echo "[run_grpo_2xa100] ckpt=${CKPT_DIR}"
 
 exec "${VENV_PYTHON}" training/scripts/run_grpo.py \
     --config=training/configs/grpo_qwen3.5_2b_2xa100.yaml \
-    "${OVERRIDES[@]}"
+    "${OVERRIDES[@]}" \
+    "${EXTRA_OVERRIDES[@]}"

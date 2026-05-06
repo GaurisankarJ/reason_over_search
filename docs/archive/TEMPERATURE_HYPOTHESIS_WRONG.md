@@ -1,3 +1,11 @@
+---
+title: TEMPERATURE HYPOTHESIS WRONG
+tags: []
+source: internal
+created: 2026-04-28
+updated: 2026-05-01
+---
+
 # Post-mortem: "paper eval uses temperature=1.0" was wrong
 
 **Date**: 2026-04-28

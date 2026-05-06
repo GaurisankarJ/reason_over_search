@@ -1,3 +1,11 @@
+---
+title: README
+tags: []
+source: internal
+created: 2026-05-01
+updated: 2026-05-01
+---
+
 # Archive — discarded experiments and historical snapshots
 
 Index of everything we tried that did **not** make it into the locked Plan B v1 config (see [../milestone_one/FROZEN_CONFIG_v1.md](../milestone_one/FROZEN_CONFIG_v1.md)) or that is preserved for the historical record.

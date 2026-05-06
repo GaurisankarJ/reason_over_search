@@ -1,3 +1,11 @@
+---
+title: DISCARDED ABLATIONS
+tags: []
+source: internal
+created: 2026-04-28
+updated: 2026-05-01
+---
+
 # Discarded ablations — autoresearch loop
 
 History of pipeline ablations tried on `experiment_ros/<tag>` branches that did **not** survive the keep/discard threshold (improvement < ~2 pp EM and within single-seed noise on n=125 Bamboogle/instruct).

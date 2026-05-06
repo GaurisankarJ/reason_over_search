@@ -1,3 +1,11 @@
+---
+title: VAST INSTANCE SETUP
+tags: []
+source: internal
+created: 2026-05-01
+updated: 2026-05-02
+---
+
 # Vast.ai Instance Setup — From Zero to Running Eval
 
 End-to-end walkthrough to bring up a new Vast.ai instance with the corpus, indexes, encoder, GRPO checkpoints, and eval datasets all staged. After this, the box can serve the retriever, run SGLang, and execute `scripts/run_one.sh` for any (variant, dataset, seed) combo.

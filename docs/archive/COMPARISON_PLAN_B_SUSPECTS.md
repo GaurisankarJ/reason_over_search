@@ -1,3 +1,11 @@
+---
+title: COMPARISON PLAN B SUSPECTS
+tags: []
+source: internal
+created: 2026-04-28
+updated: 2026-05-01
+---
+
 # Plan B v0 — historical suspect ranking and next-step plan
 
 This is the snapshot of the suspect ranking and recommended next-steps section of [docs/COMPARISON_PLAN_B.md](../milestone_one/COMPARISON_PLAN_B.md) as it stood before the v1 sweep convergence (2026-04-28). Kept here as the historical reasoning trail. **All hypotheses below are now resolved** — see [MILESTONE_1.md](../milestone_one/MILESTONE_1.md) and [PAPER_VS_OURS_AUDIT.md](../eval/PAPER_VS_OURS_AUDIT.md) for the converged state.

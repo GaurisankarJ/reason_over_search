@@ -1,3 +1,11 @@
+---
+title: RETRIEVER INDEXING
+tags: []
+source: internal
+created: 2026-05-01
+updated: 2026-05-02
+---
+
 # Indexing & Retrieval Internals
 
 How dense retrieval is wired up here, what the index choices cost in RAM/VRAM/recall/latency, and the experiments worth running before committing to a swap.
