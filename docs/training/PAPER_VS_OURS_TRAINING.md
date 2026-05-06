@@ -120,11 +120,11 @@ Paper values from Appendix B.2; verl values from [`Search-R1/scripts/nq_hotpotqa
 | Total gradient updates | ~10,050 | ~10,050 | ~1,005 | ~1,005 | ~1,005 | ~1,005 |
 | Per-step time, linear est. | n/a | ≈ 25.5 × 57 s × 5 ≈ 121 min | **24 min** (= 25.5 × 57 s) | 14 min | 12 min | 10 min |
 | Per-step time, sub-linear est. | n/a | ~75 min | ~15 min | ~9 min | ~7 min | ~6 min |
-| **Wall-clock / run** | ~24 h | **~250–750 h** (10–30 d) | **17 d / 11 d** = 264–408 h | **9.5 d / 6.5 d** = 156–228 h | **8.5 d / 5 d** = 120–204 h | **7 d / 4 d** = 96–168 h |
-| GPU-hours / run | ~192 GPU-h | 250–750 GPU-h | 264–408 GPU-h | 312–456 GPU-h | 120–204 GPU-h | 96–168 GPU-h |
+| **Wall-clock / run** | ~24 h | **~1300–2000 h** (55–85 d) | **17 d / 11 d** = 264–408 h | **9.5 d / 6.5 d** = 156–228 h | **8.5 d / 5 d** = 120–204 h | **7 d / 4 d** = 96–168 h |
+| GPU-hours / run | ~192 GPU-h | 1300–2000 GPU-h | 264–408 GPU-h | 312–456 GPU-h | 120–204 GPU-h | 96–168 GPU-h |
 | Vast on-demand $/hr (typical, ±50%) | n/a | ~$1.20 | ~$1.20 | ~$2.40 (2× rate) | ~$2.00 | ~$2.80 |
-| **$ / run** | n/a | **$300–900** (= 250 × $1.20 to 750 × $1.20) | **$300–490** (= 264 × $1.20 to 408 × $1.20) | **$370–550** (= 156 × $2.40 to 228 × $2.40) | **$240–410** (= 120 × $2.00 to 204 × $2.00) | **$270–470** (= 96 × $2.80 to 168 × $2.80) |
-| Recommended for Phase 2 | n/a | **infeasible** (>$1k/run, 30 d) | viable but slow | solid alternative | **best $/run** | fastest, marginal $$ |
+| **$ / run** | n/a | **$1600–2400** (= 1300 × $1.20 to 2000 × $1.20) | **$300–490** (= 264 × $1.20 to 408 × $1.20) | **$370–550** (= 156 × $2.40 to 228 × $2.40) | **$240–410** (= 120 × $2.00 to 204 × $2.00) | **$270–470** (= 96 × $2.80 to 168 × $2.80) |
+| Recommended for Phase 2 | n/a | **infeasible** (>$1.5k/run, 55–85 d) | viable but slow | solid alternative | **best $/run** | fastest, marginal $$ |
 
 ### Derivation
 
