@@ -12,6 +12,13 @@ local_retriever/models/
 evaluation_search_r1/search_r1_base_model/
 evaluation_search_r1/search_r1_instruct_model/
 
+# M3 evaluation: Qwen3-0.6B model checkpoints (HF safetensors, ~1.5 GB each)
+eval/qwen_3_0.6b/
+eval/qwen_3_0.6b_v0/
+
+# evaluation_research/: results dir (per-run artifacts; aggregated reports live in docs/)
+evaluation_research/results/
+
 # Environment
 /.venv
 local_retriever/.venv
