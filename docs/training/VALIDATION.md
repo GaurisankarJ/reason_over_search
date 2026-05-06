@@ -1,3 +1,11 @@
+---
+title: VALIDATION
+tags: []
+source: internal
+created: 2026-05-01
+updated: 2026-05-06
+---
+
 # Validation Set & Cadence
 
 In-loop validation during GRPO training. Mirrors Search-R1's validation setup so the training dynamics are comparable to the paper.

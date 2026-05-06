@@ -1,3 +1,11 @@
+---
+title: INDEX ARCHITECTURE
+tags: []
+source: internal
+created: 2026-05-01
+updated: 2026-05-02
+---
+
 # Index Architecture
 
 How the retriever service is wired up: components, query lifecycle, build pipeline, memory layout. For the *what-to-pick* side (RAM/VRAM/recall/latency tradeoffs across Flat/HNSW/IVF/PQ) see [RETRIEVER_INDEXING.md](RETRIEVER_INDEXING.md). For known concurrency issues in the current implementation (sync calls in async handlers, RAM duplication) see [RETRIEVER_CONCURRENCY.md](RETRIEVER_CONCURRENCY.md).

@@ -1,3 +1,11 @@
+---
+title: PHASE 2 RUNBOOK
+tags: []
+source: internal
+created: 2026-05-02
+updated: 2026-05-06
+---
+
 # Milestone 2 Phase 2 — Runbook
 
 Concrete sequence to run Search-R1 GRPO training on Vast.ai. Phase 1 (build the training pipeline) is documented in [MILESTONE_2.md](MILESTONE_2.md) §"Step-by-step"; this runbook covers Phase 2 (actually run training + smoke-eval).

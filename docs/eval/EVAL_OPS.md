@@ -1,3 +1,11 @@
+---
+title: EVAL OPS
+tags: []
+source: internal
+created: 2026-05-01
+updated: 2026-05-02
+---
+
 # Evaluation Operations
 
 How to run the Search-R1 evaluation sweeps and where the wall-clock goes. For *what* the sweep validates and the per-dataset numbers, see [REPRODUCIBILITY.md](REPRODUCIBILITY.md) and [../milestone_one/RESULTS_PLAN_B.md](../milestone_one/RESULTS_PLAN_B.md). Hardware reference is in [../setup/HARDWARE.md](../setup/HARDWARE.md).

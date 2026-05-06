@@ -1,3 +1,11 @@
+---
+title: RESULTS v0
+tags: []
+source: internal
+created: 2026-05-04
+updated: 2026-05-04
+---
+
 # Results v0: First Ablation Block (W&B project `research`)
 
 **Date compiled**: 2026-05-03  

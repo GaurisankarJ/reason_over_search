@@ -1,3 +1,11 @@
+---
+title: GPU MEMORY
+tags: []
+source: internal
+created: 2026-05-02
+updated: 2026-05-02
+---
+
 # What's in GPU memory during GRPO training
 
 > Educational deep-dive on the memory layout of a colocated GRPO step. Concrete numbers for our 1× A100 80GB config (Qwen3.5-2B, seq=4096, group=5). Reading this is *not* required to run training; it's here for when something OOMs and you need to know what to evict.

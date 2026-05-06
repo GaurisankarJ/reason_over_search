@@ -1,3 +1,11 @@
+---
+title: CONVERSATION CONTEXT
+tags: []
+source: internal
+created: 2026-05-06
+updated: 2026-05-06
+---
+
 # Training: Conversation Context (for Claude Code bootstrap)
 
 **Read this first when a fresh agent session starts on training work.** Then read the file map below in order; you'll have full context in ~30 minutes.

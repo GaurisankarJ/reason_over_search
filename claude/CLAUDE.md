@@ -172,7 +172,19 @@ Single RTX 4090 (24 GB), AMD EPYC 7642 (48c/96t), 503 GB RAM. No NVLink, single 
 - **For autoresearch loops** (`experiment_ros/<tag>` branches): the editable surface is `active_pipeline.py`, `parser.py`, `templates.py`, `basic_config.yaml`.
 - **Single-run noise is real** (~3 pp at n=125 on Bamboogle when temperature>0). Treat improvements <2 pp EM with skepticism; confirm with a second seed or use temp=0 (greedy).
 - **Cite paper sections by URL** when discussing results, especially `arxiv.org/html/2503.09516v5#A6` (Table 3, the GRPO comparison).
-- When in doubt about a dataset split or a Search-R1 implementation detail, check the official repo (`github.com/PeterGriffinJin/Search-R1`) before guessing; and ask me before invoking AlphaXiv or other web tools that publish content.
+- When in doubt about a dataset split or a Search-R1 implementation detail, check the official repo (`github.com/PeterGriffinJin/Search-R1`) before guessing. You can freely fetch from arXiv, AlphaXiv, arxiv.org, academic sites, and GitHub to check paper status and content.
+- **After important milestones or learnings, update the relevant sources of truth:** CLAUDE.md (this file, the main narrative), milestone files (`docs/milestone_one/MILESTONE_1.md`, `docs/milestone_two/MILESTONE_2.md`), TODO tracking (`docs/TODO_*.md`), and conversation-context snapshots (`docs/report/CONVERSATION_CONTEXT.md`, `docs/training/CONVERSATION_CONTEXT.md`, `docs/research/CONVERSATION_CONTEXT.md`, `docs/internship/CONVERSATION_CONTEXT.md`). The project moves fast; stale snapshots mislead the next session. Keep these in sync; they are the persistent record.
+- **When working on the CV, LinkedIn, or job-search strand**, also update `docs/sankar/00_CONVERSATION_CONTEXT.md` and `docs/internship/CONVERSATION_CONTEXT.md`.
+
+### Wiki workflow (Karpathy-style)
+
+`docs/` is run as a personal wiki. Schema and conventions are in [`docs/SCHEMA.md`](../docs/SCHEMA.md); read it before doing any of the cycles below. Three cycles drive maintenance:
+
+- **Ingest cycle**: when the human drops a source into [`docs/raw/`](../docs/raw/) (papers, screenshots, fetched articles, supervisor emails), read it, file distilled facts into the right topical pages (creating new ones if substantial), and append a one-line entry to [`docs/log.md`](../docs/log.md) citing the raw path and the pages touched.
+- **Query cycle**: when the human asks a synthesis question, read the relevant section's index (`README.md` or `CONVERSATION_CONTEXT.md`) first, then search topical subdirs and answer with `file:line` citations. If the answer is non-trivial and likely to recur, file it back as a new page or section and log it.
+- **Lint cycle**: run `python scripts/wiki_lint.py docs/` before significant docs PRs (or on request). Reports broken links, orphans, stale claims, and frontmatter validity. No auto-fix; triage manually.
+
+Conventions: relative markdown links (no `[[wikilinks]]`); YAML frontmatter on every page outside `raw/` (`title`, `tags`, `source`, `created`, `updated`); seed new pages with `python scripts/wiki_frontmatter_init.py`. The `log.md` is append-only (newest day on top); never rewrite past entries.
 
 ### Gotchas to remember
 

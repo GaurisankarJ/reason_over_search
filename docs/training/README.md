@@ -1,3 +1,11 @@
+---
+title: README
+tags: []
+source: internal
+created: 2026-05-01
+updated: 2026-05-06
+---
+
 # Training docs
 
 This directory documents the training-side reproduction of [Search-R1](https://www.alphaxiv.org/abs/2503.09516) on **Qwen3.5-2B** via [NeMo-RL](https://github.com/NVIDIA-NeMo/RL). Owned by [Milestone 2](../milestone_two/MILESTONE_2.md).

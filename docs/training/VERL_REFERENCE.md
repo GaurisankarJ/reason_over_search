@@ -1,3 +1,11 @@
+---
+title: VERL REFERENCE
+tags: []
+source: internal
+created: 2026-05-01
+updated: 2026-05-06
+---
+
 # Verl Reference Settings (for porting to NeMo-RL)
 
 Stripped-down configuration reference distilled from the user's verl-tested launch scripts (`z_run_qwen3_0.6b_grpo_vllm_instruct_gpu_{1,2}_a100_80gb.sh` from `~/Documents/Obsidian/code/omega/research/verl_latest/`). Those scripts targeted **Qwen3-0.6B** + ReSearch-style retrieval; we cherry-pick the *transferable* settings (retriever HTTP contract, GRPO knobs, agent-loop pattern, rollout logging shape) and discard the model-size-specific tunings.

@@ -1,3 +1,11 @@
+---
+title: README
+tags: []
+source: internal
+created: 2026-05-04
+updated: 2026-05-06
+---
+
 # `docs/report/`
 
 Thesis-facing record. Files at the top of this list are the canonical entry points; everything below is supporting detail.

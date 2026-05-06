@@ -1,3 +1,11 @@
+---
+title: CODE SETUP v0
+tags: []
+source: internal
+created: 2026-05-04
+updated: 2026-05-04
+---
+
 # Code Setup v0 — ReSearch Port: What Changed vs the Paper
 
 **Date**: 2026-05-03  

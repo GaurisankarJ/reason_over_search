@@ -1,3 +1,11 @@
+---
+title: NEMO RL KNOBS
+tags: []
+source: internal
+created: 2026-05-01
+updated: 2026-05-06
+---
+
 # NeMo-RL GPU Optimisation Knobs
 
 Reference for the NeMo-RL settings that matter when running GRPO on Qwen3.5-2B on **A100 80GB**. Sources: [NVIDIA-NeMo/RL repo](https://github.com/NVIDIA-NeMo/RL), [GRPO docs](https://docs.nvidia.com/nemo/rl/latest/about/algorithms/grpo.html), [GRPO on DeepScaler tutorial](https://docs.nvidia.com/nemo/rl/latest/guides/grpo-deepscaler.html), the [`grpo_math_1B.yaml` example](https://github.com/NVIDIA-NeMo/RL/blob/main/examples/configs/grpo_math_1B.yaml).

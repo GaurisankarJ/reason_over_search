@@ -1,3 +1,11 @@
+---
+title: ORIGINAL PLAN A
+tags: []
+source: internal
+created: 2026-05-04
+updated: 2026-05-04
+---
+
 ## Abstract
 
 Large Language Models (LLMs) have demonstrated enhanced reasoning abilities solely through reinforcement learning (RL) in verifiable domains such as mathematics and programming. Recent studies have shed light on LLMs' capabilities for interacting with the environment through tool use to solve complex problems. In this study, we will explore whether integrating external tool use with reasoning is a suitable approach to achieve domain adaptation for smaller LLMs (1B to 3B). To achieve this, we wish to explore 1) reward model design (binary vs soft vs reward-free vs hybrid), 2) incorporating meta-reasoning like `<tool_use>...</tool_use>` along with `<thinking>...</thinking>` in the reasoning process, and 3) curriculum learning and transfer learning. We aim to verify if advanced domain-based reasoning, such as reflection, verification and self-correction, develops in small LLMs during the reinforcement learning (RL) process.

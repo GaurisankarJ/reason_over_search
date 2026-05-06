@@ -1,3 +1,11 @@
+---
+title: RNG
+tags: []
+source: internal
+created: 2026-05-02
+updated: 2026-05-02
+---
+
 # RNG — random number generators
 
 > Background concept that [`SEED.md`](SEED.md) assumes you know. Read this first if "what is an RNG?" is the question.

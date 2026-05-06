@@ -1,3 +1,11 @@
+---
+title: SURVEY OVERFLOW
+tags: []
+source: internal
+created: 2026-05-06
+updated: 2026-05-06
+---
+
 # SURVEY_OVERFLOW: Adjacent Papers Not Discussed in Main Prose
 
 > Companion to [SURVEY.md](SURVEY.md) and [SURVEY_FOCUSED.md](SURVEY_FOCUSED.md). These 15 papers are in the bibliography but were not part of the thematic narrative of the main survey, nor are they directly project-critical for the small-LM search-augmented thesis. They are kept here as one-off cards for completeness — useful background, possible future citations, or alternative directions to explore later.

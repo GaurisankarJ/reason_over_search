@@ -1,3 +1,11 @@
+---
+title: CONVERSATION CONTEXT
+tags: []
+source: internal
+created: 2026-05-06
+updated: 2026-05-06
+---
+
 # Conversation Context: Research Strand
 
 > Living snapshot of the literature + algorithm + systems strand that feeds the M2 ablation plan. Update this when a load-bearing decision changes; freeze older state below the line.

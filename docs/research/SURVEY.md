@@ -1,3 +1,11 @@
+---
+title: SURVEY
+tags: []
+source: internal
+created: 2026-05-06
+updated: 2026-05-06
+---
+
 # Reinforcement Learning with Verifiable Rewards: A Consolidated Survey
 
 > A unified treatment of the RLVR literature spanning foundations, verifier design, optimization, self-verification, multi-task hybrid rewards, domain extensions, tool-use integration, theoretical foundations, and open problems. Coverage current through Q1 2026.

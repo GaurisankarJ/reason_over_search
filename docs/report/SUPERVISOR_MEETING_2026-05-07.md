@@ -1,3 +1,11 @@
+---
+title: SUPERVISOR MEETING 2026 05 07
+tags: []
+source: internal
+created: 2026-05-06
+updated: 2026-05-06
+---
+
 # Supervisor Meeting
 
 

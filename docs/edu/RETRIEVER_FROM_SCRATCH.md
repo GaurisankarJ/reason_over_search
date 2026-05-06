@@ -1,3 +1,11 @@
+---
+title: RETRIEVER FROM SCRATCH
+tags: []
+source: internal
+created: 2026-05-01
+updated: 2026-05-02
+---
+
 # Retriever from Scratch — Embeddings, FAISS, IVF, SQ8
 
 A top-down walkthrough of how this repo's retriever works: from "what problem are we solving" to the bit-level FAISS machinery. Companion to [INDEX_ARCHITECTURE.md](../retriever/INDEX_ARCHITECTURE.md), which is the reference doc; this is the teaching version.

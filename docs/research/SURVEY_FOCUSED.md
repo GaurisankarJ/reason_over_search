@@ -1,3 +1,11 @@
+---
+title: SURVEY FOCUSED
+tags: []
+source: internal
+created: 2026-05-06
+updated: 2026-05-06
+---
+
 # Resource-Constrained Small-LM RLVR with Search: A Focused Survey
 
 > A project-specific survey distilled from the broader [SURVEY.md](SURVEY.md). This document concentrates on the literature that directly informs running RLVR on a 1–3B language model with a search tool on a single A100 80GB under a tight compute budget. Every paper here is sourced from its arXiv abstract; each entry includes Summary, Problem, Method, Result, Takeaway, and an ELI5 analogy.
@@ -28,7 +36,7 @@ The driving research question is whether a small (≤3B) language model can lear
 3. [Rollout Budget Optimization and Sample Efficiency](#3-rollout-budget-optimization-and-sample-efficiency)
 4. [Small-Model-Specific Failure Modes](#4-small-model-specific-failure-modes)
 5. [Curriculum and Difficulty-Aware Training](#5-curriculum-and-difficulty-aware-training)
-6. [Search-Augmented RL at Small Scale](#6-search-augmented-rl-at-small-scale)
+6. [Search-Augmented RL at Small Scale](#6-search-augmented-rl-at-small-scale) — HiPRAG, DeepRetrieval, R-Search, APEX-Searcher, s3, ZeroSearch, baselines
 7. [Off-Policy Replay, Replay Buffers, and Self-Distillation](#7-off-policy-replay-replay-buffers-and-self-distillation)
 8. [Key Results at a Glance](#8-key-results-at-a-glance)
 9. [TLDR — For This Project](#9-tldr--for-this-project)
@@ -492,7 +500,7 @@ A practical realisation specific to your dataset stack: train on **NQ (1-hop, ea
 
 ## 6. Search-Augmented RL at Small Scale
 
-This is the heart of the thesis. The four most relevant papers — HiPRAG, DeepRetrieval, R-Search, APEX-Searcher — collectively argue that 3B-class search-augmented RL is competitive with much larger systems when reward design and structural decomposition are right. The Search-R1, ReSearch, and R1-Searcher cards are also included since they are the immediate baseline lineage.
+This is the heart of the thesis. The six most relevant papers — HiPRAG, DeepRetrieval, R-Search, APEX-Searcher, s3, ZeroSearch — collectively argue that 3B-class search-augmented RL is competitive with much larger systems when reward design, structural decomposition, and data efficiency are right. The Search-R1, ReSearch, and R1-Searcher cards are also included since they are the immediate baseline lineage.
 
 ### 6.1 HiPRAG: Hierarchical Process Rewards
 
@@ -512,11 +520,23 @@ R-Search [(2506.04185)](https://arxiv.org/abs/2506.04185) issues multiple interm
 
 APEX-Searcher [(2603.13853)](https://arxiv.org/abs/2603.13853) splits the agent into Stage-1 RL training of a planner with decomposition-specific dense rewards and Stage-2 SFT of an executor on high-quality multi-hop trajectories. The decoupling sidesteps end-to-end multi-hop credit-assignment pain. Worth considering if end-to-end RL plateaus; it converts the sparse outcome signal into denser per-stage signals.
 
-### 6.5 The Search-R1 / ReSearch / R1-Searcher Lineage (baselines)
+### 6.5 s3: Data-Efficient Decoupled Searcher Training
+
+s3 [(2505.14146)](https://arxiv.org/abs/2505.14146) decouples the search agent into a **searcher** (decides what to retrieve) and a **generator** (writes the final answer), then trains only the searcher via RL. The reward is "Gain Beyond RAG": how much the searcher's retrieval improves final answer accuracy over naive RAG. The result is extreme data efficiency: 2.4k training samples outperform baselines trained on 168k+ samples (a 70× reduction), tested across 11 benchmarks (6 general QA + 5 medical).
+
+For your setting: this raises a concrete design question — whether decoupled searcher training is worth adopting alongside or instead of end-to-end recipe additions (E2H + S-GRPO + MC-GRPO). The architecture change is larger than a drop-in, but the 70× data efficiency is a strong argument if cold-start reward sparsity is the bottleneck on Qwen3.5-2B.
+
+### 6.6 ZeroSearch: LM-Simulated Retrieval for RL Training
+
+ZeroSearch [(2505.04588)](https://arxiv.org/abs/2505.04588) replaces a real search index during rollouts with a frozen LLM that simulates document retrieval (curriculum from clean to noisy responses), cutting training cost from $586.70 to $70.80 per 64k queries (8.3× cheaper) with comparable performance. A stronger simulator (14B vs 7B) actually improves over the real index.
+
+For your setting: relevant as a dev-loop accelerator for early smoke runs before committing to full real-corpus training. Switch to the real IVF-SQ8 index once format and basic search behaviour are established. Medium engineering effort (keep a frozen Qwen2.5-7B around as the retriever sim).
+
+### 6.7 The Search-R1 / ReSearch / R1-Searcher Lineage (baselines)
 
 These are the immediate baselines that the project replicates. Cards included for completeness.
 
-### 6.6 Paper Cards
+### 6.8 Paper Cards
 
 ### 2510.07794 — HiPRAG: Hierarchical Process Rewards for Agentic RAG
 
@@ -573,6 +593,34 @@ These are the immediate baselines that the project replicates. Cards included fo
 **Takeaway.** Splitting search agents into a learned planner plus an SFT executor sidesteps the credit-assignment pain of end-to-end multi-turn RL on small models.
 
 **ELI5.** A travel agent (planner) learns by trial and error which cities to visit; the tour guide (executor) is trained from a guidebook to actually walk the route.
+
+### 2505.14146 — s3: Data-Efficient Search Agent RL
+
+**Summary.** s3 trains a lightweight, model-agnostic search agent by decoupling the searcher from the generator and training only the searcher via RL with a "Gain Beyond RAG" reward.
+
+**Problem.** Existing search-augmented RL methods (Search-R1, R1-Searcher) require 100k+ training samples and couple searching and answering into one model, making training expensive.
+
+**Method.** Decouple the agent: the generator (any LLM) handles answering; the searcher handles query generation. Train only the searcher with GRPO using a reward that measures improvement in generator accuracy over naive RAG. Model-agnostic.
+
+**Result.** Outperforms baselines trained on 168k+ samples using only 2.4k training samples (70× reduction) across 11 benchmarks (6 general QA + 5 medical QA); consistent gains on all benchmarks.
+
+**Takeaway.** The data requirement for training a search agent via RL is 70× lower than Search-R1 if searcher and generator are decoupled. Worth considering as a complementary experiment to end-to-end recipe training, especially if reward sparsity limits cold-start on Qwen3.5-2B.
+
+**ELI5.** Instead of training one person to both research and write a report, hire a specialist librarian trained only on "did your search actually help the writer?" — they need far fewer examples to get good at finding the right sources.
+
+### 2505.04588 — ZeroSearch: Simulated Retrieval for RL Training
+
+**Summary.** ZeroSearch replaces a real search engine during RL training rollouts with a frozen LLM that generates simulated documents, using a curriculum from clean to noisy responses. It dramatically cuts training cost while preserving search-agent learning.
+
+**Problem.** Real search APIs and FAISS calls during rollouts are slow (HTTP latency) and expensive (~$586 per 64k queries); they also fail under high rollout load, as in the IVF-SQ8 vs Flat-IP issue.
+
+**Method.** A frozen LLM (7B or 14B) acts as a retriever simulator: given a query, it generates fake-but-plausible documents. Curriculum: start with clean, high-quality simulated docs, then add noise as training progresses to close the sim-to-real gap.
+
+**Result.** $70.80 per 64k queries vs $586.70 with real search (8.3× cheaper); performance comparable with 7B simulator and better than real search with 14B simulator.
+
+**Takeaway.** Use ZeroSearch for early smoke runs and dev-loop iteration; switch to the real IVF-SQ8 index once format and basic search behaviour are established. Effort is medium: keep a frozen Qwen2.5-7B around as the retriever sim.
+
+**ELI5.** Instead of paying for a real library trip every training step, have a knowledgeable intern pretend to be the librarian and hand back plausible-looking books; the agent learns to use search either way, and the intern costs almost nothing.
 
 ### 2503.09516 — Search-R1 (baseline)
 
@@ -712,6 +760,8 @@ RLSD [(2604.03128)](https://arxiv.org/abs/2604.03128) lets RLVR's environment re
 | PODS [(2504.13818)](https://arxiv.org/abs/2504.13818) | 3B, GRPO | 1.7× faster to same peak EM | High |
 | ExGRPO [(2510.02245)](https://arxiv.org/abs/2510.02245) | 1.5B–8B replay | +7.6 OOD vs GRPO | High |
 | DeepRetrieval [(2503.00223)](https://arxiv.org/abs/2503.00223) | 3B, RL query-gen | Beats GPT-4o/Claude-3.5 11/13 | High |
+| s3 [(2505.14146)](https://arxiv.org/abs/2505.14146) | Decoupled searcher RL, 11 benchmarks | 70× data reduction vs Search-R1 (2.4k vs 168k+) | High |
+| ZeroSearch [(2505.04588)](https://arxiv.org/abs/2505.04588) | LM-simulated retrieval during training | 8.3× cost reduction; comparable performance | High (dev loop) |
 | PEFT eval [(2512.23165)](https://arxiv.org/abs/2512.23165) | DeepSeek 1.5B | DoRA best; SVD-init fails | High |
 | MC-GRPO [(2601.22582)](https://arxiv.org/abs/2601.22582) | Small G regimes | G=2 ≈ G=8 with median baseline | High |
 | Online Difficulty Filter [(2504.03380)](https://arxiv.org/abs/2504.03380) | Any scale | +12 % in <50 % of steps | High |
@@ -863,6 +913,8 @@ All papers cited in this document, grouped by section.
 - [DeepRetrieval (2503.00223)](https://arxiv.org/abs/2503.00223)
 - [R-Search (2506.04185)](https://arxiv.org/abs/2506.04185)
 - [APEX-Searcher (2603.13853)](https://arxiv.org/abs/2603.13853)
+- [s3 (2505.14146)](https://arxiv.org/abs/2505.14146)
+- [ZeroSearch (2505.04588)](https://arxiv.org/abs/2505.04588)
 - [Search-R1 (2503.09516)](https://arxiv.org/abs/2503.09516)
 - [ReSearch (2503.19470)](https://arxiv.org/abs/2503.19470)
 - [R1-Searcher (2503.05592)](https://arxiv.org/abs/2503.05592)

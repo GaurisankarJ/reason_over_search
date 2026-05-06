@@ -1,3 +1,11 @@
+---
+title: MILESTONE 1.1 QWEN BASELINES
+tags: []
+source: internal
+created: 2026-05-02
+updated: 2026-05-02
+---
+
 # Milestone 1.1 — Untrained Qwen3.5-2B baselines
 
 > **Owner:** Jose

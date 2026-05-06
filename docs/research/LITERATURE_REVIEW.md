@@ -1,3 +1,11 @@
+---
+title: LITERATURE REVIEW
+tags: []
+source: internal
+created: 2026-05-06
+updated: 2026-05-06
+---
+
 # RLVR: Reinforcement Learning with Verifiable Rewards
 
 A comprehensive survey of recent advances in reinforcement learning for language models, focusing on verifiable rewards, reasoning emergence, and domain extension.

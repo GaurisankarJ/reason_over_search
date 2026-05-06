@@ -1,3 +1,11 @@
+---
+title: SETUP CLAUDE
+tags: []
+source: internal
+created: 2026-05-02
+updated: 2026-05-06
+---
+
 # SETUP_CLAUDE.md — fresh-Vast bring-up, one-step
 
 > **For Claude (the agent):** this doc is your runbook. The user has just

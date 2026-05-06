@@ -1,3 +1,11 @@
+---
+title: SMOKE RESULTS 2026 05 06
+tags: []
+source: internal
+created: 2026-05-06
+updated: 2026-05-06
+---
+
 # Smoke Test Results — Phase 2 First-Pass Mechanics
 
 > **Canonical smoke-results doc.** Latest sample dump = the v4 (seed=43) run; the timing / wall-clock / cost analysis at the bottom comes from the **2026-05-02 small-shape run** (40-traj/combo). Both archived; see "Provenance + archive" below.

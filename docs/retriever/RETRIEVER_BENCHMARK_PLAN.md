@@ -1,3 +1,11 @@
+---
+title: RETRIEVER BENCHMARK PLAN
+tags: []
+source: internal
+created: 2026-05-01
+updated: 2026-05-01
+---
+
 # Retriever Benchmark Plan — pre/post concurrency fixes
 
 > **Status (2026-05-01): plan only, not executed.** Written while the Plan B v1 instruct sweep was in flight (now finished — see [../milestone_one/COMPARISON_PLAN_B_v1.md](../milestone_one/COMPARISON_PLAN_B_v1.md)). The "don't disturb the in-flight sweep" constraint below is no longer active. Re-read before kicking this off so the plan doesn't reference stale runtime state.

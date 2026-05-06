@@ -1,3 +1,11 @@
+---
+title: INTEGRATION GUIDE
+tags: []
+source: internal
+created: 2026-05-04
+updated: 2026-05-06
+---
+
 # Integration Guide: Efficiency + Algorithm Evolution
 
 **Purpose**: Navigate the three rounds of research (v1 → v2 → v3) + two parallel paths (algorithms in PARADIGM_REVIEW, systems in RUNTIME_EFFICIENCY) to make concrete decisions about your training run.

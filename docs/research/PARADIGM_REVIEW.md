@@ -1,3 +1,11 @@
+---
+title: PARADIGM REVIEW
+tags: []
+source: internal
+created: 2026-05-03
+updated: 2026-05-06
+---
+
 # Small-LM RL Training Paradigms — Systematic Review
 
 **Audience**: anyone working on this project (researcher, engineer, or visiting collaborator). Each technique gets a technical description *and* an ELI5 paragraph so the doc reads even if RL post-training isn't your day job.

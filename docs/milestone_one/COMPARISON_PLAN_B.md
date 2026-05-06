@@ -1,3 +1,11 @@
+---
+title: COMPARISON PLAN B
+tags: []
+source: internal
+created: 2026-05-01
+updated: 2026-05-01
+---
+
 # Plan B v0 vs. Search-R1 paper — gap analysis
 
 > **Status (2026-04-28): resolved.** This document captures the **v0** Plan B numbers and the gap analysis that led to identifying the load-bearing miss (`apply_chat=False` for base, see [../eval/PAPER_VS_OURS_AUDIT.md D1](../eval/PAPER_VS_OURS_AUDIT.md)). The fix is applied in code; the **v1** sweep is converging (see [MILESTONE_1.md#status-2026-04-28](MILESTONE_1.md#status-2026-04-28)). Sections retained below for the historical baseline + probe evidence; the obsolete suspect-ranking and next-steps moved to [docs/archive/](../archive/).

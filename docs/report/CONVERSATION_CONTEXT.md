@@ -1,3 +1,11 @@
+---
+title: CONVERSATION CONTEXT
+tags: []
+source: internal
+created: 2026-05-04
+updated: 2026-05-06
+---
+
 # Conversation Context
 
 > Living snapshot of project status, decisions, and pointers to the canonical docs. Update this when something material changes; keep historical sections frozen below.

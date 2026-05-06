@@ -1,3 +1,11 @@
+---
+title: RESULTS v1
+tags: []
+source: internal
+created: 2026-05-04
+updated: 2026-05-04
+---
+
 # Results v1: Second Block (W&B project `research_revamp`)
 
 **Date compiled**: 2026-05-03  

@@ -1,3 +1,11 @@
+---
+title: RUNTIME EFFICIENCY
+tags: []
+source: internal
+created: 2026-05-03
+updated: 2026-05-06
+---
+
 # Runtime Efficiency — Systems & Engineering Levers
 
 **Companion to [`PARADIGM_REVIEW.md`](PARADIGM_REVIEW.md).** That doc covers the *algorithmic* literature (KL, Dr. GRPO, DAPO, LoRA, spec-dec). This one covers the *systems* knobs: vLLM config, optimizer kernels, colocation cost, dynamic batching, fused AdamW, gpu_memory_utilization, prefix caching. The two compose — engineering wins are mostly orthogonal to algorithm wins.

@@ -1,3 +1,11 @@
+---
+title: CHAT TEMPLATE
+tags: []
+source: internal
+created: 2026-05-01
+updated: 2026-05-06
+---
+
 # Chat Template Decision
 
 ## TL;DR

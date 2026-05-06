@@ -1,3 +1,11 @@
+---
+title: SMOKE RESULTS 2026 05 04 v2 seed42
+tags: []
+source: internal
+created: 2026-05-06
+updated: 2026-05-06
+---
+
 # Smoke Test Results — Phase 2 First-Pass Mechanics (v2 run)
 
 Run on Vast.ai 1× A100 80 GB, image `pantomiman/reason-over-search-v1:v1`. Retriever: IVF-SQ8 + 8 workers (the flat IP default times out under training rollout load). Smoke shape: 8 outer steps × 8 prompts × group=5 = 320 trajectories per combo (40 per step jsonl line).

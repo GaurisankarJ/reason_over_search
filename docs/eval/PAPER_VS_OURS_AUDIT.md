@@ -1,3 +1,11 @@
+---
+title: PAPER VS OURS AUDIT
+tags: []
+source: internal
+created: 2026-05-01
+updated: 2026-05-01
+---
+
 # Search-R1 Paper vs Our Reproduction: Exhaustive Configuration Audit
 
 **Audit date**: 2026-04-28

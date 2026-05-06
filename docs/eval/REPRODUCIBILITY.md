@@ -1,3 +1,11 @@
+---
+title: REPRODUCIBILITY
+tags: []
+source: internal
+created: 2026-05-01
+updated: 2026-05-01
+---
+
 # Search-R1 Reproduction
 
 End-to-end reproduction of Search-R1's published 3B GRPO results on this codebase. Covers the comparison numbers, the divergences we found and fixed, and the smoke-test evidence the fixes landed. Per-dataset Plan B numbers are in [../milestone_one/RESULTS_PLAN_B.md](../milestone_one/RESULTS_PLAN_B.md). Operational details (how to run sweeps, where the wall-clock goes) are in [EVAL_OPS.md](EVAL_OPS.md).

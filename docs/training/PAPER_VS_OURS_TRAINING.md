@@ -1,3 +1,11 @@
+---
+title: PAPER VS OURS TRAINING
+tags: []
+source: internal
+created: 2026-05-01
+updated: 2026-05-06
+---
+
 # Paper vs Ours — Training
 
 Training-side counterpart to [`docs/eval/PAPER_VS_OURS_AUDIT.md`](../eval/PAPER_VS_OURS_AUDIT.md). Documents every knowing departure from Search-R1's training setup, plus the rationale.
