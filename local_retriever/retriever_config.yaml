@@ -1,5 +1,11 @@
 # ------------------------------------------------Environment Settings------------------------------------------------#
-gpu_id: "0"
+# gpu_id explicitly null: flashrag/config/config.py:_init_device() overwrites
+# CUDA_VISIBLE_DEVICES from this field, which clobbers the per-process GPU pinning
+# launch_ivfsq8.sh start_fleet sets when pairing each retriever to its GPU.
+# basic_config.yaml has gpu_id: "0" as a default, which would still apply if this
+# field were merely omitted; setting null makes _init_device a no-op and lets the
+# parent shell's CUDA_VISIBLE_DEVICES win (encoder lands on visible GPU index 0).
+gpu_id: null
 
 # -------------------------------------------------Retrieval Settings------------------------------------------------#
 # Defaults (v1, May 2026): CPU + IVF-SQ8 index — fast enough for training rollouts (≈1.7 s for a 3-query batch

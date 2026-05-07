@@ -4,15 +4,18 @@
 # Estimated wall-clock: ~6 h (NQ-bound per variant ~2 h × 3 + ~5 min model swaps).
 #
 # Architecture:
-#   * 8 paired IVF-SQ8 retriever processes on ports 3005..3012 (one per SGLang
+#   * 8 paired IVF-SQ8 retriever processes on ports 3013..3020 (one per SGLang
 #     server). Depends on the async fix in local_retriever/retriever_serving.py
 #     and on OMP_NUM_THREADS being capped per-process (env OMP_RETRIEVER, default 8).
+#     Each retriever's e5 encoder is pinned to its paired GPU via CUDA_VISIBLE_DEVICES
+#     in launch_ivfsq8.sh start_fleet; without pinning, all 8 encoders stack on GPU 0.
 #   * 8 SGLang servers on ports 3000..3007, one per GPU. All 8 serve the SAME
 #     variant per phase; we tear down + bring up between variants. Retriever
-#     fleet stays up across all phases.
+#     fleet stays up across all phases. Retriever ports must NOT overlap SGLang's
+#     3000..3007 — see CODE_SETUP.md §3a for the port-collision incident.
 #   * 7 datasets dispatched in parallel across GPUs 0..6 (GPU 7 idle this phase).
 #     NQ (~2 h, longest) is pinned to GPU 0 so it starts first.
-#   * GPU N pairs with SGLang :300N and retriever :$((3005+N)).
+#   * GPU N pairs with SGLang :300N and retriever :$((FLEET_BASE_PORT+N)) (default 3013).
 #
 # Variants in execution order:
 #   1. base                — Search-R1 GRPO from Qwen2.5-3B-Base
@@ -37,6 +40,12 @@ export HF_HOME="${HF_HOME:-/workspace/hf_cache}" \
        HF_DATASETS_CACHE="${HF_DATASETS_CACHE:-/workspace/hf_datasets_cache}" \
        TRANSFORMERS_CACHE="${TRANSFORMERS_CACHE:-/workspace/hf_cache}"
 
+# Retriever fleet base port — exported so launch_ivfsq8.sh and the dispatch
+# loop below stay in sync if someone overrides it. Must NOT overlap SGLang's
+# 3000..3007 range (the original 3005..3012 layout collided on 3005/3006/3007;
+# see CODE_SETUP.md §3a).
+export FLEET_BASE_PORT="${FLEET_BASE_PORT:-3013}"
+
 SEED=1
 DATASETS=(nq triviaqa popqa hotpotqa 2wikimultihopqa musique bamboogle)
 VARIANTS=(base instruct qwen_25_3b_instruct)
@@ -55,7 +64,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# Retriever fleet (8 procs, ports 3005..3012) lives across all variant phases.
+# Retriever fleet (8 procs, ports 3013..3020) lives across all variant phases.
 echo
 echo "=== starting IVF-SQ8 retriever fleet ==="
 "$REPO_ROOT/local_retriever/launch_ivfsq8.sh" start_fleet 8
@@ -72,10 +81,10 @@ for variant in "${VARIANTS[@]}"; do
   for i in "${!DATASETS[@]}"; do
     ds="${DATASETS[$i]}"
     SGL_PORT=$((3000 + i)) \
-    RETRIEVER_URL="127.0.0.1:$((3005 + i))" \
+    RETRIEVER_URL="127.0.0.1:$((FLEET_BASE_PORT + i))" \
       "$REPO_ROOT/scripts/run_one.sh" "$variant" "$ds" "$SEED" \
       > "$LOG_ROOT/${variant}_${ds}.log" 2>&1 &
-    echo "  GPU $i  SGLang :$((3000 + i))  retriever :$((3005 + i))  $variant/$ds  pid $!"
+    echo "  GPU $i  SGLang :$((3000 + i))  retriever :$((FLEET_BASE_PORT + i))  $variant/$ds  pid $!"
   done
 
   # One bad dataset shouldn't kill the rest of the sweep — capture rc but continue.

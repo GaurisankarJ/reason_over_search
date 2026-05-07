@@ -63,6 +63,48 @@ These are paper-faithful and stay identical:
 | `docs/eval/plan_a_8gpu/` (new folder) | `BOOTSTRAP.md`, `CODE_SETUP.md` (this), `RESULTS.md`, `SESSION_LOG.md` | User ask: scaffold output docs at run-start, fill live as the run progresses (mirroring `docs/report/CODE_SETUP_v1.md` style). | this work |
 | `docs/PLAN_A_5090x4.md` + `docs/plan_a_5090x4_metrics.tsv` | Cherry-picked from sister branch `plan-a-5090x4`; added frontmatter and fixed `setup/` link paths. | Predecessor run-doc that all four new docs link into for bottleneck analysis (§7) and metric schema. | this work |
 
+## 3a. Fixes applied during the actual run (2026-05-07)
+
+Three load-bearing bugs surfaced when the sweep was first launched. Each was diagnosed and patched before the successful re-run that produced [`RESULTS.md`](RESULTS.md). All three should be folded into §3 ("Files changed") for any future Plan-A run; we keep them as a dated subsection here for clarity-of-history.
+
+### 3a.1 Port collision: SGLang fleet 3000-3007 vs retriever fleet 3005-3012
+
+**Symptom.** Phase-1 `musique` (dispatch index 5) failed with `Retry generate failed after 10 times`; `bamboogle` (dispatch index 6) failed with `RuntimeError: SGLang /generate HTTP 404: {"detail":"Not Found"}`. The other 5 datasets ran fine.
+
+**Root cause.** The original architecture had retrievers on `3005..3012` and SGLang on `3000..3007` — overlapping on **3005, 3006, 3007**. Retrievers bound first; SGLang's `bind()` on those ports failed silently (each SGLang still loaded its model onto its assigned GPU, holding ~21 GB of VRAM but unable to receive HTTP). The dispatch loop then routed `/generate` requests for indices 5/6/7 to the retriever's FastAPI server, which 404s on `/generate`. The `manage_sglang.sh wait_fleet` check passed because `wait_ready` only confirmed a TCP response, not that the responder was actually SGLang.
+
+**Fix.**
+- `local_retriever/launch_ivfsq8.sh:34` introduces `FLEET_BASE_PORT="${FLEET_BASE_PORT:-3013}"`; `start_fleet`/`wait_fleet`/`stop_fleet` use `$((FLEET_BASE_PORT + i))`. The new 3013..3020 range is disjoint from SGLang's 3000..3007.
+- `scripts/sweep_8gpu_one_seed.sh` exports `FLEET_BASE_PORT` (so it's inherited by `launch_ivfsq8.sh`) and dispatches `RETRIEVER_URL="127.0.0.1:$((FLEET_BASE_PORT + i))"` instead of the hardcoded `3005 + i`.
+- Single-instance `start [port]` still defaults to 3005 for smoke-test compatibility (no fleet, no SGLang in the same shell).
+
+**Verification.** `ss -lnt | grep ':30[0-2][0-9]'` after `start_fleet 8` shows two disjoint ranges. The previously-broken `musique` dispatch (i=5) now correctly hits SGLang :3005 + retriever :3018 and runs to completion. Confirmed end-to-end by all 7 datasets producing `metric_score.txt` in phase 1.
+
+### 3a.2 All 8 retriever encoders stacked on GPU 0
+
+**Symptom.** `nvidia-smi` showed GPU 0 at ~7.8 GB used while GPUs 1-7 sat at 1 MiB, even after `start_fleet` set `env CUDA_VISIBLE_DEVICES=N` per process for N=0..7. `cat /proc/$pid/environ | grep CUDA_VISIBLE_DEVICES` confirmed each python process did receive its assigned `CUDA_VISIBLE_DEVICES=N`, yet the encoder weights all loaded onto physical GPU 0. Concretely: GPU 0 = encoder + Qwen ≈ 22 GB, leaving SGLang very tight (the per-card budget is 24 GB on a 4090).
+
+**Root cause.** `flashrag/config/config.py:103-106 _init_device()` reads `gpu_id` from the merged config and overwrites `os.environ["CUDA_VISIBLE_DEVICES"] = str(gpu_id)` — clobbering the parent shell's per-process pinning. The default `gpu_id: "0"` lives in `flashrag/config/basic_config.yaml:12`, which flashrag merges into every config it loads. Removing the field from `local_retriever/retriever_config.yaml` was not enough; the basic-config default still applied via the merge.
+
+**Fix.**
+- `local_retriever/retriever_config.yaml` — set `gpu_id: null` explicitly (with a comment pointing at the basic-config-merge gotcha). flashrag's `_init_device` checks `if gpu_id is not None:` before overwriting, so `null` makes it a no-op.
+- `local_retriever/launch_ivfsq8.sh` — `_launch_one` accepts an optional GPU index argument and prepends `env CUDA_VISIBLE_DEVICES=$gpu_id` to the python invocation; `start_fleet` passes `i` so retriever_i pairs with GPU_i (and with SGLang_i on the same GPU).
+- Per-GPU budget after fix: ~1 GB encoder + ~21 GB SGLang ≈ 22 GB, fits the 24 GB 4090 with ~2 GB headroom — matches the doc's `Step 0` VRAM probe estimate.
+
+**Verification.** Post-`start_fleet 8`, `nvidia-smi --query-gpu=index,memory.used --format=csv,noheader,nounits` shows ~976 MiB on each of GPUs 0-7 (was: 7775 MiB on GPU 0 alone, 1 MiB on the rest). Per-process env confirmed via `cat /proc/$(sed -n '6p' /tmp/retriever_fleet.pids)/environ | grep CUDA_VISIBLE_DEVICES` → `CUDA_VISIBLE_DEVICES=5` for the 6th retriever as expected.
+
+### 3a.3 Aggregator silently dropped all `qwen_25_3b_instruct` runs
+
+**Symptom.** The sweep's auto-aggregation step printed `wrote ... (14 runs aggregated, 14 with trace health)` even though 21 metric files (7 datasets × 3 variants) existed on disk. The rendered tables in [`RESULTS.md`](RESULTS.md) only had `base` and `instruct` rows.
+
+**Root cause.** `scripts/aggregate.py:26` had `SAVE_NOTE_RE = re.compile(r"search_r1_(?P<variant>base|instruct)_(?:seed|run)(?P<seed>\d+)$")` — the variant alternation hardcoded a two-name list. The `qwen_25_3b_instruct` save_note (`search_r1_qwen_25_3b_instruct_seed1`) failed to match. Five render loops at lines 139, 164, 195, 215, 235 also iterated `for variant in ("base", "instruct"):` directly, so even if the regex were fixed they would still skip the new variant.
+
+**Fix.** `scripts/aggregate.py:26-29`:
+- Variant capture changed to non-greedy `.+?` so any trailing variant name is accepted: `r"search_r1_(?P<variant>.+?)_(?:seed|run)(?P<seed>\d+)$"`. The `.+?` is bounded by the seed/run anchor so it can't over-match.
+- New module-level `VARIANTS = ["base", "instruct", "qwen_25_3b_instruct"]` list controls table row order. All five `("base", "instruct")` literals replaced with `VARIANTS`.
+
+**Verification.** Re-run: `python scripts/aggregate.py --output docs/eval/plan_a_8gpu/RESULTS.md` ends with `wrote ... (21 runs aggregated, 21 with trace health)`. EM/F1/acc tables and the grand-average table all show three rows per dataset. Phase-3 raw-Qwen scores (e.g. `nq=0.197`, `bamboogle=0.160`) appear alongside base/instruct.
+
 ## 4. What's deliberately *not* changed
 
 - **`scripts/sweep_a_full.sh`** — Plan A's canonical 5-seed 70-run script stays exactly as it was. This sweep is the 1-seed parallel version, not a replacement.

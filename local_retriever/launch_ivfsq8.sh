@@ -28,21 +28,35 @@ PY="${PY:-/venv/retriever/bin/python}"
 INDEX="${INDEX:-$RETRIEVER_DIR/indexes/wiki18_100w_e5_ivf4096_sq8.index}"
 OMP_RETRIEVER="${OMP_RETRIEVER:-8}"
 FLEET_PIDFILE="${FLEET_PIDFILE:-/tmp/retriever_fleet.pids}"
+# Fleet base port: must NOT overlap SGLang fleet 3000..3000+FLEET_SIZE-1.
+# Default 3013 keeps an 8-retriever fleet (3013..3020) clear of an 8-server
+# SGLang fleet (3000..3007). Single-retriever 'start' still defaults to 3005.
+FLEET_BASE_PORT="${FLEET_BASE_PORT:-3013}"
 
 ACTION="${1:?missing action: start|stop|wait|start_fleet|wait_fleet|stop_fleet}"
 
 # Launch one retriever process bound to $port. Echoes pid on stdout, log path on stderr.
+# Optional 2nd arg pins the e5 encoder to a specific GPU (CUDA_VISIBLE_DEVICES).
+# flashrag/retriever/encoder.py:174 unconditionally moves the encoder to cuda:0;
+# without per-process pinning, all fleet retrievers stack their encoders on GPU 0.
 _launch_one() {
   local port="$1"
+  local gpu_id="${2:-}"
   local logfile="/tmp/retriever_ivfsq8_${port}.log"
   if [[ ! -f "$INDEX" ]]; then
     echo "[retriever] index not found: $INDEX" >&2
     echo "[retriever] download per docs/setup/BOOTSTRAP_NEW_INSTANCE.md step 4" >&2
     return 1
   fi
-  echo "[retriever] starting on port $port (OMP=$OMP_RETRIEVER, log: $logfile)" >&2
+  local gpu_msg=""
+  local cuda_env=""
+  if [[ -n "$gpu_id" ]]; then
+    gpu_msg=" GPU=$gpu_id"
+    cuda_env="CUDA_VISIBLE_DEVICES=$gpu_id"
+  fi
+  echo "[retriever] starting on port $port (OMP=$OMP_RETRIEVER${gpu_msg}, log: $logfile)" >&2
   cd "$RETRIEVER_DIR"
-  OMP_NUM_THREADS="$OMP_RETRIEVER" nohup "$PY" retriever_serving.py \
+  env $cuda_env OMP_NUM_THREADS="$OMP_RETRIEVER" nohup "$PY" retriever_serving.py \
     --config retriever_config.yaml \
     --num_retriever 1 \
     --index "$INDEX" \
@@ -105,14 +119,16 @@ start_fleet() {
   local count="${1:-8}"
   : > "$FLEET_PIDFILE"
   for ((i=0; i<count; i++)); do
-    local port=$((3005 + i))
+    local port=$((FLEET_BASE_PORT + i))
     local pid
-    pid="$(_launch_one "$port")"
+    # Pin retriever i's encoder to GPU i (paired 1:1 with SGLang i on port 3000+i).
+    # Each GPU then holds ~1 GB encoder + ~21 GB SGLang ≈ 22 GB on a 24 GB 4090.
+    pid="$(_launch_one "$port" "$i")"
     echo "$pid" >> "$FLEET_PIDFILE"
     # also write the per-port pidfile so single-instance stop works for any one
     echo "$pid" > "/tmp/retriever_ivfsq8_${port}.pid"
   done
-  echo "[retriever] fleet of $count launched on ports 3005..$((3005 + count - 1)); pids in $FLEET_PIDFILE"
+  echo "[retriever] fleet of $count launched on ports ${FLEET_BASE_PORT}..$((FLEET_BASE_PORT + count - 1)); pids in $FLEET_PIDFILE"
 }
 
 wait_fleet() {
@@ -121,7 +137,7 @@ wait_fleet() {
   count="$(wc -l < "$FLEET_PIDFILE" 2>/dev/null | awk '{print $1}')"
   count="${count:-8}"
   for ((i=0; i<count; i++)); do
-    _wait_one "$((3005 + i))" "$timeout" || return 1
+    _wait_one "$((FLEET_BASE_PORT + i))" "$timeout" || return 1
   done
   echo "[retriever] fleet of $count ready"
 }
@@ -147,8 +163,10 @@ stop_fleet() {
     kill -9 $remaining 2>/dev/null || true
   fi
   rm -f "$FLEET_PIDFILE"
-  # also clear per-port pidfiles
-  rm -f /tmp/retriever_ivfsq8_300[5-9].pid /tmp/retriever_ivfsq8_3010.pid /tmp/retriever_ivfsq8_3011.pid /tmp/retriever_ivfsq8_3012.pid
+  # also clear per-port pidfiles for the fleet's port range (and legacy 3005..3012 layout)
+  for ((i=0; i<16; i++)); do
+    rm -f "/tmp/retriever_ivfsq8_$((FLEET_BASE_PORT + i)).pid" "/tmp/retriever_ivfsq8_$((3005 + i)).pid"
+  done
   echo "[retriever] fleet stopped"
 }
 

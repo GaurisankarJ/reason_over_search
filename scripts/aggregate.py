@@ -23,7 +23,10 @@ DEFAULT_RESULTS = REPO_ROOT / "evaluation_search_r1" / "results"
 
 DATASETS = ["bamboogle", "nq", "triviaqa", "popqa", "musique", "2wikimultihopqa", "hotpotqa"]
 METRICS = ["em", "f1", "acc"]
-SAVE_NOTE_RE = re.compile(r"search_r1_(?P<variant>base|instruct)_(?:seed|run)(?P<seed>\d+)$")
+# Variants in display order. The non-greedy variant regex below accepts arbitrary
+# variant names (e.g. "qwen_25_3b_instruct"); this list controls table row order.
+VARIANTS = ["base", "instruct", "qwen_25_3b_instruct"]
+SAVE_NOTE_RE = re.compile(r"search_r1_(?P<variant>.+?)_(?:seed|run)(?P<seed>\d+)$")
 
 
 def parse_metric_file(path: Path) -> dict[str, float]:
@@ -136,7 +139,7 @@ def render(runs, metric: str) -> str:
     lines.append("|" + "|".join(["---"] * len(header)) + "|")
 
     for ds in DATASETS:
-        for variant in ("base", "instruct"):
+        for variant in VARIANTS:
             row = [ds, variant]
             scores = dict(grouped.get((ds, variant), []))
             seed_vals = [scores.get(s) for s in seeds_present]
@@ -161,7 +164,7 @@ def grand_average(runs, metric: str) -> str:
     lines = [f"### Grand average {metric.upper()} across all runs", ""]
     lines.append("| Variant | mean | n_runs |")
     lines.append("|---|---|---|")
-    for variant in ("base", "instruct"):
+    for variant in VARIANTS:
         vals = by_variant.get(variant, [])
         if vals:
             lines.append(f"| {variant} | {statistics.mean(vals):.3f} | {len(vals)} |")
@@ -192,7 +195,7 @@ def render_trace_health(trace) -> str:
     lines.append("| " + " | ".join(header) + " |")
     lines.append("|" + "|".join(["---"] * len(header)) + "|")
     for ds in DATASETS:
-        for variant in ("base", "instruct"):
+        for variant in VARIANTS:
             scores = {seed: h for seed, h in grouped.get((ds, variant), [])}
             seed_vals = [scores.get(s, {}).get("close_rate") for s in seeds_present]
             present = [v for v in seed_vals if v is not None]
@@ -212,7 +215,7 @@ def render_trace_health(trace) -> str:
     lines.append("| " + " | ".join(header) + " |")
     lines.append("|" + "|".join(["---"] * len(header)) + "|")
     for ds in DATASETS:
-        for variant in ("base", "instruct"):
+        for variant in VARIANTS:
             scores = {seed: h for seed, h in grouped.get((ds, variant), [])}
             seed_vals = [scores.get(s, {}).get("length_trunc_rate") for s in seeds_present]
             present = [v for v in seed_vals if v is not None]
@@ -232,7 +235,7 @@ def render_trace_health(trace) -> str:
     lines.append("| " + " | ".join(header) + " |")
     lines.append("|" + "|".join(["---"] * len(header)) + "|")
     for ds in DATASETS:
-        for variant in ("base", "instruct"):
+        for variant in VARIANTS:
             scores = {seed: h for seed, h in grouped.get((ds, variant), [])}
             seed_vals = [scores.get(s, {}).get("mean_completion_tokens") for s in seeds_present]
             present = [v for v in seed_vals if v is not None]
