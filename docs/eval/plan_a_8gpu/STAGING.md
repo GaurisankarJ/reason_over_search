@@ -14,24 +14,41 @@ This stage runs on a **single small instance** with a **persistent volume** moun
 
 Cost saved: a typical staging session is ~30–60 min wall-clock dominated by HF downloads (~25–60 min @ 1 Gbps). Running that on an 8×4090 at $1.50–$3/hr in idle GPU time is wasted money. Running the same thing on a 1×4090 at ~$0.35/hr (or CPU-only at $0.10–0.20/hr) is ~$0.10–$0.50.
 
-## Step 0 — host requirements (smaller than stage 2)
+## Step 0 — ideal instance shape
 
-Two acceptable shapes:
+**Default recommendation: 1× RTX 4090, 32 GB RAM, 16 vCPU, ≥1 Gbps NIC, 150 GB persistent volume.** Cost on Vast.ai marketplace lows: ~$0.30–0.55/hr × ~1 h staging session ≈ **$0.50**.
 
-| Shape | Cost (Vast.ai marketplace) | Validates |
-|---|---|---|
-| **1× RTX 4090** (recommended) | ~$0.30–0.40/hr | retriever fix + Qwen-on-SGLang single-GPU smoke (Step 7) |
-| **CPU-only (no GPU)** | ~$0.10–0.20/hr | retriever fix only — defer SGLang smoke to early stage 2 |
+| Resource | Ideal | Floor | Driven by |
+|---|---|---|---|
+| GPU | 1× RTX 4090 (24 GB VRAM) | 0 GB (CPU-only) | Qwen2.5-3B in bf16 @ ctx 8192 needs ~22 GB VRAM for the optional Step 7 SGLang smoke. Skip GPU only if you're willing to defer that smoke into stage 2. |
+| Host RAM | 32 GB | 24 GB | One IVF-SQ8 index resident ~17 GB + encoder + OS/venv ~5 GB + headroom + (with GPU) SGLang host overhead ~3 GB. |
+| vCPU | 16 cores | 16 cores | `smoke_concurrent.sh` fires 8 concurrent /search calls; we cap each at `OMP_RETRIEVER=4` so 8 × 4 = 32 OMP threads peak (saturating ≥16 cores cleanly). Below 16 cores a single FAISS search already saturates the box, so the parallelism delta becomes statistically noisy — the smoke can falsely OK a still-broken async path. |
+| Network | ≥1 Gbps | ≥100 Mbps | 110 GB of artifacts. 1 Gbps → ~15 min download phase. 100 Mbps → ~150 min — staging session balloons to 3 h. |
+| Disk | 150 GB **persistent volume at `/workspace`** | 130 GB | 110 GB artifacts + 20 GB headroom. Must survive instance teardown — that's the whole point of staging. Ephemeral container disk doesn't count. |
 
-In both cases:
+### Cheapest path (CPU-only)
 
-| Resource | Minimum |
+If you just want to validate the retriever async fix and don't want to pay GPU rates:
+
+| Resource | Value |
 |---|---|
-| Host RAM | 32 GB (single retriever ~17 GB resident) |
-| Disk | **150 GB on persistent volume** at `/workspace` (artifacts) — this is the value being preserved across stages |
-| Network | ≥ 100 Mbps (downloads dominate wall-clock) |
+| GPU | none |
+| RAM, CPU, network, disk | same as above |
+| Cost | ~$0.10–0.15/hr × ~1 h ≈ **$0.15** |
+| Trade-off | Step 7 (Qwen SGLang smoke) deferred to early stage 2 — costs ~10 extra min on the 8×4090 instance ≈ ~$0.50 of expensive time. Net delta vs the 1×4090 staging ≈ 0; mostly a complexity choice. |
 
-**Critical:** the persistent volume must be detachable / re-attachable. On Vast.ai use "Vast.ai Storage" (persistent block storage), not the default ephemeral disk. The 110 GB of artifacts must survive instance teardown.
+### Why these numbers and not less
+
+- **Why not 16 GB RAM** — the IVF-SQ8 index is 17 GB resident on its own. 16 GB host = swap thrashing or OOM at retriever start. This number is index-size-driven, not headroom-driven.
+- **Why not 8 vCPUs** — at 8 cores with `OMP_RETRIEVER=2`, total parallel thread budget is 16, but a single FAISS IVF search at nprobe=64 alone wants ~8–24 cores (its OMP fanout) — sequential and parallel timings collapse together, the speedup ratio loses signal. The smoke can't reliably distinguish PASS from FAIL.
+- **Why not 100 Mbps** — pure operator-time concern. The download is unattended but you pay the hourly rate while it runs.
+- **Why no GPU** is a valid choice — the load-bearing fix this stage validates is the retriever async fix, which is CPU-only. The SGLang smoke catches a different class of bug (Qwen-model prompt rendering) and isn't on the critical path of "did our changes break the multi-GPU sweep."
+
+### Persistent volume — non-negotiable
+
+On Vast.ai use **"Vast.ai Storage"** (persistent block storage), not the default ephemeral container disk. The 110 GB of artifacts is the value being preserved across stages; if it lives on ephemeral disk it dies with the instance and stage 2 has to re-stage from scratch on the 8×4090 at $5/hr.
+
+Tarball-to-blob fallback (S3 / R2 / B2) is documented at the end of this doc if your platform doesn't support detachable volumes.
 
 ## Step 1 — get the image
 
