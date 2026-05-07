@@ -2,8 +2,6 @@ from fastapi import FastAPI, HTTPException
 import argparse
 from pydantic import BaseModel
 from typing import List, Tuple, Union
-import asyncio
-from collections import deque
 
 from flashrag.config import Config
 from flashrag.utils import get_retriever
@@ -11,14 +9,24 @@ from flashrag.utils import get_retriever
 app = FastAPI()
 
 retriever_list = []
-available_retrievers = deque()
-retriever_semaphore = None
 
 
 def init_retriever(args):
-    global retriever_semaphore
+    """Initialize a single shared retriever.
+
+    --num_retriever > 1 is intentionally a no-op. Concurrency is handled by
+    FastAPI's thread pool over one shared FAISS index (IVF-SQ8 reads are
+    thread-safe). The previous in-process pool was a placebo: synchronous
+    FAISS calls inside `async def` handlers serialized on the single-worker
+    uvicorn event loop, leaving GPU clients at ~40% util on a 4-shard run
+    (docs/PLAN_A_5090x4.md §7).
+    """
+    if args.num_retriever != 1:
+        print(
+            f"WARNING: --num_retriever={args.num_retriever} ignored; "
+            "FastAPI thread pool now handles concurrency on a single shared retriever."
+        )
     config = Config(args.config)
-    # CLI overrides win over both yaml and Config._init_device's hardware autodetection.
     config['faiss_gpu'] = bool(args.gpu)
     if args.index is not None:
         config['index_path'] = args.index
@@ -26,24 +34,12 @@ def init_retriever(args):
         f"index_path={config['index_path']}  faiss_gpu={config['faiss_gpu']}  "
         f"nprobe={config.get('faiss_nprobe')}"
     )
-    for i in range(args.num_retriever):
-        print(f"Initializing retriever {i+1}/{args.num_retriever}")
-        retriever = get_retriever(config)
-        retriever_list.append(retriever)
-        available_retrievers.append(i)
-    # create a semaphore to limit the number of retrievers that can be used concurrently
-    retriever_semaphore = asyncio.Semaphore(args.num_retriever)
+    retriever_list.append(get_retriever(config))
 
 
 @app.get("/health")
-async def health_check():
-    return {
-        "status": "healthy",
-        "retrievers": {
-            "total": len(retriever_list),
-            "available": len(available_retrievers)
-        }
-    }
+def health_check():
+    return {"status": "healthy", "retrievers": len(retriever_list)}
 
 
 class QueryRequest(BaseModel):
@@ -67,38 +63,17 @@ class Document(BaseModel):
     "/search",
     response_model=Union[Tuple[List[Document], List[float]], List[Document]],
 )
-async def search(request: QueryRequest):
+def search(request: QueryRequest):
     query = request.query
-    top_n = request.top_n
-    return_score = request.return_score
-
     if not query or not query.strip():
-        print(f"Query content cannot be empty: {query}")
-        raise HTTPException(
-            status_code=400,
-            detail="Query content cannot be empty"
-        )
-
-    async with retriever_semaphore:
-        retriever_idx = available_retrievers.popleft()
-        try:
-            if return_score:
-                results, scores = retriever_list[retriever_idx].search(
-                    query, top_n, return_score)
-                docs = [
-                    Document(id=r['id'], contents=r['contents'])
-                    for r in results
-                ]
-                return docs, scores
-            else:
-                results = retriever_list[retriever_idx].search(
-                    query, top_n, return_score)
-                return [
-                    Document(id=r['id'], contents=r['contents'])
-                    for r in results
-                ]
-        finally:
-            available_retrievers.append(retriever_idx)
+        raise HTTPException(status_code=400, detail="Query content cannot be empty")
+    retriever = retriever_list[0]
+    if request.return_score:
+        results, scores = retriever.search(query, request.top_n, True)
+        docs = [Document(id=r['id'], contents=r['contents']) for r in results]
+        return docs, scores
+    results = retriever.search(query, request.top_n, False)
+    return [Document(id=r['id'], contents=r['contents']) for r in results]
 
 
 @app.post(
@@ -108,37 +83,21 @@ async def search(request: QueryRequest):
         Tuple[List[List[Document]], List[List[float]]],
     ],
 )
-async def batch_search(request: BatchQueryRequest):
-    query = request.query
-    top_n = request.top_n
-    return_score = request.return_score
+def batch_search(request: BatchQueryRequest):
+    retriever = retriever_list[0]
+    if request.return_score:
+        results, scores = retriever.batch_search(request.query, request.top_n, True)
+        batched = [
+            [Document(id=r['id'], contents=r['contents']) for r in results[i]]
+            for i in range(len(results))
+        ]
+        return batched, scores
+    results = retriever.batch_search(request.query, request.top_n, False)
+    return [
+        [Document(id=r['id'], contents=r['contents']) for r in results[i]]
+        for i in range(len(results))
+    ]
 
-    async with retriever_semaphore:
-        retriever_idx = available_retrievers.popleft()
-        try:
-            if return_score:
-                results, scores = retriever_list[retriever_idx].batch_search(
-                    query, top_n, return_score)
-                batched = [
-                    [
-                        Document(id=r['id'], contents=r['contents'])
-                        for r in results[i]
-                    ]
-                    for i in range(len(results))
-                ]
-                return batched, scores
-            else:
-                results = retriever_list[retriever_idx].batch_search(
-                    query, top_n, return_score)
-                return [
-                    [
-                        Document(id=r['id'], contents=r['contents'])
-                        for r in results[i]
-                    ]
-                    for i in range(len(results))
-                ]
-        finally:
-            available_retrievers.append(retriever_idx)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

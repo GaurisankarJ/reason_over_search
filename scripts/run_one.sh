@@ -13,10 +13,12 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 EVAL_DIR="$REPO_ROOT/evaluation_search_r1"
 PY="${PY:-/venv/evaluation_search_r1/bin/python}"
 
-variant="${1:?missing variant (base|instruct)}"
+variant="${1:?missing variant (base|instruct|qwen_25_3b_instruct)}"
 dataset="${2:?missing dataset}"
 seed="${3:?missing seed}"
 data_dir="${4:-$REPO_ROOT/data}"
+SGL_PORT="${SGL_PORT:-3000}"
+RETRIEVER_URL="${RETRIEVER_URL:-127.0.0.1:3005}"
 
 # Canonical split per dataset (matches Search-R1: test if exists, else dev).
 case "$dataset" in
@@ -38,6 +40,10 @@ case "$variant" in
   instruct)
     apply_chat=True
     generator_model=search_r1_instruct_model
+    ;;
+  qwen_25_3b_instruct)
+    apply_chat=True
+    generator_model=qwen_25_3b_instruct
     ;;
   *) echo "unknown variant: $variant" >&2; exit 2 ;;
 esac
@@ -62,7 +68,7 @@ cd "$EVAL_DIR"
   --split "$split" \
   --save_dir "$save_dir" \
   --save_note "$save_note" \
-  --sgl_remote_url 127.0.0.1:3000 \
-  --remote_retriever_url 127.0.0.1:3005 \
+  --sgl_remote_url 127.0.0.1:$SGL_PORT \
+  --remote_retriever_url "$RETRIEVER_URL" \
   --generator_model "$generator_model" \
   --apply_chat "$apply_chat"
