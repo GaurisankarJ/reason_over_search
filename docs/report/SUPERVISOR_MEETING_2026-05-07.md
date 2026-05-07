@@ -140,6 +140,24 @@ M3 uses the same `<search>` / `<result>` action format as the **published** ReSe
 
 Full numerical record: [`RESULTS_v2.md`](RESULTS_v2.md). Code-setup diff and 14-fix audit: [`CODE_SETUP_v2.md`](CODE_SETUP_v2.md). Milestone narrative: [`../milestone_three/MILESTONE_3.md`](../milestone_three/MILESTONE_3.md).
 
+### 4.8 M3.1 — second checkpoint, second prompt (queued 2026-05-08, results pending)
+
+The M3 lift was measured on `p1_basic_w_ex_z7kcxfof` (the *with-example* run that anchored heavy-tool 2/4 behaviour, end reward 0.190 over 1046 steps, +28 % rel). But that **was not the highest-reward Phase-1 run** — `p3_decide_no_ex_el6s2d2h` (no example, decision rules, end reward **0.215** over 2280 steps, **+43 % rel**) was. M3.1 evaluates that second checkpoint on the same 7 paper QA benchmarks at full Plan A, using the byte-identical `p3_decide_no_ex` prompt that produced it. The question this answers: does the higher rollout reward translate to higher held-out EM, or is the gap mostly the partial-credit-floor artifact (Finding 4)?
+
+| Run | Prompt | Behaviour | Steps | End reward | Δ rel reward |
+|---|---|---|---:|---:|---:|
+| `z7kcxfof` (M3) | `p1_basic_w_ex` | heavy-tool 2/4 | 1046 | **0.190** | +28 % |
+| `el6s2d2h` (**M3.1**) | `p3_decide_no_ex` | standard 1/3 | 2280 | **0.215** | **+43 %** |
+
+**Pipeline change is additive only** (no fixes; the M3 14-fix audit holds). Two pieces:
+
+- New prompt template constant `P3_DECIDE_NO_EX_TEMPLATE` (verbatim from training, recovered from `RESULTS_v0.md`); `templates.py` now exposes a `QWEN3_TEMPLATES` registry keyed on `prompt_mode`. `active_pipeline.py` and `run_eval.py` switched their `prompt_mode == 'qwen3'` checks to `prompt_mode.startswith('qwen3')` so all qwen3 modes share retrieval format / budgets / `enable_thinking=True`; only the system message differs.
+- Checkpoint conversion: el6s2d2h step 2000 verl-FSDP → HF safetensors via `python -m verl.model_merger merge --backend fsdp …`. ~1 min; output at [`eval/qwen_3_0.6b_v0_no_ex/`](../../eval/qwen_3_0.6b_v0_no_ex/).
+
+**Status**: sbatch **job 2134645** queued 2026-05-08T00:33Z (gpu-short, 4 h). Will run all 7 datasets autonomously, ~2.5 h expected (matches the M3 v0 sbatch reference). Logs: `logs/m3_2134645_*.{out,err,log}`. Numerical results land in [`RESULTS_v2.md`](RESULTS_v2.md) §M3.1. Milestone narrative: [`../milestone_three/MILESTONE_3.1.md`](../milestone_three/MILESTONE_3.1.md). Setup diff: [`CODE_SETUP_v2.md`](CODE_SETUP_v2.md) §13.5.
+
+**Planned follow-up — training-plot comparison panel**: both runs already have full W&B histories + per-run plots (`results_v0_assets/single_p1_basic_w_ex_z7kcxfof.png`, `results_v0_assets/single_p3_decide_no_ex_el6s2d2h.png`). The data-side work is done; only a side-by-side panel (reward / tool-call rate / num-turns / response-length, both runs overlaid) is missing — that visualisation would make the with-example-vs-no-example structural finding glanceable for the supervisor brief. Adding it is a few hours of plot work post-M3.1, no new training. Tracked as M3.1 deliverable item 9.
+
 ---
 
 ## 5. Compute reality and the reframed research question

@@ -58,6 +58,8 @@ Gaurisankar Jayadas
   - **Held-out generalisation rules out memorisation**: `z7kcxfof` was trained on MuSiQue only; the lift transfers to the other 6 benchmarks (none seen at training time), so the model exhibits a learned tool-use skill rather than retrieving training-set answers.
   - Setup cost (14 fixes), wall-clock (~2.5 h / variant), per-dataset breakdown, vs-ReSearch comparison, and the *"eval pipeline now pinned for Phase-2"* deliverable: `docs/report/RESULTS_v2.md` and `docs/report/SUPERVISOR_MEETING_2026-05-07.md` § 4.
 
+- **M3.1 launched (2026-05-08, results pending)**. Evaluating the **highest-reward Phase-1 run**, `p3_decide_no_ex_el6s2d2h` (no example, decision rules, end reward 0.215, +43 % rel; vs M3's z7kcxfof at 0.190, +28 % rel) on the same 7 benchmarks at full Plan A using its training prompt byte-for-byte. Pipeline change is additive only (new `P3_DECIDE_NO_EX_TEMPLATE` + `QWEN3_TEMPLATES` registry; `prompt_mode` family switched to prefix-match). Sbatch **job 2134645** queued. Settles whether higher rollout reward translates to higher held-out EM. Detail: `docs/milestone_three/MILESTONE_3.1.md`; results land in `RESULTS_v2.md` §14.
+
 ## Plans for next weeks
 
 The proposed training recipe is three drop-in additions to a single Search-R1 GRPO baseline run on a Qwen3.5 small model (the family released 2026-03-02 includes 0.8B, 2B, 4B, 9B; only 0.8B and 2B fit the budget). Phase-2 will **start with Qwen3.5-0.8B** for cheap iteration before extending to 2B if the recipe holds. All three additions were chosen because they target the "1× A100 budget" reframing and are cheap to add.

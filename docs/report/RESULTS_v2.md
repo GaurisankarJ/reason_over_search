@@ -331,3 +331,67 @@ To swap to a different checkpoint, drop it under `eval/<name>/` and add the case
 - M3 code-setup diff: `docs/report/CODE_SETUP_v2.md`
 - Training-time per-run synthesis (29 ALICE runs): `docs/report/RESULTS_v0.md` (14 v0) + `docs/report/RESULTS_v1.md` (15 v1)
 
+---
+
+## 14. M3.1 — second checkpoint, second prompt (queued 2026-05-08)
+
+After M3 closed, a second eval was launched against `p3_decide_no_ex_el6s2d2h` — the Phase-1 v0 run with the **highest end-of-run rollout reward (0.215)** but a different prompt and behavioral signature than the M3-evaluated `z7kcxfof`. Asks the question: does the rollout-reward gap (0.215 vs 0.190) translate to held-out EM, and which prompt-conditioned-on behavioural mode (heavy-tool with-example vs standard-tool no-example) generalises better?
+
+### 14.1 The two checkpoints, side by side (training-time signature)
+
+| Run | Prompt | Behaviour | Steps | First-decile reward | Last-decile reward | Δ rel |
+|---|---|---|---:|---:|---:|---:|
+| `z7kcxfof` (M3) | `p1_basic_w_ex` | heavy-tool 2-call / 4-turn / ~2050 tok | 1046 | 0.148 | **0.190** | +28 % |
+| `el6s2d2h` (M3.1) | `p3_decide_no_ex` | standard 1-call / 3-turn / ~1117 tok | 2280 | 0.151 | **0.215** | **+43 %** |
+
+(Source: [`RESULTS_v0.md`](RESULTS_v0.md) §11 cross-run summary table.)
+
+### 14.2 Eval setup (deltas vs M3 only)
+
+Identical to M3 except for the prompt template and the checkpoint:
+
+| Setting | M3 (z7kcxfof) | M3.1 (el6s2d2h) |
+|---|---|---|
+| Checkpoint dir | `eval/qwen_3_0.6b_v0/` (1046 steps) | `eval/qwen_3_0.6b_v0_no_ex/` (step 2000; verl-FSDP → HF via `verl.model_merger`) |
+| Prompt template | `QWEN3_0_6B_TEMPLATE` | **`P3_DECIDE_NO_EX_TEMPLATE`** (new in `evaluation_research/flashrag/search_r1/templates.py`; verbatim from training) |
+| `prompt_mode` | `qwen3` | `qwen3_p3_decide_no_ex` (new; in the `qwen3*` family — same retrieval format / budgets / `enable_thinking=True`) |
+| Hardware | ALICE 1× A100-80GB | same |
+| Decoding / seed / datasets | greedy / 1 / 7 paper benchmarks (full Plan A, 51,713 items) | same |
+
+Pipeline change is additive (no fixes; the M3 14-fix audit holds). Detail: [`CODE_SETUP_v2.md`](CODE_SETUP_v2.md) §13.5 and [`../milestone_three/MILESTONE_3.1.md`](../milestone_three/MILESTONE_3.1.md).
+
+### 14.3 Job
+
+**sbatch 2134645**, gpu-short partition, 4 h limit, submitted 2026-05-08T00:33Z. Will start retriever (IVF-SQ8 × 8) + SGLang on `eval/qwen_3_0.6b_v0_no_ex/`, run all 7 datasets via `bash scripts/run_m3.sh qwen3_0.6b_v0_no_ex <dataset> 1`. Expected wall-clock ~2.5 h per the M3 v0 sbatch (job 2125009) reference.
+
+Logs: `logs/m3_2134645_*.{out,err,log}`. Per-dataset results: `evaluation_research/results/<dataset>/<dataset>_*_m3_qwen3_0.6b_v0_no_ex_seed1/`.
+
+### 14.4 Headline (TBD, populated when job completes)
+
+| Metric        | pre-GRPO  | M3 (z7kcxfof, with example) | **M3.1 (el6s2d2h, no example)** | Δ M3.1 vs M3 |
+| ------------- | --------- | ----------- | --------------- | --- |
+| **EM** (avg)  | **0.102** | **0.155**   | _TBD_           | _TBD_ |
+| ACC (avg)     | 0.123     | 0.189       | _TBD_           | _TBD_ |
+| F1 (avg)      | 0.140     | 0.223       | _TBD_           | _TBD_ |
+
+### 14.5 Per-dataset breakdown (TBD)
+
+| Dataset               | Items  | pre-GRPO EM | M3 v0 EM | M3.1 EM | Δ M3.1 vs M3 |
+| --------------------- | ------ | ----------- | -------- | ------- | --- |
+| bamboogle (test)      | 125    | 0.056       | 0.088    | _TBD_   | _TBD_ |
+| nq (test)             | 3,610  | 0.113       | 0.191    | _TBD_   | _TBD_ |
+| triviaqa (test)       | 11,313 | 0.178       | 0.302    | _TBD_   | _TBD_ |
+| popqa (test)          | 14,267 | 0.133       | 0.227    | _TBD_   | _TBD_ |
+| hotpotqa (dev)        | 7,405  | 0.083       | 0.116    | _TBD_   | _TBD_ |
+| 2wikimultihopqa (dev) | 12,576 | 0.141       | 0.138    | _TBD_   | _TBD_ |
+| musique (dev)         | 2,417  | 0.010       | 0.023    | _TBD_   | _TBD_ |
+| **average**           | 51,713 | 0.102       | 0.155    | _TBD_   | _TBD_ |
+
+### 14.6 Hypothesis
+
+If the rollout-reward gap (0.215 vs 0.190) is meaningful, el6s2d2h should beat z7kcxfof on at least the single-hop datasets (NQ / TriviaQA / PopQA), where M3 had headroom and the lift was concentrated. If the gap is mostly the partial-credit-floor artifact ([`RESULTS_v0.md`](RESULTS_v0.md) finding 4), the EM gap will be smaller than the rollout-reward gap suggests. Either result settles a Phase-1 ambiguity.
+
+### 14.7 Planned follow-up: training-plot comparison panel
+
+Not eval; just a visualisation. The two training runs already exist as W&B histories + per-run plots in `results_v0_assets/`. Adding a single side-by-side panel (reward / tool-call / num-turns / response-length curves) overlaying z7kcxfof and el6s2d2h would make the "with-example anchors heavy-tool, no-example + decision-rules survives at higher reward" finding glanceable. Tracked as a deliverable in [`../milestone_three/MILESTONE_3.1.md`](../milestone_three/MILESTONE_3.1.md) (item 9).
+

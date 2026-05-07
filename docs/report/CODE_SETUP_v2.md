@@ -286,6 +286,33 @@ The +0.032 EM lift on bamboogle survives end-to-end and matches the user's prior
 
 ---
 
+## 13.5. M3.1 extension (2026-05-08): second Phase-1 checkpoint, second prompt
+
+After M3 closed, we evaluate `p3_decide_no_ex_el6s2d2h` — the Phase-1 v0 run with the **highest end-of-run rollout reward (0.215)** but a **different prompt** than z7kcxfof. This required no new alignment fixes; the M3 14-fix audit holds. Two purely additive changes to the pipeline:
+
+1. **New prompt template constant**: `P3_DECIDE_NO_EX_TEMPLATE` in `evaluation_research/flashrag/search_r1/templates.py`, byte-for-byte identical to the system message used at training time (recovered from [`docs/report/RESULTS_v0.md`](RESULTS_v0.md) §`p3_decide_no_ex (el6s2d2h)`). Difference vs `QWEN3_0_6B_TEMPLATE` (= `p1_basic_w_ex`):
+   - "Use the search tool **multiple** Wikipedia search tool calls" → "Use the search tool" (the "multiple" was the heavy-tool anchor in M3)
+   - "Answers should be based on the search results" → "Use the information in the search results to determine the final answer" + two extra decision-rule sentences
+   - **No Hamlet 2-search example** at the bottom (the headline structural difference)
+2. **`prompt_mode='qwen3_p3_decide_no_ex'`** added as a new mode. Implementation: `templates.py` exports `QWEN3_TEMPLATES = {"qwen3": ..., "qwen3_p1_basic_w_ex": ..., "qwen3_p3_decide_no_ex": ...}`. `active_pipeline.py` and `run_eval.py` switched their `prompt_mode == 'qwen3'` checks to `prompt_mode.startswith('qwen3')` so all qwen3 modes share retrieval format / budgets / `enable_thinking=True`; only the system message differs.
+
+**Checkpoint conversion**: el6s2d2h was archived in verl-FSDP format (`actor/model_world_size_1_rank_0.pt`); converted to HF safetensors via:
+
+```bash
+/home/s4374886/.conda/envs/verl-latest/bin/python -m verl.model_merger merge \
+    --backend fsdp \
+    --local_dir docs/archive/verl_runs/v0/p3_decide_no_ex_el6s2d2h/global_step_2000/actor \
+    --target_dir eval/qwen_3_0.6b_v0_no_ex
+```
+
+(~1 min on the login node; output is a 1.5 GB `model.safetensors` + tokenizer files. Step 2000 is the closest checkpointed step to end-of-run 2280; same approach as M3, which used z7kcxfof's step 1000 of 1046.)
+
+**Variant dispatch**: `scripts/run_m3.sh` and `scripts/sbatch_m3.sh` add a `qwen3_0.6b_v0_no_ex` variant case that points at `eval/qwen_3_0.6b_v0_no_ex/` and passes `--prompt_mode qwen3_p3_decide_no_ex`. Same SGLang flags, same retriever, same datasets.
+
+For results see [`RESULTS_v2.md`](RESULTS_v2.md) §M3.1 (sbatch job 2134645, queued 2026-05-08).
+
+---
+
 ## 14. Pointers
 
 - Training run that produced `qwen_3_0.6b_v0`: `docs/report/RESULTS_v0.md` §`p1_basic_w_ex (z7kcxfof)`
