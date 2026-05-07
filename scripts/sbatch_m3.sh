@@ -25,7 +25,7 @@
 
 set -euo pipefail
 
-VARIANT="${1:?Usage: sbatch scripts/sbatch_m3.sh <qwen3_0.6b|qwen3_0.6b_v0>}"
+VARIANT="${1:?Usage: sbatch scripts/sbatch_m3.sh <qwen3_0.6b|qwen3_0.6b_v0|qwen3_0.6b_v0_no_ex>}"
 # Under sbatch, SLURM copies the script to /var/spool/slurmd/<jobid>/slurm_script,
 # so BASH_SOURCE-based REPO_ROOT resolves wrong. Use SLURM_SUBMIT_DIR (set by SLURM
 # to the directory where `sbatch` was invoked) with a hardcoded fallback for direct execution.
@@ -87,8 +87,9 @@ curl -sS http://127.0.0.1:3005/health
 
 # ── SGLang server ────────────────────────────────────────────────────────────
 case "$VARIANT" in
-  qwen3_0.6b)     MODEL_PATH="$REPO_ROOT/eval/qwen_3_0.6b" ;;
-  qwen3_0.6b_v0)  MODEL_PATH="$REPO_ROOT/eval/qwen_3_0.6b_v0" ;;
+  qwen3_0.6b)            MODEL_PATH="$REPO_ROOT/eval/qwen_3_0.6b" ;;
+  qwen3_0.6b_v0)         MODEL_PATH="$REPO_ROOT/eval/qwen_3_0.6b_v0" ;;
+  qwen3_0.6b_v0_no_ex)   MODEL_PATH="$REPO_ROOT/eval/qwen_3_0.6b_v0_no_ex" ;;
   *) echo "Unknown variant: $VARIANT" >&2; exit 2 ;;
 esac
 

@@ -11,7 +11,7 @@ from flashrag.prompt import PromptTemplate
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from flashrag.pipeline.parallelism import INFERENCE_MAX_WORKERS
-from flashrag.search_r1.templates import SEARCH_R1_TEMPLATE, QWEN3_0_6B_TEMPLATE
+from flashrag.search_r1.templates import SEARCH_R1_TEMPLATE, QWEN3_0_6B_TEMPLATE, QWEN3_TEMPLATES
 from flashrag.search_r1.reward import extract_solution
 from flashrag.search_r1.parser import extract_search_tag_query
 
@@ -28,8 +28,14 @@ class SearchR1Pipeline(BasicPipeline):
         self.enable_thinking = enable_thinking
         self.prompt_mode = prompt_mode
         print(f"enable_thinking: {enable_thinking}  prompt_mode: {prompt_mode}")
-        # 'qwen3': system-message format (p1_basic_w_ex); 'search_r1': original user-message format.
-        self.prompt_template = QWEN3_0_6B_TEMPLATE if prompt_mode == 'qwen3' else SEARCH_R1_TEMPLATE
+        # 'qwen3*': system-message format (Phase-1 hybrid prompts); 'search_r1': original user-message format.
+        # All `qwen3*` modes share retrieval format / budgets / enable_thinking; only the system message differs.
+        if prompt_mode in QWEN3_TEMPLATES:
+            self.prompt_template = QWEN3_TEMPLATES[prompt_mode]
+        elif prompt_mode == 'search_r1':
+            self.prompt_template = SEARCH_R1_TEMPLATE
+        else:
+            raise ValueError(f"Unknown prompt_mode: {prompt_mode!r}; valid: {sorted(QWEN3_TEMPLATES.keys()) + ['search_r1']}")
 
         self.tokenizer = AutoTokenizer.from_pretrained(config["generator_model_path"])
 
@@ -38,7 +44,7 @@ class SearchR1Pipeline(BasicPipeline):
         question = (item.question or "").strip()
         if question and question[-1] != '?':
             question += '?'
-        if self.prompt_mode == 'qwen3':
+        if self.prompt_mode.startswith('qwen3'):
             # p1_basic_w_ex training format: system message holds the full prompt; user message is just the question.
             messages = [
                 {'role': 'system', 'content': self.prompt_template},
@@ -65,7 +71,7 @@ class SearchR1Pipeline(BasicPipeline):
         # Per-mode budgets:
         #   qwen3 (p1_basic_w_ex training): response_length=4096, max_tool_response_length=256, ~5 turns observed
         #   search_r1 (paper-fidelity):     max_turns=4, response=500, obs=500
-        if getattr(self, 'prompt_mode', 'search_r1') == 'qwen3':
+        if getattr(self, 'prompt_mode', 'search_r1').startswith('qwen3'):
             # Match p1_basic_w_ex training: response_length=4096, max_tool_response_length=256, ~5 turns observed.
             # No per-step cap — `min(remain_length, step_limit)` becomes `remain_length`.
             max_search_turns = 5
@@ -120,7 +126,7 @@ class SearchR1Pipeline(BasicPipeline):
 
                 if search_status.startswith("valid_search"):
                     search_result = self.retriever.search(search_content)
-                    if self.prompt_mode == 'qwen3':
+                    if self.prompt_mode.startswith('qwen3'):
                         # Match p1_basic_w_ex training rollout exactly (verl_legacy/vllm_rollout.py:286-290):
                         # raw `{contents}` joined by \n\n, stripped — NO "Doc i(Title:...)" header.
                         retrieval_text = ''
@@ -142,7 +148,7 @@ class SearchR1Pipeline(BasicPipeline):
                         retrieval_text = self.tokenizer.decode(
                             obs_ids[:max_obs_length], skip_special_tokens=True
                         )
-                    if self.prompt_mode == 'qwen3':
+                    if self.prompt_mode.startswith('qwen3'):
                         # Match p1_basic_w_ex training rollout exactly:
                         # `verl_legacy/vllm_rollout.py:419` encodes f" <result>\n{result}\n</result>"
                         # (LEADING SPACE before <result>). Different tokenization vs. no-space.

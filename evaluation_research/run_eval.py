@@ -102,8 +102,9 @@ def ircot(args, config_dict):
 def search_r1(args, config_dict):
     config_dict["metrics"] = ["em", "acc", "f1"]
     config_dict["search_r1_mode"] = True
-    # qwen3 mode (p1_basic_w_ex) was trained with top_n=5; stay at top-3 for search_r1 paper-fidelity.
-    if args.prompt_mode == "qwen3":
+    # All qwen3* modes (p1_basic_w_ex, p3_decide_no_ex, ...) were trained with top_n=5;
+    # stay at top-3 for search_r1 paper-fidelity.
+    if args.prompt_mode.startswith("qwen3"):
         config_dict["retrieval_topk"] = 5
     config = Config(args.config_path, config_dict)
     all_split = get_dataset(config)
@@ -131,7 +132,7 @@ if __name__ == "__main__":
     parser.add_argument("--enable_thinking", type=_str2bool, default=False)
     parser.add_argument("--search_r1_mode", type=_str2bool, default=False)
     parser.add_argument("--prompt_mode", type=str, default='search_r1',
-                        help="'search_r1' (original user-msg template) or 'qwen3' (p1_basic_w_ex system-msg template)")
+                        help="'search_r1' (original user-msg template), 'qwen3' / 'qwen3_p1_basic_w_ex' (M3 z7kcxfof prompt), or 'qwen3_p3_decide_no_ex' (M3.1 el6s2d2h prompt)")
 
     func_dict = {
         "naive": naive,

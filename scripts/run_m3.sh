@@ -1,9 +1,15 @@
 #!/usr/bin/env bash
-# Run one (model_variant, dataset, seed) M3 evaluation using evaluation_research/.
+# Run one (model_variant, dataset, seed) M3 / M3.1 evaluation using evaluation_research/.
 # Usage:
-#   scripts/run_m3.sh <qwen3_0.6b|qwen3_0.6b_v0> <dataset> <seed> [data_dir]
+#   scripts/run_m3.sh <qwen3_0.6b|qwen3_0.6b_v0|qwen3_0.6b_v0_no_ex> <dataset> <seed> [data_dir]
 #
-# Both variants use prompt_mode=qwen3 (system-message format, <result> tags).
+# Variants (each must use the prompt the model was trained with, byte-for-byte):
+#   qwen3_0.6b              untrained Qwen3-0.6B hybrid; baseline reference. prompt_mode=qwen3 (p1_basic_w_ex).
+#   qwen3_0.6b_v0           p1_basic_w_ex_z7kcxfof (M3, RESULTS_v2 §4-9): heavy-tool 2-call/4-turn, 1046 steps.
+#                           prompt_mode=qwen3.
+#   qwen3_0.6b_v0_no_ex     p3_decide_no_ex_el6s2d2h (M3.1): decision rules, no example, step 2000 (peak
+#                           reward 0.215). prompt_mode=qwen3_p3_decide_no_ex.
+#
 # Writes results to evaluation_research/results/<dataset>/.
 # Skips if a metric_score.txt already exists for this save_note (resume-friendly).
 
@@ -13,7 +19,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 EVAL_DIR="$REPO_ROOT/evaluation_research"
 PY="${PY:-/home/s4374886/.conda/envs/evaluation_search_r1/bin/python}"
 
-variant="${1:?missing variant (qwen3_0.6b|qwen3_0.6b_v0)}"
+variant="${1:?missing variant (qwen3_0.6b|qwen3_0.6b_v0|qwen3_0.6b_v0_no_ex)}"
 dataset="${2:?missing dataset}"
 seed="${3:?missing seed}"
 data_dir="${4:-$REPO_ROOT/data}"
@@ -32,9 +38,15 @@ esac
 case "$variant" in
   qwen3_0.6b)
     model_path="$REPO_ROOT/eval/qwen_3_0.6b"
+    prompt_mode=qwen3
     ;;
   qwen3_0.6b_v0)
     model_path="$REPO_ROOT/eval/qwen_3_0.6b_v0"
+    prompt_mode=qwen3
+    ;;
+  qwen3_0.6b_v0_no_ex)
+    model_path="$REPO_ROOT/eval/qwen_3_0.6b_v0_no_ex"
+    prompt_mode=qwen3_p3_decide_no_ex
     ;;
   *) echo "unknown variant: $variant" >&2; exit 2 ;;
 esac
@@ -48,7 +60,7 @@ if compgen -G "$save_dir/${dataset}_*_${save_note}/metric_score.txt" > /dev/null
   exit 0
 fi
 
-echo "[run]  $variant/$dataset/seed=$seed split=$split model=$model_path"
+echo "[run]  $variant/$dataset/seed=$seed split=$split model=$model_path prompt_mode=$prompt_mode"
 cd "$EVAL_DIR"
 "$PY" run_eval.py \
   --config_path flashrag/config/basic_config.yaml \
@@ -62,5 +74,5 @@ cd "$EVAL_DIR"
   --remote_retriever_url 127.0.0.1:3005 \
   --generator_model "$model_path" \
   --apply_chat True \
-  --prompt_mode qwen3 \
+  --prompt_mode "$prompt_mode" \
   --enable_thinking True
