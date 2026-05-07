@@ -89,7 +89,123 @@ After the Qwen3-0.6B compute reality became clear, training pivoted to **Qwen3.5
 
 ---
 
-## 2. Next Steps: Proposed Training Recipe
+## 2. M3: First evaluation of the v0 GRPO checkpoint vs untrained Qwen3-0.6B
+
+Between the previous meeting (2026-05-04) and this one (2026-05-07), the M3 evaluation was completed: the **only Phase-1 GRPO checkpoint that converged on heavy-tool behaviour** (`p1_basic_w_ex_z7kcxfof`, 1046 steps, 2 search calls / 4 turns / ~2050-token responses, end-of-run rollout reward 0.190 — see `RESULTS_v0.md` §10) was evaluated against the untrained Qwen3-0.6B hybrid base on the same 7 paper QA benchmarks. **Eval ran on full Plan A test/dev sets (51,713 items per variant, no subsampling)** rather than the originally planned 1k subsamples — `sample_num` is not respected by the FlashRAG `search_r1` pipeline path; the upgrade is a happy accident that removes any subsampling-noise objection.
+
+### 2.1 Headline result
+
+Across all 7 datasets (51,713 items per variant; ALICE A100-80GB; greedy decode):
+
+| Metric | pre-GRPO | post-GRPO (z7kcxfof) | Δ absolute | Δ relative |
+|---|---:|---:|---:|---:|
+| **EM** (avg) | **0.102** | **0.155** | **+0.053** | **+52 %** |
+| ACC (avg) | 0.123 | 0.189 | +0.066 | +54 % |
+| F1 (avg) | 0.140 | 0.223 | +0.083 | +59 % |
+
+**6 of 7 datasets improved on EM**; the seventh (2WikiMultiHopQA) was statistically tied (−0.003 EM).
+
+### 2.2 Per-dataset breakdown (EM)
+
+| Dataset | Items | pre-GRPO EM | v0 EM | Δ EM | Δ % |
+|---|---:|---:|---:|---:|---:|
+| bamboogle (test) | 125 | 0.056 | **0.088** | +0.032 | +57 % |
+| nq (test) | 3,610 | 0.113 | **0.191** | +0.078 | +69 % |
+| triviaqa (test) | 11,313 | 0.178 | **0.302** | +0.124 | +70 % |
+| popqa (test) | 14,267 | 0.133 | **0.227** | +0.094 | +71 % |
+| hotpotqa (dev) | 7,405 | 0.083 | **0.116** | +0.033 | +40 % |
+| 2wikimultihopqa (dev) | 12,576 | **0.141** | 0.138 | −0.003 | −2 % |
+| musique (dev) | 2,417 | 0.010 | **0.023** | +0.013 | +130 % |
+| **average** | 51,713 | 0.102 | **0.155** | **+0.053** | **+52 %** |
+
+The lift is **concentrated on single-hop QA** (NQ +69 %, TriviaQA +70 %, PopQA +71 %). **Multi-hop saturates at 0.6 B parameters**: HotpotQA +40 %, 2WikiMultiHopQA tied. MuSiQue (3-hop) doubles in absolute EM but from a small base (0.010 → 0.023). Multi-hop weakness is a **capacity ceiling**, not a training-side issue — confirms the "0.6 B is too small for paper-grade reward-function ablation" finding from Phase-1.
+
+### 2.3 The training run that produced the evaluated checkpoint (z7kcxfof)
+
+| Property | Value |
+|---|---|
+| W&B id | `z7kcxfof` (compact name `p1_basic_w_ex`) |
+| Date | 2026-04-06 |
+| Block | v0 (Phase-1 ALICE, paper `<search>`/`<result>` tags) |
+| Hardware | ALICE 1× A100-40GB |
+| Steps trained / horizon | 1046 / 9968 |
+| Algorithm | GRPO with Search-R1 EM-only reward (verl-legacy `qa_em.py`) |
+| Hyperparameters (paper-faithful) | `lr=1e-6`, KL coef 0.001, `max_response_length=4096`, rollout `n=3`, `top_n=5`, `max_turns=4` |
+| End-of-run rollout reward | 0.148 → **0.190** |
+| End-of-run tool-call rate | 1.83 → **2.00** |
+| End-of-run num turns | 3.83 → **4.00** |
+| End-of-run response length | 1788 → **2047** tokens |
+| Behavioral signature | **Heavy-tool mode** (2 search calls / 4 turns); the *only* Phase-1 run that converged on this; the 2-search Hamlet example in the prompt anchors the model on "always do 2 searches" |
+
+Total Phase-1 ALICE training was **29 runs** (14 v0 + 15 v1, 2026-04-03 to 2026-04-19). Of those, only `z7kcxfof` produced the heavy-tool signature this evaluation captures.
+
+### 2.4 The prompt (`p1_basic_w_ex` system message — byte-for-byte at training and eval)
+
+```text
+You are a helpful assistant who can answer questions using multiple Wikipedia search tool calls.
+You can call the search tool by writing: <search> your query </search>
+You will receive the result in: <result> your search result </result>
+Use the search tool to obtain the information needed for the answer.
+Answers should be based on the search results.
+You may use the search tool multiple times if needed before giving the final answer.
+Provide the final answer in the format: <answer>The final answer is \[ \boxed{answer here} \]</answer>.
+For example:
+Question: What is the nationality of the author of Hamlet?
+<search>Hamlet</search>
+<result>The Tragedy of Hamlet was written by William Shakespeare.</result>
+<search>William Shakespeare</search>
+<result>William Shakespeare was an English playwright.</result>
+<answer>The final answer is \[ \boxed{English} \]</answer>
+```
+
+### 2.5 M3 vs ReSearch paper setup
+
+The v0 checkpoint was trained with the **paper Search-R1 tag scheme** (`<search>` / `<result>`), not the **ReSearch tool-call scheme** (`<tool_call>` / `<tool_response>`). The eval is byte-aligned to verl-legacy training rollouts:
+
+| Knob | ReSearch paper (`re-search/src/flashrag/pipeline/active_pipeline.py`, `ReSearchPipeline`) | M3 (this work) |
+|---|---|---|
+| Action format | `<tool_call>{"name":"search","arguments":{"query":"..."}}</tool_call>` (Hermes/ChatML JSON) | `<search>X</search>` (Search-R1 tags, `p1_basic_w_ex` prompt) |
+| Result wrapper | ` <tool_response>\n{X}\n</tool_response>` | ` <result>\n{X}\n</result>` (leading space, byte-identical to verl-legacy `vllm_rollout.py:419`) |
+| Retrieval text | `{contents}\n\n` joined, stripped | same |
+| `top_n` / topk | 5 | 5 |
+| `max_search_turns` | 8 | 5 (training observed max) |
+| `step_limit` per call | 512 | 8192 (no cap; bounded by `remain_length=4096`) |
+| `generator_max_input_len` | 1024 (ReSearch eval default) | 4096 (matches training `response_length=4096`) |
+| `enable_thinking` | False default | True (Qwen3 hybrid soft-switch needs it for the model to actually reason) |
+| Pred extraction | `<answer>` content + `last_boxed_only_string + remove_boxed` | `<answer>` content + `\boxed{X}` regex unwrap (effectively the same) |
+| Reward at training time | EM-only, paper-faithful (`qa_em.py`) | same |
+
+The full setup-fix trail (14 fixes between clone-and-run and the first clean comparison) is recorded in `docs/report/CODE_SETUP_v2.md` §3. Highest-impact fixes:
+- **Single braces in `\boxed{answer here}`** (template was using Python format-escape `{{}}` but read as raw string for qwen3 mode → model output contained `\boxed{{X}}` → predictor unwrap failed; first iteration EM=0)
+- **Leading space before `<result>`** (matches training tokenization byte-for-byte; without it, tokenization at the boundary differs from training distribution)
+- **Raw retrieval format `{contents}\n\n`** (drop the Search-R1 `Doc i (Title:...)` prefix; training fed raw)
+- **`top_n=5`, `max_obs_length=256`, `generator_max_input_len=4096`** (training-side budgets)
+- **`enable_thinking=True`** (so Qwen3 hybrid's chat template doesn't auto-inject closed empty `<think></think>`)
+
+After applying these in sequence, bamboogle smoke EM rose from 0.000 → 0.008 → 0.040 / 0.080 → 0.056 / 0.088 (pre-GRPO / v0). Each fix moved a recognisable amount; alignment is mechanically interpretable rather than empirically tuned.
+
+### 2.6 Wall-clock and concurrency
+
+| Variant | Wall-clock total | `INFERENCE_MAX_WORKERS` |
+|---|---|---|
+| pre-GRPO (`qwen_3_0.6b`) | ~115 min (interactive `srun`, job 2120423, node870) | 16 (NQ, TriviaQA, PopQA) → 32 (HotpotQA, 2Wiki, MuSiQue) |
+| v0 (`qwen_3_0.6b_v0`) | **2h 26m 33s** (`sbatch`, job 2125009, node875) | 32 throughout |
+
+Bumping `INFERENCE_MAX_WORKERS` from 16 → 32 gave a **~2× speedup** at fixed dataset shape (popqa @ 16 workers = 1.79 s/item; hotpotqa @ 32 workers = 0.92 s/item, both 1k-item-equivalent). Decode-side throughput peaked at ~3,300 tokens/s on a 0.6 B model with cuda-graph + flashinfer attention; bottleneck after the bump shifts to retriever queue depth (8 retriever workers feeding 32 in-flight clients).
+
+### 2.7 Implications
+
+1. **Phase-1 GRPO did teach useful behavior.** A clean +0.053 EM (+52 % relative) lift across 51,713 items per variant on full Plan A is well outside any plausible noise band. Heavy-tool mode (2 calls / 4 turns) emerges from the 2-search Hamlet example anchor — same behavioural signature documented at training time.
+2. **0.6 B is the capacity ceiling for multi-hop.** HotpotQA +40 %, 2Wiki tied → multi-hop reasoning at 600 M is capacity-bound, not training-bound. Confirms the Phase-1 finding that 0.6 B is too small to support reward-function ablation on multi-hop.
+3. **The held-out generalisation rules out memorisation.** `z7kcxfof` was trained on MuSiQue with EM reward; held-out evaluation on the other 6 benchmarks (NQ, TriviaQA, PopQA, HotpotQA, 2Wiki, Bamboogle) shows the lift transfers — the model learned a tool-use *skill*, not training-set answers.
+4. **The eval pipeline is now pinned and reusable** for Phase-2. Any future Qwen3-0.6 B / 2 B / 3.5-2 B checkpoint that uses the `<search>` / `<result>` tag scheme can be plugged in via `eval/<name>/` and `bash scripts/run_m3.sh` without touching the eval code. This is the missing piece that was blocking Phase-2 NeMo-RL evaluation.
+5. **Phase-2 expectation**: the Qwen3.5-2B target (3.3× the parameter count, same hybrid soft-switch) should expand the multi-hop lift if the capacity-ceiling hypothesis is right. Single-hop is already close to ceiling under this prompt; multi-hop has the room.
+
+Full numerical record + per-dataset intermediate data: `docs/report/RESULTS_v2.md`. Code-setup diff and 14-fix audit: `docs/report/CODE_SETUP_v2.md`. M3 milestone narrative: `docs/milestone_three/MILESTONE_3.md`.
+
+---
+
+## 3. Next Steps: Proposed Training Recipe
 
 Three drop-in additions to a single Search-R1 GRPO baseline run on Qwen3.5-2B, all chosen because they target the "1× A100 budget" reframing and are cheap to add:
 

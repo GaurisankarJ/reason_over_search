@@ -84,7 +84,14 @@ def extract_solution(solution_str: str):
     matches = list(re.finditer(answer_pattern, solution_str, re.DOTALL))
     if len(matches) <= 0:
         return None
-    return matches[-1].group(1).strip()
+    answer_text = matches[-1].group(1).strip()
+    # qwen3 mode (p1_basic_w_ex prompt) wraps the answer as `\boxed{X}`. Unwrap so EM/F1
+    # compare against X, not the whole "The final answer is \[ \boxed{X} \]" wrapper.
+    # `\{+ ... \}+` tolerates accidental `{{X}}` from a stray Python format-string escape.
+    boxed = re.search(r"\\boxed\{+\s*(.+?)\s*\}+", answer_text, re.DOTALL)
+    if boxed:
+        return boxed.group(1).strip()
+    return answer_text
 
 
 def extract_information_blocks(text: str) -> List[str]:

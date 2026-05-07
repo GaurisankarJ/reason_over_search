@@ -5,14 +5,14 @@ QWEN3_0_6B_TEMPLATE = (
     "Use the search tool to obtain the information needed for the answer.\n"
     "Answers should be based on the search results.\n"
     "You may use the search tool multiple times if needed before giving the final answer.\n"
-    "Provide the final answer in the format: <answer>The final answer is \\[ \\boxed{{answer here}} \\]</answer>.\n"
+    "Provide the final answer in the format: <answer>The final answer is \\[ \\boxed{answer here} \\]</answer>.\n"
     "For example:\n"
     "Question: What is the nationality of the author of Hamlet?\n"
     "<search>Hamlet</search>\n"
     "<result>The Tragedy of Hamlet was written by William Shakespeare.</result>\n"
     "<search>William Shakespeare</search>\n"
     "<result>William Shakespeare was an English playwright.</result>\n"
-    "<answer>The final answer is \\[ \\boxed{{English}} \\]</answer>"
+    "<answer>The final answer is \\[ \\boxed{English} \\]</answer>"
 )
 
 SEARCH_R1_TEMPLATE = (

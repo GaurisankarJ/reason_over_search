@@ -161,7 +161,7 @@ The retriever runs the IVF4096-SQ8 index with 8 parallel workers (matching the t
 
 ### Index
 
-`local_retriever/indexes/wiki18_100w_e5_ivf4096_sq8.index` — 16 GB on disk, downloaded 2026-05-06.
+`indexes/wiki18_100w_e5_ivf4096_sq8.index` — 16 GB on disk, downloaded 2026-05-06. Lives at the **project root** so the relative paths in `local_retriever/retriever_config.yaml` (`./corpus/`, `./indexes/`, `./models/`) resolve when the retriever is launched from there. See §Setup gotchas for the rationale.
 
 ### CPU requirements (exact derivation)
 
@@ -239,13 +239,14 @@ export OMP_NUM_THREADS=4
 /home/s4374886/.conda/envs/retriever/bin/python local_retriever/retriever_serving.py \
   --config local_retriever/retriever_config.yaml \
   --num_retriever 8 \
-  --index "$(pwd)/local_retriever/indexes/wiki18_100w_e5_ivf4096_sq8.index" \
   --port 3005 &
 
 # Wait ~60 s for 8 workers to load index (~134 GB RSS on first launch)
 sleep 60
 curl -sS http://127.0.0.1:3005/health   # → {"status":"healthy","retrievers":{"total":8,"available":8}}
 ```
+
+The retriever resolves `./corpus/`, `./indexes/`, `./models/` relative to its launch CWD. Launch from the project root and these point to the symlinks/files placed there (see §Setup gotchas).
 
 For the flat IP fallback (paper-fidelity or if IVF not available):
 ```bash
@@ -268,6 +269,8 @@ For the flat IP fallback (paper-fidelity or if IVF not available):
 # verify
 curl -sS http://127.0.0.1:3000/health
 ```
+
+**If launching via `ssh <node>` from outside an `srun --pty` shell** (i.e., lmod modules aren't auto-loaded so `nvcc` is not on PATH), append `--attention-backend triton --disable-cuda-graph` to avoid flashinfer's nvcc-dependent JIT compile. See §Setup gotchas.
 
 Swap to `eval/qwen_3_0.6b_v0` for the v0 checkpoint run. Restart SGLang between variants.
 
@@ -318,7 +321,7 @@ No prior EM numbers exist for Qwen3-0.6B on these benchmarks. Use M1 instruct re
 
 1. [x] `eval/qwen_3_0.6b/` and `eval/qwen_3_0.6b_v0/` populated and accessible on ALICE. ✓ (done 2026-05-06)
 2. [x] `retriever` and `evaluation_search_r1` conda envs created on ALICE. ✓ (done 2026-05-06)
-3. [x] IVF-SQ8 index downloaded to `local_retriever/indexes/wiki18_100w_e5_ivf4096_sq8.index` (16 GB). ✓ (done 2026-05-06)
+3. [x] IVF-SQ8 index downloaded to `indexes/wiki18_100w_e5_ivf4096_sq8.index` (16 GB). ✓ (downloaded 2026-05-06; relocated from `local_retriever/indexes/` to project root 2026-05-06 — see §Setup gotchas)
 4. [x] `evaluation_research/` pipeline fork created with M3 code changes (QWEN3_0_6B_TEMPLATE, `prompt_mode=qwen3`, `<result>` tag swap); editable install verified in `evaluation_search_r1` env. ✓ (done 2026-05-06)
 5. [x] `scripts/run_m3.sh` and `scripts/sbatch_m3.sh` created. ✓ (done 2026-05-06)
 6. [ ] Short-partition validation: bamboogle (qwen3_0.6b) passes; wall-clock table updated.
@@ -326,6 +329,76 @@ No prior EM numbers exist for Qwen3-0.6B on these benchmarks. Use M1 instruct re
 8. [ ] Results aggregated to `docs/milestone_three/RESULTS_M3.md`.
 9. [ ] Summary table and findings written up here under §Status.
 
+## Setup gotchas (lessons from the slot 1 attempt, 2026-05-06)
+
+These all bit during the first interactive launch on `node872` (job 2120329). Recording the working fixes so future launches don't repeat them.
+
+### 1. Corpus/index/models layout — must sit at the retriever's launch CWD
+
+`local_retriever/retriever_config.yaml` uses relative paths (`./corpus/wiki18_100w.jsonl`, `./indexes/wiki18_100w_e5_ivf4096_sq8.index`, `./models/e5-base-v2/`). They resolve relative to **wherever the retriever process is launched from**, not relative to the config file.
+
+Initial mistake: launched `python local_retriever/retriever_serving.py --config local_retriever/retriever_config.yaml ...` from the project root with `--index` overriding only the index path. The corpus_path stayed relative and resolved to `./corpus/...` at the project root, which didn't exist (corpus had been placed under `local_retriever/corpus/`). Crash:
+
+```
+FileNotFoundError: Unable to find '/zfsstore/.../reason_over_search/./corpus/wiki18_100w.jsonl'
+```
+
+**Fix (2026-05-06)**: moved the three subdirs to the project root so the relative paths resolve when launching from there:
+
+| Path | Type | Target |
+|---|---|---|
+| `corpus/wiki18_100w.jsonl` | symlink | `/zfsstore/user/s4374886/omega/flash-rag/corpus/wiki18_100w.jsonl` |
+| `indexes/wiki18_100w_e5_ivf4096_sq8.index` | 16 GB file (renamed from `local_retriever/indexes/`) | — |
+| `models/e5-base-v2/` | symlink | `/zfsstore/user/s4374886/omega/flash-rag/models/e5-base-v2` |
+
+`local_retriever/{corpus,indexes,models}/` removed. `scripts/sbatch_m3.sh` updated to point `IVF_INDEX` at the new project-root location.
+
+### 2. SGLang requires `ninja` in the env (one-time pip install)
+
+`evaluation_search_r1` did not have `ninja` installed. Without it, flashinfer's JIT compile of attention kernels fails:
+
+```
+FileNotFoundError: [Errno 2] No such file or directory: 'ninja'
+```
+
+**Fix**: `pip install ninja` in the `evaluation_search_r1` env. Done 2026-05-06.
+
+### 3. `nvcc` not on PATH in non-interactive ssh — use Triton backend
+
+ALICE uses lmod modules. `module load CUDA/12.4.0` works in `srun --pty bash` and in batch (`sbatch`) jobs, but **does not auto-load when you `ssh <node>`** from outside (e.g., to drive a long-running job from the login node). Without CUDA on PATH, flashinfer's CUDA-graph capture fails:
+
+```
+Exception: Capture cuda graph failed: Could not find CUDA installation. Please set CUDA_HOME environment variable.
+```
+
+**Fix for ssh-launched runs**: pass `--attention-backend triton --disable-cuda-graph` to `sglang.launch_server`. Triton has its own JIT (LLVM-based, no nvcc). Small perf cost vs. flashinfer + cuda-graph but functional.
+
+For `sbatch`-driven runs (where `module load CUDA/12.4.0` actually applies), default flashinfer + cuda-graph is fine.
+
+### 4. First-time corpus → arrow conversion is slow (~1–2 min)
+
+HuggingFace `datasets` converts the 21M-passage `wiki18_100w.jsonl` to its arrow cache on first load. The first retriever worker is slow (~1–2 min). Workers 2–8 reuse the cache and start in seconds. This is a one-time cost per cache location.
+
+### 5. PATH carry-over across nested bash via setsid + nohup
+
+When detaching a long-lived process from an ssh session, both `nohup` and `setsid` are needed:
+
+```bash
+ssh <node> "cd $PROJ && setsid bash -c 'PATH=/path/to/env/bin:\$PATH nohup ... > log 2>&1 < /dev/null & echo \$! > pid'"
+```
+
+Without `setsid`, the child remains in the ssh session's process group and dies on disconnect even with `nohup`. Without explicit `PATH=…`, the conda env's binaries (e.g., `ninja`) aren't found by subprocess JIT compilers.
+
 ## Status
 
-**2026-05-06**: Models staged (`eval/qwen_3_0.6b/`, `eval/qwen_3_0.6b_v0/`). Both conda envs created and verified. IVF-SQ8 index downloaded (16 GB, `local_retriever/indexes/`). `evaluation_research/` fork created from `evaluation_search_r1/` with three targeted changes: `QWEN3_0_6B_TEMPLATE` added to `templates.py`; `prompt_mode='qwen3'` wired through `active_pipeline.py` and `run_eval.py` (system-message chat format + `<result>` observation wrapper); editable install verified. `scripts/run_m3.sh` and `scripts/sbatch_m3.sh` created. Next: short-partition validation (bamboogle, 30 min srun), then submit sbatch for both variants.
+**2026-05-06 (early)**: Models staged (`eval/qwen_3_0.6b/`, `eval/qwen_3_0.6b_v0/`). Both conda envs created and verified. IVF-SQ8 index downloaded (16 GB, originally `local_retriever/indexes/`). `evaluation_research/` fork created from `evaluation_search_r1/` with three targeted changes: `QWEN3_0_6B_TEMPLATE` added to `templates.py`; `prompt_mode='qwen3'` wired through `active_pipeline.py` and `run_eval.py` (system-message chat format + `<result>` observation wrapper); editable install verified. `scripts/run_m3.sh` and `scripts/sbatch_m3.sh` created.
+
+**2026-05-06 (slot 1, ~22:08–22:37, job 2120329, node872)**: Interactive 4 h srun (40 CPU / 160 GB / 1 × A100). Started retriever + SGLang; hit the four gotchas above. Resolved: corpus path (cd into `local_retriever`), `pip install ninja`, switched SGLang to `--attention-backend triton --disable-cuda-graph`. **Slot lost at 22:37:19 to `NODE_FAIL` on node872** (cluster hardware/communication issue, not OOM, not our processes — `sacct` reason `None`, node now `down*`). Logs preserved at `logs/m3_slot1_2120329/`.
+
+**2026-05-06 (post-mortem)**: Moved corpus/index/models to project root so the retriever's relative paths resolve from `cd $REPO_ROOT` (the standard launch pattern in `sbatch_m3.sh`). Documented the four gotchas above. `ninja` permanently installed in `evaluation_search_r1`.
+
+**Pending slots**:
+- Job **2120423**: queued, `Resources` reason, planned start 2026-05-06T23:38:40 (4 h). Plan: smoke `qwen3_0.6b` + `qwen3_0.6b_v0` on bamboogle, then full Plan B for `qwen3_0.6b`.
+- Job **2121164**: queued, `Priority` reason, planned start 2026-05-07T03:40:00 (4 h, may backfill earlier). Plan: full Plan B for `qwen3_0.6b_v0`.
+
+Next: when 2120423 transitions RUNNING, retry the slot 1 plan with the gotchas already fixed.

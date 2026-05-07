@@ -102,6 +102,9 @@ def ircot(args, config_dict):
 def search_r1(args, config_dict):
     config_dict["metrics"] = ["em", "acc", "f1"]
     config_dict["search_r1_mode"] = True
+    # qwen3 mode (p1_basic_w_ex) was trained with top_n=5; stay at top-3 for search_r1 paper-fidelity.
+    if args.prompt_mode == "qwen3":
+        config_dict["retrieval_topk"] = 5
     config = Config(args.config_path, config_dict)
     all_split = get_dataset(config)
     test_data = _dataset_for_split(all_split, args.split, config)

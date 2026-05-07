@@ -62,10 +62,19 @@ class SearchR1Pipeline(BasicPipeline):
         item.update_output("query", query)
 
         remain_length = self.config['generator_max_input_len']
-        # Match Search-R1 evaluate.sh: max_turns=4, max_response_length=500, max_obs_length=500.
-        max_search_turns = 4
-        step_limit = 500
-        max_obs_length = 500
+        # Per-mode budgets:
+        #   qwen3 (p1_basic_w_ex training): response_length=4096, max_tool_response_length=256, ~5 turns observed
+        #   search_r1 (paper-fidelity):     max_turns=4, response=500, obs=500
+        if getattr(self, 'prompt_mode', 'search_r1') == 'qwen3':
+            # Match p1_basic_w_ex training: response_length=4096, max_tool_response_length=256, ~5 turns observed.
+            # No per-step cap — `min(remain_length, step_limit)` becomes `remain_length`.
+            max_search_turns = 5
+            step_limit = 8192
+            max_obs_length = 256
+        else:
+            max_search_turns = 4
+            step_limit = 500
+            max_obs_length = 500
         turns = 0
         over_length_flag = False
         stop_tokens = ['</search>', '</answer>', '<|im_end|>', '<|endoftext|>']
@@ -111,14 +120,22 @@ class SearchR1Pipeline(BasicPipeline):
 
                 if search_status.startswith("valid_search"):
                     search_result = self.retriever.search(search_content)
-                    # Match Search-R1 _passages2string: "Doc i(Title: <title>) <text>\n"
-                    retrieval_text = ''
-                    for idx, line in enumerate(search_result):
-                        content = line['contents']
-                        title = content.split('\n')[0]
-                        text = '\n'.join(content.split('\n')[1:])
-                        retrieval_text += f"Doc {idx + 1}(Title: {title}) {text}\n"
-                    retrieval_text = retrieval_text.strip()
+                    if self.prompt_mode == 'qwen3':
+                        # Match p1_basic_w_ex training rollout exactly (verl_legacy/vllm_rollout.py:286-290):
+                        # raw `{contents}` joined by \n\n, stripped — NO "Doc i(Title:...)" header.
+                        retrieval_text = ''
+                        for line in search_result:
+                            retrieval_text += f"{line['contents']}\n\n"
+                        retrieval_text = retrieval_text.strip()
+                    else:
+                        # Match Search-R1 _passages2string: "Doc i(Title: <title>) <text>\n"
+                        retrieval_text = ''
+                        for idx, line in enumerate(search_result):
+                            content = line['contents']
+                            title = content.split('\n')[0]
+                            text = '\n'.join(content.split('\n')[1:])
+                            retrieval_text += f"Doc {idx + 1}(Title: {title}) {text}\n"
+                        retrieval_text = retrieval_text.strip()
                     # Truncate to max_obs_length tokens (paper: 500) so multi-turn prompts don't blow up.
                     obs_ids = self.tokenizer.encode(retrieval_text, add_special_tokens=False)
                     if len(obs_ids) > max_obs_length:
@@ -126,8 +143,12 @@ class SearchR1Pipeline(BasicPipeline):
                             obs_ids[:max_obs_length], skip_special_tokens=True
                         )
                     if self.prompt_mode == 'qwen3':
-                        # Match p1_basic_w_ex training format.
-                        query += f"{output_str}<result>\n{retrieval_text}\n</result>"
+                        # Match p1_basic_w_ex training rollout exactly:
+                        # `verl_legacy/vllm_rollout.py:419` encodes f" <result>\n{result}\n</result>"
+                        # (LEADING SPACE before <result>). Different tokenization vs. no-space.
+                        # Observation tokens are loss-masked during training (line 421: result_mask=[0]*len),
+                        # so the model has only seen this exact framing in context.
+                        query += f"{output_str} <result>\n{retrieval_text}\n</result>"
                     else:
                         # Match generation.py: f'\n\n<information>{search_results.strip()}</information>\n\n'
                         query += f"{output_str}\n\n<information>{retrieval_text}</information>\n\n"

@@ -62,4 +62,5 @@ cd "$EVAL_DIR"
   --remote_retriever_url 127.0.0.1:3005 \
   --generator_model "$model_path" \
   --apply_chat True \
-  --prompt_mode qwen3
+  --prompt_mode qwen3 \
+  --enable_thinking True

@@ -8,6 +8,13 @@ local_retriever/corpus/
 local_retriever/indexes/
 local_retriever/models/
 
+# M3 evaluation runtime data (corpus + 16 GB IVF index + encoder model;
+# sourced from /zfsstore/user/s4374886/omega/flash-rag/{corpus,models} via symlinks
+# and a local 16 GB IVF-SQ8 index file — too large for git)
+/corpus/
+/indexes/
+/models/
+
 # Evaluation
 evaluation_search_r1/search_r1_base_model/
 evaluation_search_r1/search_r1_instruct_model/
@@ -37,6 +44,10 @@ evaluation_search_r1/results/
 *.log
 *.pid
 *.pid_text
+
+# M3 sbatch / interactive job logs (per-job stdout/stderr; large retriever + sglang traces)
+logs/m3_*.out
+logs/m3_*.err
 
 # Training run artifacts (commit smoke trace jsonls explicitly; ignore W&B dirs and checkpoints)
 logs/**/wandb/
