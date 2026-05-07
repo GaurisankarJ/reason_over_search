@@ -3,7 +3,7 @@ title: MILESTONE 3
 tags: []
 source: internal
 created: 2026-05-06
-updated: 2026-05-06
+updated: 2026-05-07
 ---
 
 # Milestone 3: Evaluate [Qwen3-0.6B](https://huggingface.co/Qwen/Qwen3) Hybrid
@@ -324,10 +324,10 @@ No prior EM numbers exist for Qwen3-0.6B on these benchmarks. Use M1 instruct re
 3. [x] IVF-SQ8 index downloaded to `indexes/wiki18_100w_e5_ivf4096_sq8.index` (16 GB). ✓ (downloaded 2026-05-06; relocated from `local_retriever/indexes/` to project root 2026-05-06 — see §Setup gotchas)
 4. [x] `evaluation_research/` pipeline fork created with M3 code changes (QWEN3_0_6B_TEMPLATE, `prompt_mode=qwen3`, `<result>` tag swap); editable install verified in `evaluation_search_r1` env. ✓ (done 2026-05-06)
 5. [x] `scripts/run_m3.sh` and `scripts/sbatch_m3.sh` created. ✓ (done 2026-05-06)
-6. [ ] Short-partition validation: bamboogle (qwen3_0.6b) passes; wall-clock table updated.
-7. [ ] Both variants evaluated on all 7 benchmarks via sbatch.
-8. [ ] Results aggregated to `docs/milestone_three/RESULTS_M3.md`.
-9. [ ] Summary table and findings written up here under §Status.
+6. [x] Short-partition validation: bamboogle (qwen3_0.6b) passes; wall-clock table superseded by §Status 2026-05-07 entry.
+7. [x] Both variants evaluated on all 7 benchmarks (full Plan A test/dev sets, 51,713 items / variant; happy-accident upgrade from 1k subsamples — `sample_num` not respected by the FlashRAG `search_r1` pipeline path).
+8. [x] ~~Results aggregated to `docs/milestone_three/RESULTS_M3.md`~~ — **superseded by [`docs/report/RESULTS_v2.md`](../report/RESULTS_v2.md)** (full numerical record) and [`docs/report/SUPERVISOR_MEETING_2026-05-07.md`](../report/SUPERVISOR_MEETING_2026-05-07.md) §4 (consolidated brief).
+9. [x] Summary and findings: see [`../report/RESULTS_v2.md`](../report/RESULTS_v2.md) and [`../report/SUPERVISOR_MEETING_2026-05-07.md`](../report/SUPERVISOR_MEETING_2026-05-07.md) §4; this milestone's narrative continues in §Status below.
 
 ## Setup gotchas (lessons from the slot 1 attempt, 2026-05-06)
 
@@ -402,3 +402,5 @@ Without `setsid`, the child remains in the ssh session's process group and dies 
 - Job **2121164**: queued, `Priority` reason, planned start 2026-05-07T03:40:00 (4 h, may backfill earlier). Plan: full Plan B for `qwen3_0.6b_v0`.
 
 Next: when 2120423 transitions RUNNING, retry the slot 1 plan with the gotchas already fixed.
+
+**2026-05-07 (COMPLETED)**: Both variants ran on **full Plan A** (no `sample_num` applied — happy-accident upgrade from the planned 1k subsamples; the FlashRAG `search_r1` pipeline path does not respect `sample_num`, so the comparison is statistically Plan A and the per-dataset EMs are population-true). 14 alignment fixes between clone-and-run and the first clean comparison (full audit: [`../report/CODE_SETUP_v2.md`](../report/CODE_SETUP_v2.md) §3). Pre-GRPO interactive ~115 min (job 2120423, node870; mixed `INFERENCE_MAX_WORKERS=16` for NQ/TriviaQA/PopQA → 32 for HotpotQA/2Wiki/MuSiQue). Post-GRPO sbatch **2h 26m 33s** (job 2125009, node875; 32 workers throughout). Headline: average EM 0.102 → 0.155 (+52 % relative, +0.053 absolute) across 51,713 items / variant; 6 / 7 datasets improved; held-out generalisation rules out memorisation. Job 2121164 (the spare slot) was cancelled — both variants fit in slots 2120423 + 2125009. Full numerical record: [`../report/RESULTS_v2.md`](../report/RESULTS_v2.md). Supervisor write-up: [`../report/SUPERVISOR_MEETING_2026-05-07.md`](../report/SUPERVISOR_MEETING_2026-05-07.md) §4. **M3 closed; the eval pipeline is now pinned and reusable for Phase-2.**

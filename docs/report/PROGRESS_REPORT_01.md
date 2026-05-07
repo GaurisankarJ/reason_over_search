@@ -3,7 +3,7 @@ title: PROGRESS REPORT 01
 tags: []
 source: internal
 created: 2026-05-05
-updated: 2026-05-06
+updated: 2026-05-07
 ---
 
 Leiden University
@@ -22,6 +22,12 @@ Gaurisankar Jayadas
 | **Project term:** | February 2026 – July 2026 |
 | **E-mail:** | gaurisankarj1996@gmail.com |
 | **Window covered:** | 2026-04-23 – 2026-05-07 |
+
+## TL;DR
+
+- **Phase-1 (29 ALICE Qwen3-0.6B runs, Apr 3 – Apr 19)**: GRPO + paper Search-R1 EM reward is stable on the hybrid checkpoint, but the 0.6B base cannot bootstrap tool-use cold, the partial-credit reward floor at 0.1 masks the tool-use signal, and prompt phrasing dominates behaviour more than the reward.
+- **M3 (2026-05-07)**: 1046 GRPO steps lifted average EM **0.102 → 0.155 (+52 % relative, +0.053 absolute)** across all 7 paper benchmarks at full Plan A (51,713 items / variant). Held-out 6 / 7 datasets confirms a learned tool-use skill, not memorised answers. Eval pipeline is now pinned and reusable for Phase-2.
+- **Pivot**: Phase-1 z7kcxfof stopped at 1046 / 9968 steps after **23 h 47 m 30 s** on 1× A100-40GB (W&B); full horizon ≈ **~9.5 d / run** at the observed pace, and none of the 29 Phase-1 runs reached the full horizon (across the 9 hybrid prompt-ablation runs the projected range is ~5–10 d). Phase-2 Qwen3.5-2B Vast-smoke 57 s/step → **11–17 d / run on A100-80GB**. Reframed the RQ to *"is the recipe feasible under realistic constraints?"* and proposed E2H + S-GRPO + MC-GRPO with a JustRL plain-GRPO control.
 
 ## Outcome of previous meeting
 
@@ -45,14 +51,10 @@ Gaurisankar Jayadas
 
 - **Reframed research question.** Original RQ1 to RQ4 (domain expansion approaches, reward-function modeling, meta-reasoning, curriculum-based training) require a sweep that the remaining compute budget cannot afford. New framing: *"Is it feasible to post-train a small LM to Search-R1-level results under realistic resource constraints, and what is the optimised training recipe?"* The artifacts already produced (prompt-sensitivity, partial-credit floor, reproduced eval baseline, ported NeMo-RL pipeline) become the primary evidence; answerable with one or two trained runs rather than a sweep.
 
-- **First evaluation of the Phase-1 v0 GRPO checkpoint vs the untrained Qwen3-0.6B hybrid (M3, completed 2026-05-07).** The only Phase-1 run that converged on heavy-tool behaviour — `p1_basic_w_ex_z7kcxfof` (1046 GRPO steps, 2 search calls / 4 turns / ~2050-token responses, end-of-run rollout reward 0.190; ALICE 1× A100-40GB; 2026-04-06) — was evaluated against the untrained Qwen3-0.6B hybrid base on the seven paper QA benchmarks. The eval ran on **full Plan A test/dev sets** (51,713 items per variant) rather than 1k stratified subsamples; `sample_num` is not respected by the FlashRAG `search_r1` pipeline path, so the comparison is statistically Plan A. Hardware: ALICE 1× A100-80GB; greedy decode; single seed.
-  - **Headline result**: average EM lifted from 0.102 to 0.155 (**+0.053 absolute, +52 % relative**); ACC 0.123 → 0.189 (+54 %); F1 0.140 → 0.223 (+59 %). 6 of 7 datasets improved on EM; 2WikiMultiHopQA was statistically tied (−0.003 EM).
-  - **Per-dataset (EM, full test/dev sets)**: bamboogle 0.056 → 0.088 (+57 %); NQ 0.113 → **0.191** (+69 %); TriviaQA 0.178 → **0.302** (+70 %); PopQA 0.133 → **0.227** (+71 %); HotpotQA 0.083 → **0.116** (+40 %); 2WikiMultiHopQA 0.141 → 0.138 (−2 %); MuSiQue 0.010 → **0.023** (+130 %). The lift is concentrated on single-hop QA (NQ / TriviaQA / PopQA all ≈ +70 % relative); multi-hop saturates (HotpotQA +40 %, 2Wiki tied) — at 0.6 B parameters multi-hop reasoning is capacity-bound, not training-bound.
-  - **Held-out generalisation rules out memorisation**: `z7kcxfof` was trained on MuSiQue with EM reward; held-out evaluation on the other 6 benchmarks (none seen at training time) transfers the lift, so the model is exhibiting a learned tool-use skill rather than retrieving training-set answers.
-  - **vs ReSearch paper setup**: M3 uses the paper Search-R1 tag scheme (`<search>` / `<result>`) that `p1_basic_w_ex` was trained with, not the ReSearch tool-call scheme (`<tool_call>` / `<tool_response>`). The eval is byte-aligned to the verl-legacy training rollout: leading space before `<result>` (`vllm_rollout.py:419`), raw `{contents}\n\n` retrieval format (no Search-R1 `Doc i (Title:...)` prefix), `top_n=5`, `max_obs_length=256`, `generator_max_input_len=4096`, `max_search_turns=5`, no per-step token cap, `enable_thinking=True` (Qwen3 hybrid otherwise auto-injects empty `<think></think>` and the model produces shallow answers). The `\boxed{answer here}` answer format also required a 1-character template fix (single vs double braces) and a `\boxed{X}` regex unwrap on top of the standard `<answer>...</answer>` extraction.
-  - **Setup cost**: 14 fixes between clone-and-run and the first clean comparison; bamboogle smoke EM moved 0.000 → 0.008 → 0.040 / 0.080 → 0.056 / 0.088 (pre-GRPO / v0) as each fix landed; alignment is mechanically interpretable rather than empirically tuned. Full audit: `docs/report/CODE_SETUP_v2.md` §3.
-  - **Wall-clock**: 2 h 26 m for the post-GRPO sbatch run (job 2125009, node875) at `INFERENCE_MAX_WORKERS=32`; ~115 min for the pre-GRPO interactive run (mixed 16/32 workers). Bumping client concurrency 16 → 32 gave a measured ~2× speedup (popqa @ 16w = 1.79 s/item vs hotpotqa @ 32w = 0.92 s/item, same 1k-item-equivalent shape).
-  - **The eval pipeline is now pinned and reusable** for Phase-2 NeMo-RL: any future Qwen3.5-2B checkpoint that uses the `<search>` / `<result>` tag scheme can be plugged in via `eval/<name>/` and `bash scripts/run_m3.sh` without touching the eval code. This was the missing piece that was blocking Phase-2 evaluation. Full numerical record: `docs/report/RESULTS_v2.md`.
+- **First evaluation of the Phase-1 v0 GRPO checkpoint vs the untrained Qwen3-0.6B hybrid (M3, completed 2026-05-07).** The only Phase-1 run that converged on heavy-tool behaviour (`p1_basic_w_ex_z7kcxfof`, 1046 GRPO steps, 2 search / 4 turns; ALICE 1× A100-40GB; 2026-04-06) was evaluated against the untrained Qwen3-0.6B hybrid on the seven paper QA benchmarks. Eval ran on **full Plan A test/dev sets** (51,713 items / variant) rather than 1k subsamples; `sample_num` is not respected by the FlashRAG `search_r1` pipeline path. Hardware: ALICE 1× A100-80GB; greedy decode; single seed.
+  - **Result**: average EM **0.102 → 0.155** (+0.053 abs, +52 % rel); 6 / 7 datasets improved (2WikiMultiHopQA tied at −0.003). Single-hop datasets (NQ, TriviaQA, PopQA) gained +69–71 % relative; multi-hop saturated (HotpotQA +40 %, 2Wiki tied) → 0.6 B is **capacity-bound** for multi-hop, not training-bound.
+  - **Held-out generalisation rules out memorisation**: `z7kcxfof` was trained on MuSiQue only; the lift transfers to the other 6 benchmarks (none seen at training time), so the model exhibits a learned tool-use skill rather than retrieving training-set answers.
+  - Setup cost (14 fixes), wall-clock (~2.5 h / variant), per-dataset breakdown, vs-ReSearch comparison, and the *"eval pipeline now pinned for Phase-2"* deliverable: `docs/report/RESULTS_v2.md` and `docs/report/SUPERVISOR_MEETING_2026-05-07.md` § 4.
 
 ## Plans for next weeks
 

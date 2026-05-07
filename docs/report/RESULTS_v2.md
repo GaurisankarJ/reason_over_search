@@ -10,21 +10,26 @@ updated: 2026-05-07
 
 **Date compiled**: 2026-05-07
 **Source**:
-- Training run: W&B project [`gaurisankarj1996-leiden-university/research`](https://wandb.ai/gaurisankarj1996-leiden-university/research), run id **`z7kcxfof`** (compact name `p1_basic_w_ex`, archived at `docs/archive/verl_runs/v0/p1_basic_w_ex_z7kcxfof/`).
+
+- Training run: W&B project `[gaurisankarj1996-leiden-university/research](https://wandb.ai/gaurisankarj1996-leiden-university/research)`, run id `**z7kcxfof`** (compact name `p1_basic_w_ex`, archived at `docs/archive/verl_runs/v0/p1_basic_w_ex_z7kcxfof/`).
 - Evaluation: ALICE SLURM jobs `2120423` (interactive `srun`, pre-GRPO) + `2125009` (`sbatch`, post-GRPO). Per-dataset result JSONs in `evaluation_research/results/<dataset>/<dataset>_<timestamp>_m3_<variant>_seed1/`.
 
 **Hardware**:
+
 - **Training (z7kcxfof)**: ALICE 1× **A100-40GB** (`gpu_1_40gb`).
 - **Evaluation (this report)**: ALICE 1× **A100-80GB** (`gpu-short` and `gpu-a100-80g` partitions).
 
 **Model**: `Qwen3-0.6B` hybrid (Qwen's post-trained soft-switch reasoning model). Two snapshots compared:
 
-| Snapshot | Source | Description |
-|---|---|---|
-| `qwen_3_0.6b` | HF `Qwen/Qwen3-0.6B` (cached at `eval/qwen_3_0.6b/`) | Pre-GRPO frozen hybrid checkpoint (untrained) |
+
+| Snapshot         | Source                                                                                                                     | Description                                                                 |
+| ---------------- | -------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `qwen_3_0.6b`    | HF `Qwen/Qwen3-0.6B` (cached at `eval/qwen_3_0.6b/`)                                                                       | Pre-GRPO frozen hybrid checkpoint (untrained)                               |
 | `qwen_3_0.6b_v0` | HF checkpoint exported from `docs/archive/verl_runs/v0/p1_basic_w_ex_z7kcxfof/global_step_1000_rollout_20260407_002729_hf` | Post-GRPO: 1046 steps with the `p1_basic_w_ex` prompt + Search-R1 EM reward |
 
+
 > **Bottom line up front**:
+>
 > 1. **Across all 7 paper benchmarks (51,713 items per variant, full Plan A test/dev sets), 1046 GRPO steps with the `p1_basic_w_ex` prompt lifted average EM from 0.102 to 0.155 (+5.3 pp absolute, +52% relative).** Six of seven datasets improved; one (2WikiMultiHopQA) was statistically tied.
 > 2. **The largest lifts are on single-hop QA**: NQ +0.078 EM (+69%), TriviaQA +0.124 EM (+70%), PopQA +0.094 EM (+71%). MuSiQue (3-hop) doubled from 0.010 to 0.023, but at small absolute numbers.
 > 3. **Multi-hop saturates at 0.6B**: HotpotQA +0.033 EM (+40%) lifts modestly; 2WikiMultiHopQA −0.003 EM (essentially tied). Multi-hop reasoning at 600 M parameters appears to be capacity-bound, not training-bound.
@@ -35,9 +40,11 @@ updated: 2026-05-07
 
 ## 1. Training run roster (1 run — the only run that produced the evaluated checkpoint)
 
-| W&B id | Compact name | Date | Block | Steps trained / horizon | Model | Behavior summary |
-|---|---|---|---|---:|---|---|
-| `z7kcxfof` | `p1_basic_w_ex` | 2026-04-06 | v0 (Phase-1 ALICE, paper `<search>`/`<result>` tags) | **1046 / 9968** | Qwen3-0.6B hybrid | basic rules + Hamlet 2-search example; **the only Phase-1 run that converged on heavy-tool 2-call / 4-turn behavior**; mean rollout reward 0.148 → 0.190 |
+
+| W&B id     | Compact name    | Date       | Block                                                | Steps trained / horizon | Model             | Behavior summary                                                                                                                                         |
+| ---------- | --------------- | ---------- | ---------------------------------------------------- | ----------------------- | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `z7kcxfof` | `p1_basic_w_ex` | 2026-04-06 | v0 (Phase-1 ALICE, paper `<search>`/`<result>` tags) | **1046 / 9968**         | Qwen3-0.6B hybrid | basic rules + Hamlet 2-search example; **the only Phase-1 run that converged on heavy-tool 2-call / 4-turn behavior**; mean rollout reward 0.148 → 0.190 |
+
 
 Phase-1 context: across the v0 ALICE block (Apr 3 – 9, 14 runs total) + v1 ALICE block (Apr 12 – 19, 15 runs) → **29 ALICE training runs total**. Of those, only `z7kcxfof` produced the heavy-tool behavioral signature (2 search calls / 4 turns / ~2050-token responses) that this evaluation captures. All other Phase-1 prompts converged to the standard 1-tool / 3-turn regime. See `docs/report/RESULTS_v0.md` §10 (`p1_basic_w_ex`) and `docs/report/RESULTS_v0.md` §11.2 ("Prompt drives behavior more than reward").
 
@@ -45,31 +52,36 @@ Phase-1 context: across the v0 ALICE block (Apr 3 – 9, 14 runs total) + v1 ALI
 
 ## 2. Training configuration (z7kcxfof, copied from v0 W&B run config)
 
-| Setting | Value |
-|---|---|
-| Algorithm | GRPO |
-| KL control | `kl_ctrl.kl_coef=0.001`, `kl_loss_coef=0.001`, `kl_loss_type=low_var_kl` |
-| Optimizer | AdamW, `lr=1e-06`, constant schedule |
-| Reward | `re_search` reward manager (Search-R1 EM-only, `verl_legacy/utils/reward_score/re_search.py`) |
-| Train batch | `train_batch_size=4`, `ppo_mini_batch_size=4` |
-| Sequence | `max_prompt_length=512`, `max_response_length=4096` |
-| Rollout | `n=3` (group size G=3), `vllm.max_model_len=4608`, `enforce_eager=True`, `top_n=5` |
-| FSDP | `actor.param_offload=True`, `ref.param_offload=True` |
-| Agent loop | `re_search_agent` (verl_legacy with vllm_rollout) |
-| Retriever | CPU FAISS, `wiki18_100w_mini`, `http://127.0.0.1:3005` |
-| Hardware | ALICE 1× A100-40GB |
-| Compile | `use_torch_compile=True`, `attn_implementation=sdpa` |
-| Prompt | `re_search_template_sys` slot filled with the `p1_basic_w_ex` body (see §3) |
-| Apply chat | `True` |
+
+| Setting     | Value                                                                                         |
+| ----------- | --------------------------------------------------------------------------------------------- |
+| Algorithm   | GRPO                                                                                          |
+| KL control  | `kl_ctrl.kl_coef=0.001`, `kl_loss_coef=0.001`, `kl_loss_type=low_var_kl`                      |
+| Optimizer   | AdamW, `lr=1e-06`, constant schedule                                                          |
+| Reward      | `re_search` reward manager (Search-R1 EM-only, `verl_legacy/utils/reward_score/re_search.py`) |
+| Train batch | `train_batch_size=4`, `ppo_mini_batch_size=4`                                                 |
+| Sequence    | `max_prompt_length=512`, `max_response_length=4096`                                           |
+| Rollout     | `n=3` (group size G=3), `vllm.max_model_len=4608`, `enforce_eager=True`, `top_n=5`            |
+| FSDP        | `actor.param_offload=True`, `ref.param_offload=True`                                          |
+| Agent loop  | `re_search_agent` (verl_legacy with vllm_rollout)                                             |
+| Retriever   | CPU FAISS, `wiki18_100w_mini`, `http://127.0.0.1:3005`                                        |
+| Hardware    | ALICE 1× A100-40GB                                                                            |
+| Compile     | `use_torch_compile=True`, `attn_implementation=sdpa`                                          |
+| Prompt      | `re_search_template_sys` slot filled with the `p1_basic_w_ex` body (see §3)                   |
+| Apply chat  | `True`                                                                                        |
+| Wall-clock observed | **23 h 47 m 30 s for 1046 / 9968 steps** (W&B run wall-clock; effective ~82 s/step on 1× A100-40GB including end-of-run async checkpoint save + validation rollouts); full 9968-step horizon ≈ **~9.5 days per run** at the observed rate for this rollout shape. Across the 9 v0 hybrid prompt-ablation runs, full-horizon projections cluster at **~5–10 days** depending on rollout length distribution. None of the 29 Phase-1 runs reached the full horizon (longest hybrid: `p4_think_w_ex`, 2281 / 9968 steps in 31.7 h). |
+
 
 **Training behavior at end of run** (per `RESULTS_v0.md` §11):
 
-| Metric | First-decile mean | Last-decile mean |
-|---|---:|---:|
-| reward (rollout, EM 0/1 + tiny format bonus) | 0.148 | **0.190** |
-| `tool_call_counts/mean` | 1.83 | **2.00** |
-| `num_turns/mean` | 3.83 | **4.00** |
-| `response_length/mean` | 1788 | **2047** |
+
+| Metric                                       | First-decile mean | Last-decile mean |
+| -------------------------------------------- | ----------------- | ---------------- |
+| reward (rollout, EM 0/1 + tiny format bonus) | 0.148             | **0.190**        |
+| `tool_call_counts/mean`                      | 1.83              | **2.00**         |
+| `num_turns/mean`                             | 3.83              | **4.00**         |
+| `response_length/mean`                       | 1788              | **2047**         |
+
 
 Heavy-tool mode: 2 tool calls per question, 4 conversation turns, ~2050-token responses. The Hamlet 2-search example in the prompt anchors the model on imitating "always do 2 searches"; this is the only Phase-1 run that converges on this 2-call regime (the other 13 v0 prompts cluster at 1 tool call / 3 turns).
 
@@ -102,22 +114,24 @@ This is rendered into the chat template as `[{role: 'system', content: <above>},
 
 The eval pipeline (`evaluation_research/`, an editable-install overlay of `evaluation_search_r1/`) is byte-aligned to the training rollout (verl-legacy `vllm_rollout.py`); see `CODE_SETUP_v2.md` §3 for all 14 fixes that produced the alignment.
 
-| Setting | Value | Aligned with |
-|---|---|---|
-| Action tags | `<search>` / `<result>` | training |
-| Result wrapper | `" <result>\n{X}\n</result>"` (leading space) | `vllm_rollout.py:419` |
-| Retrieval text format | raw `"{contents}\n\n".join(...).strip()` | `vllm_rollout.py:286-290` |
-| `top_n` (retriever) | 5 | training |
-| `max_obs_length` | 256 tokens | training `max_tool_response_length` |
-| `generator_max_input_len` | 4096 | training `response_length` |
-| `step_limit` per call | 8192 (no cap; bounded by remain_length) | training (no per-step cap) |
-| `max_search_turns` | 5 | training observed max |
-| `enable_thinking` | True | training distribution (model emits `<think>`) |
-| `apply_chat` | True | training |
-| Decoding | greedy (temperature=0.0) | M1 / paper convention |
-| Retriever index | `wiki18_100w_e5_ivf4096_sq8.index` (16 GB IVF-SQ8) × 8 workers | training (recall hit < 1 % vs flat IP) |
-| `INFERENCE_MAX_WORKERS` | 32 (post-bump; 16 for early pre-GRPO datasets) | tuning, ~2× speedup |
-| Subsampling | **none** (`sample_num` not applied; full test/dev sets) | upgrade vs Plan B |
+
+| Setting                   | Value                                                          | Aligned with                                  |
+| ------------------------- | -------------------------------------------------------------- | --------------------------------------------- |
+| Action tags               | `<search>` / `<result>`                                        | training                                      |
+| Result wrapper            | `" <result>\n{X}\n</result>"` (leading space)                  | `vllm_rollout.py:419`                         |
+| Retrieval text format     | raw `"{contents}\n\n".join(...).strip()`                       | `vllm_rollout.py:286-290`                     |
+| `top_n` (retriever)       | 5                                                              | training                                      |
+| `max_obs_length`          | 256 tokens                                                     | training `max_tool_response_length`           |
+| `generator_max_input_len` | 4096                                                           | training `response_length`                    |
+| `step_limit` per call     | 8192 (no cap; bounded by remain_length)                        | training (no per-step cap)                    |
+| `max_search_turns`        | 5                                                              | training observed max                         |
+| `enable_thinking`         | True                                                           | training distribution (model emits `<think>`) |
+| `apply_chat`              | True                                                           | training                                      |
+| Decoding                  | greedy (temperature=0.0)                                       | M1 / paper convention                         |
+| Retriever index           | `wiki18_100w_e5_ivf4096_sq8.index` (16 GB IVF-SQ8) × 8 workers | training (recall hit < 1 % vs flat IP)        |
+| `INFERENCE_MAX_WORKERS`   | 32 (post-bump; 16 for early pre-GRPO datasets)                 | tuning, ~2× speedup                           |
+| Subsampling               | **none** (`sample_num` not applied; full test/dev sets)        | upgrade vs Plan B                             |
+
 
 ---
 
@@ -125,11 +139,13 @@ The eval pipeline (`evaluation_research/`, an editable-install overlay of `evalu
 
 Across all 7 datasets (51,713 items per variant):
 
-| Metric | pre-GRPO (qwen_3_0.6b) | post-GRPO (qwen_3_0.6b_v0, z7kcxfof) | Δ absolute | Δ relative |
-|---|---:|---:|---:|---:|
-| **EM** (avg) | **0.102** | **0.155** | **+0.053** | **+52 %** |
-| ACC (avg) | 0.123 | 0.189 | +0.066 | +54 % |
-| F1 (avg) | 0.140 | 0.223 | +0.083 | +59 % |
+
+| Metric       | pre-GRPO (qwen_3_0.6b) | post-GRPO (qwen_3_0.6b_v0, z7kcxfof) | Δ absolute | Δ relative |
+| ------------ | ---------------------- | ------------------------------------ | ---------- | ---------- |
+| **EM** (avg) | **0.102**              | **0.155**                            | **+0.053** | **+52 %**  |
+| ACC (avg)    | 0.123                  | 0.189                                | +0.066     | +54 %      |
+| F1 (avg)     | 0.140                  | 0.223                                | +0.083     | +59 %      |
+
 
 **6 of 7 datasets improved on EM**; the seventh (2WikiMultiHopQA) is within ±0.003 EM of the baseline.
 
@@ -139,51 +155,59 @@ Across all 7 datasets (51,713 items per variant):
 
 ### EM (exact match, the headline metric)
 
-| Dataset | Items | pre-GRPO EM | v0 EM | Δ EM | Δ % |
-|---|---:|---:|---:|---:|---:|
-| bamboogle (test) | 125 | 0.056 | **0.088** | +0.032 | +57 % |
-| nq (test) | 3,610 | 0.113 | **0.191** | +0.078 | +69 % |
-| triviaqa (test) | 11,313 | 0.178 | **0.302** | +0.124 | +70 % |
-| popqa (test) | 14,267 | 0.133 | **0.227** | +0.094 | +71 % |
-| hotpotqa (dev) | 7,405 | 0.083 | **0.116** | +0.033 | +40 % |
-| 2wikimultihopqa (dev) | 12,576 | **0.141** | 0.138 | −0.003 | −2 % |
-| musique (dev) | 2,417 | 0.010 | **0.023** | +0.013 | +130 % |
-| **average** | 51,713 | 0.102 | **0.155** | **+0.053** | **+52 %** |
+
+| Dataset               | Items  | pre-GRPO EM | v0 EM     | Δ EM       | Δ %       |
+| --------------------- | ------ | ----------- | --------- | ---------- | --------- |
+| bamboogle (test)      | 125    | 0.056       | **0.088** | +0.032     | +57 %     |
+| nq (test)             | 3,610  | 0.113       | **0.191** | +0.078     | +69 %     |
+| triviaqa (test)       | 11,313 | 0.178       | **0.302** | +0.124     | +70 %     |
+| popqa (test)          | 14,267 | 0.133       | **0.227** | +0.094     | +71 %     |
+| hotpotqa (dev)        | 7,405  | 0.083       | **0.116** | +0.033     | +40 %     |
+| 2wikimultihopqa (dev) | 12,576 | **0.141**   | 0.138     | −0.003     | −2 %      |
+| musique (dev)         | 2,417  | 0.010       | **0.023** | +0.013     | +130 %    |
+| **average**           | 51,713 | 0.102       | **0.155** | **+0.053** | **+52 %** |
+
 
 ### ACC (substring containment)
 
-| Dataset | pre-GRPO ACC | v0 ACC | Δ ACC |
-|---|---:|---:|---:|
-| bamboogle | 0.080 | 0.096 | +0.016 |
-| nq | 0.149 | 0.256 | +0.107 |
-| triviaqa | 0.209 | 0.367 | +0.158 |
-| popqa | 0.153 | 0.263 | +0.110 |
-| hotpotqa | 0.096 | 0.147 | +0.051 |
-| 2wikimultihopqa | 0.154 | 0.157 | +0.003 |
-| musique | 0.019 | 0.038 | +0.019 |
-| average | 0.123 | 0.189 | +0.066 |
+
+| Dataset         | pre-GRPO ACC | v0 ACC | Δ ACC  |
+| --------------- | ------------ | ------ | ------ |
+| bamboogle       | 0.080        | 0.096  | +0.016 |
+| nq              | 0.149        | 0.256  | +0.107 |
+| triviaqa        | 0.209        | 0.367  | +0.158 |
+| popqa           | 0.153        | 0.263  | +0.110 |
+| hotpotqa        | 0.096        | 0.147  | +0.051 |
+| 2wikimultihopqa | 0.154        | 0.157  | +0.003 |
+| musique         | 0.019        | 0.038  | +0.019 |
+| average         | 0.123        | 0.189  | +0.066 |
+
 
 ### F1 (token-overlap)
 
-| Dataset | pre-GRPO F1 | v0 F1 | Δ F1 |
-|---|---:|---:|---:|
-| bamboogle | 0.085 | 0.140 | +0.055 |
-| nq | 0.162 | 0.279 | +0.117 |
-| triviaqa | 0.228 | 0.390 | +0.162 |
-| popqa | 0.162 | 0.275 | +0.113 |
-| hotpotqa | 0.128 | 0.196 | +0.068 |
-| 2wikimultihopqa | 0.177 | 0.194 | +0.017 |
-| musique | 0.039 | 0.086 | +0.047 |
-| average | 0.140 | 0.223 | +0.083 |
+
+| Dataset         | pre-GRPO F1 | v0 F1 | Δ F1   |
+| --------------- | ----------- | ----- | ------ |
+| bamboogle       | 0.085       | 0.140 | +0.055 |
+| nq              | 0.162       | 0.279 | +0.117 |
+| triviaqa        | 0.228       | 0.390 | +0.162 |
+| popqa           | 0.162       | 0.275 | +0.113 |
+| hotpotqa        | 0.128       | 0.196 | +0.068 |
+| 2wikimultihopqa | 0.177       | 0.194 | +0.017 |
+| musique         | 0.039       | 0.086 | +0.047 |
+| average         | 0.140       | 0.223 | +0.083 |
+
 
 ---
 
 ## 7. Observed wall-clock (full eval per variant)
 
-| Variant | Run mode | `INFERENCE_MAX_WORKERS` | Total wall-clock | Notes |
-|---|---|---|---|---|
-| pre-GRPO (`qwen_3_0.6b`) | Interactive `srun` (job 2120423, node870) | 16 (NQ, TriviaQA, PopQA) → 32 (HotpotQA, 2Wiki, MuSiQue) bumped mid-run | ~115 min | Plus ~28 s bamboogle smoke |
-| v0 (`qwen_3_0.6b_v0`) | `sbatch` (job 2125009, node875) | 32 throughout | **2h 26m 33s** (`sacct: COMPLETED 02:26:33`) | Including ~5m45s retriever cold-start (first-time HF arrow build on this node) and ~4m20s SGLang cold-start (flashinfer JIT compile) |
+
+| Variant                  | Run mode                                  | `INFERENCE_MAX_WORKERS`                                                 | Total wall-clock                             | Notes                                                                                                                                |
+| ------------------------ | ----------------------------------------- | ----------------------------------------------------------------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| pre-GRPO (`qwen_3_0.6b`) | Interactive `srun` (job 2120423, node870) | 16 (NQ, TriviaQA, PopQA) → 32 (HotpotQA, 2Wiki, MuSiQue) bumped mid-run | ~115 min                                     | Plus ~28 s bamboogle smoke                                                                                                           |
+| v0 (`qwen_3_0.6b_v0`)    | `sbatch` (job 2125009, node875)           | 32 throughout                                                           | **2h 26m 33s** (`sacct: COMPLETED 02:26:33`) | Including ~5m45s retriever startup (16 GB IVF-SQ8 mmap + 8-worker spin-up; HF arrow cache had been hard-linked to the new config-id, so no first-build was needed) and ~4m20s SGLang flashinfer JIT cache warmup |
+
 
 The 32-worker bump gave a measured **~2× speedup** (popqa @ 16w = 1.79 s/item vs hotpotqa @ 32w = 0.92 s/item, both 1k-item-equivalent shape). Decode-side throughput peaked at ~3,300 tokens/s on a 0.6B model with cuda-graph + flashinfer; the bottleneck after the bump is retriever queue depth (8 workers feeding 32 in-flight clients).
 
@@ -205,11 +229,13 @@ No new plots are produced for the eval (single greedy seed → deterministic out
 
 ## 9. Cross-run summary table (eval-side)
 
-| Variant | Bamboogle | NQ | TriviaQA | PopQA | HotpotQA | 2Wiki | MuSiQue | Avg EM |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|
-| pre-GRPO (qwen_3_0.6b) | 0.056 | 0.113 | 0.178 | 0.133 | 0.083 | **0.141** | 0.010 | 0.102 |
-| v0 (qwen_3_0.6b_v0) | **0.088** | **0.191** | **0.302** | **0.227** | **0.116** | 0.138 | **0.023** | **0.155** |
-| Δ EM | +0.032 | +0.078 | +0.124 | +0.094 | +0.033 | −0.003 | +0.013 | **+0.053** |
+
+| Variant                | Bamboogle | NQ        | TriviaQA  | PopQA     | HotpotQA  | 2Wiki     | MuSiQue   | Avg EM     |
+| ---------------------- | --------- | --------- | --------- | --------- | --------- | --------- | --------- | ---------- |
+| pre-GRPO (qwen_3_0.6b) | 0.056     | 0.113     | 0.178     | 0.133     | 0.083     | **0.141** | 0.010     | 0.102      |
+| v0 (qwen_3_0.6b_v0)    | **0.088** | **0.191** | **0.302** | **0.227** | **0.116** | 0.138     | **0.023** | **0.155**  |
+| Δ EM                   | +0.032    | +0.078    | +0.124    | +0.094    | +0.033    | −0.003    | +0.013    | **+0.053** |
+
 
 ---
 
@@ -234,6 +260,7 @@ Originally MILESTONE_3.md planned 1k stratified subsamples for the five large da
 ### 10.5. Setup cost was non-trivial but mostly one-shot
 
 14 fixes (`CODE_SETUP_v2.md` §3) between clone-and-run and the first clean comparison. The most consequential were:
+
 - **Single braces in `\boxed{answer here}`** (template was using Python format-escape `{{}}` but read as raw string)
 - **Leading space before `<result>`** (matches training tokenization byte-for-byte)
 - **Raw retrieval format** (drop the Search-R1 `Doc i (Title:...)` prefix; training fed raw `{contents}\n\n`)
@@ -250,18 +277,16 @@ After these were applied in sequence, the bamboogle smoke EM rose from 0.000 →
 
 With the `prompt_mode=qwen3` switch in `SearchR1Pipeline`, the eval pipeline is byte-aligned to verl-legacy training rollouts that use the `<search>/<result>` tag format and the `p1_basic_w_ex` prompt. **Any future Qwen3-0.6B (or Qwen3.5-2B with the same tag scheme) checkpoint can be plugged in via `eval/<name>/` and `bash scripts/run_m3.sh <variant> <dataset> <seed>` without touching the eval code.** This is the M3 deliverable that unblocks Phase-2 NeMo-RL evaluation.
 
+The `<search>` / `<result>` action format used here matches the **published** ReSearch paper ([arXiv 2503.19470](https://arxiv.org/abs/2503.19470); verified upstream at `re-search` commit `51d98e1`); the `<tool_call>` JSON variant present in our local `re-search/` checkout is a separate ablation we introduced (`re-search` commit `2c32dd3`, 2026-04-12) and tested in our v1 block — **not** the paper's scheme.
+
 ---
 
 ## 11. Open questions raised by these results
 
 1. Does the lift hold on a larger model? Qwen3.5-2B (Phase-2 NeMo-RL target) is 3.3× the parameter count and adds dynamic batching + `<tool_call>` JSON tags. Expectation: lift on multi-hop should expand once the capacity floor is lifted. Testable once the first Qwen3.5-2B GRPO checkpoint exists.
-
 2. The `p1_basic_w_ex` prompt anchors heavy-tool mode (2 calls / 4 turns) via its 2-search Hamlet example. **Single-hop datasets (NQ, TriviaQA, PopQA) get +69-71 % relative lift, which is high.** Is the 2-search anchor over-applied (the model also does 2 searches on questions where 1 suffices, which mostly works because the second search is wasted but not harmful)? Examining `output['final_response']` distributions for `tool_call_counts/mean` per-dataset would settle this.
-
 3. **2WikiMultiHopQA tied** while HotpotQA gained — both are 2-hop. The 2Wiki questions tend to require multi-fact composition over the same passage; HotpotQA tends to require span-stitching across passages. Why did GRPO help HotpotQA but not 2Wiki? Inspecting the `final_response` for items where pre-GRPO succeeded but v0 failed (and vice versa) on 2Wiki vs HotpotQA would identify whether the training prompt distribution mismatched 2Wiki's question shape.
-
 4. The training rollout reward function (`re_search.py` EM-only) returns 1.0 / 0.0; the **Search-R1 partial-credit reward** (0.1 floor for any well-formatted but wrong answer) was not used here (`p1_basic_w_ex` is in the v0 block where verl-legacy `qa_em.py` was active; partial credit was a v1 artifact). Whether re-training with the partial-credit reward would close the 2Wiki gap — or whether it would create the floor-masking issue documented in `RESULTS_v0.md` §11 — is an open question for Phase-2.
-
 5. **All 7 datasets at full Plan A and a single seed take ~2.5 hours per variant on 1× A100-80GB**. Multi-seed × full Plan A is ~2.5 h × k seeds per variant; under the JustRL paper's mean-of-3-seeds convention this is ~7.5 h / variant. For Phase-2 multi-recipe evaluation, this is the rate-limiting cost to budget for.
 
 ---
@@ -305,3 +330,4 @@ To swap to a different checkpoint, drop it under `eval/<name>/` and add the case
 - M3 milestone: `docs/milestone_three/MILESTONE_3.md`
 - M3 code-setup diff: `docs/report/CODE_SETUP_v2.md`
 - Training-time per-run synthesis (29 ALICE runs): `docs/report/RESULTS_v0.md` (14 v0) + `docs/report/RESULTS_v1.md` (15 v1)
+

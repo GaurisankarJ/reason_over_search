@@ -3,7 +3,7 @@ title: CONVERSATION CONTEXT
 tags: []
 source: internal
 created: 2026-05-06
-updated: 2026-05-06
+updated: 2026-05-07
 ---
 
 # Conversation Context: Research Strand
@@ -12,17 +12,17 @@ updated: 2026-05-06
 >
 > Sibling snapshots: [`../report/CONVERSATION_CONTEXT.md`](../report/CONVERSATION_CONTEXT.md) (thesis writing + Phase-1 results), [`../training/CONVERSATION_CONTEXT.md`](../training/CONVERSATION_CONTEXT.md) (Phase-2 training pipeline), [`../internship/CONVERSATION_CONTEXT.md`](../internship/CONVERSATION_CONTEXT.md) (Alstom internship).
 
-**Last updated**: 2026-05-06 (folder reorganisation; literature moved here from `docs/report/`)
+**Last updated**: 2026-05-07 (M3 closed; Phase-2 NeMo-RL is the next chapter)
 
 ---
 
 ## 1. Status (one paragraph)
 
-The research strand has two arms that are now both ready to drive Phase-2 ablations. The **literature arm** (96-card `SURVEY.md`, project-focused `SURVEY_FOCUSED.md`, completeness `SURVEY_OVERFLOW.md`, personal `LITERATURE_REVIEW.md`) is frozen as of 2026-05-04 and surfaced the candidate recipe (E2H curriculum + S-GRPO + MC-GRPO + JustRL control) used in [`../report/SUPERVISOR_MEETING_2026-05-07.md`](../report/SUPERVISOR_MEETING_2026-05-07.md) § 2. The **algorithm + systems arm** (`INTEGRATION_GUIDE.md`, `PARADIGM_REVIEW.md` v1→v2→v3, `RUNTIME_EFFICIENCY.md`) is also frozen at v3 (2026-05-03). The big open tension is "tricks may hurt" (JustRL): the recipe must be validated with a JustRL plain-GRPO control or it cannot be claimed to be the optimised recipe. Wall-clock budget allows 2 to 3 full Qwen3.5-2B GRPO runs on 1× A100, so the C / C-minimal pair is the affordable comparison; sweeping individual tricks is not.
+The research strand has two arms that are now both ready to drive Phase-2 ablations. The **literature arm** (96-card `SURVEY.md`, project-focused `SURVEY_FOCUSED.md`, completeness `SURVEY_OVERFLOW.md`, personal `LITERATURE_REVIEW.md`) is frozen as of 2026-05-04 and surfaced the candidate recipe (E2H curriculum + S-GRPO + MC-GRPO + JustRL control) used in [`../report/SUPERVISOR_MEETING_2026-05-07.md`](../report/SUPERVISOR_MEETING_2026-05-07.md) § 6. The **algorithm + systems arm** (`INTEGRATION_GUIDE.md`, `PARADIGM_REVIEW.md` v1→v2→v3, `RUNTIME_EFFICIENCY.md`) is also frozen at v3 (2026-05-03). The big open tension is "tricks may hurt" (JustRL): the recipe must be validated with a JustRL plain-GRPO control or it cannot be claimed to be the optimised recipe. Wall-clock budget allows 2 to 3 full Qwen3.5-2B GRPO runs on 1× A100, so the C / C-minimal pair is the affordable comparison; sweeping individual tricks is not. **M3 (first eval of the v0 GRPO checkpoint) closed 2026-05-07 with EM 0.102 → 0.155 (+52 % rel) across 51,713 items / variant; the eval pipeline is now pinned and reusable for Phase-2 NeMo-RL evaluation.** See [`../report/SUPERVISOR_MEETING_2026-05-07.md`](../report/SUPERVISOR_MEETING_2026-05-07.md) § 4 and [`../report/RESULTS_v2.md`](../report/RESULTS_v2.md).
 
 ## 2. Active question
 
-The supervisor-facing reframe of the thesis (see [`../report/SUPERVISOR_MEETING_2026-05-07.md`](../report/SUPERVISOR_MEETING_2026-05-07.md) § 2):
+The supervisor-facing reframe of the thesis (see [`../report/SUPERVISOR_MEETING_2026-05-07.md`](../report/SUPERVISOR_MEETING_2026-05-07.md) § 5):
 
 > *Is it feasible to post-train a small LM (Qwen3.5-2B) to Search-R1-level results under realistic resource constraints (1× A100-80GB, ~$1000), and what is the optimised training recipe?*
 
@@ -90,6 +90,7 @@ See [`README.md`](README.md) in this directory for the full per-file index. Quic
 |---|---|
 | Literature | `LITERATURE_REVIEW.md`, `SURVEY.md`, `SURVEY_FOCUSED.md`, `SURVEY_OVERFLOW.md` |
 | Algorithm + systems | `INTEGRATION_GUIDE.md` (entry point), `PARADIGM_REVIEW.md`, `RUNTIME_EFFICIENCY.md` |
+| Open questions | [`QUESTIONS.md`](QUESTIONS.md) (running register; "register this as a question" entries land here) |
 
 Cross-folder pointers worth knowing:
 
