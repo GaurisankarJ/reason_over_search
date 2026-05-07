@@ -3,14 +3,14 @@ title: CONVERSATION CONTEXT
 tags: []
 source: internal
 created: 2026-05-04
-updated: 2026-05-06
+updated: 2026-05-07
 ---
 
 # Conversation Context
 
 > Living snapshot of project status, decisions, and pointers to the canonical docs. Update this when something material changes; keep historical sections frozen below.
 
-**Last updated**: 2026-05-06
+**Last updated**: 2026-05-07 (M3 closed; chapter wrap-up)
 
 > **Doc reorganisation 2026-05-06**: The literature-review strand (`LITERATURE_REVIEW.md`, `SURVEY.md`, `SURVEY_FOCUSED.md`, `SURVEY_OVERFLOW.md`) moved to [`docs/research/`](../research/) so this folder is purely thesis-writing. See [`docs/research/CONVERSATION_CONTEXT.md`](../research/CONVERSATION_CONTEXT.md) for the research-strand snapshot. The supervisor-meeting brief is now date-suffixed: `SUPERVISOR_MEETING_2026-05-07.md`.
 
@@ -18,7 +18,7 @@ updated: 2026-05-06
 
 ## 1. Status (one paragraph)
 
-Phase-1 of the thesis (Qwen3-0.6B prompt + base-model ablations on 1× A100, ALICE) is closed and documented in `RESULTS_v0.md` and `RESULTS_v1.md`. The Search-R1 evaluation baseline is reproduced (`milestone_one/COMPARISON_PLAN_B_v1.md`, ±2.5 pp of paper). The Phase-2 NeMo-RL training pipeline for Qwen3.5-2B is built and launch-ready. Wall-clock is observed at 11 to 17 days per run on 1× A100-80GB, which kills the original reward-function-ablation plan. The thesis question is being reframed from "extending RLVR via tool-use" to "what is the optimised training recipe for a small LM under a single-A100 budget"; proposed recipe stacks E2H curriculum + S-GRPO + MC-GRPO on a Search-R1 GRPO baseline. Net is captured in `SUPERVISOR_MEETING_2026-05-07.md`.
+Phase-1 of the thesis (Qwen3-0.6B prompt + base-model ablations on 1× A100-40GB, ALICE; 29 runs across v0 + v1 blocks) is closed and documented in `RESULTS_v0.md` and `RESULTS_v1.md`. The Search-R1 evaluation baseline (M1, Qwen2.5-3B) is reproduced (`milestone_one/COMPARISON_PLAN_B_v1.md`, ±2.5 pp of paper). The Phase-2 (M2) NeMo-RL training pipeline for Qwen3.5-2B is built and launch-ready (15 parity tests pass; smoke-tested on Vast.ai 1× A100-80GB at ~57 s/step). **M3 (first eval of the v0 GRPO checkpoint, closed 2026-05-07)**: 1046-step `p1_basic_w_ex_z7kcxfof` (the only Phase-1 run that converged on heavy-tool 2-call/4-turn behaviour; 23h 47m 30s wall on A100-40GB) lifted average EM 0.102 → 0.155 (+52 % relative, +0.053 absolute) over the untrained Qwen3-0.6B hybrid across all 7 paper benchmarks at full Plan A (51,713 items / variant on ALICE A100-80GB); 6 / 7 datasets improved; held-out generalisation rules out memorisation. The eval pipeline is now pinned and reusable for Phase-2 NeMo-RL evaluation. Phase-2 wall-clock is observed at 11 to 17 days per run on 1× A100-80GB, which kills the original reward-function-ablation plan. The thesis question is being reframed from "extending RLVR via tool-use" to "what is the optimised training recipe for a small LM under a single-A100 budget"; proposed recipe stacks E2H curriculum + S-GRPO + MC-GRPO on a Search-R1 GRPO baseline with a JustRL plain-GRPO control alongside. Net captured in `SUPERVISOR_MEETING_2026-05-07.md` (chapter-closing summary); detailed M3 numerical record in `RESULTS_v2.md`.
 
 ## 2. Hard timeline
 

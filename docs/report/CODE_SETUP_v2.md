@@ -266,7 +266,7 @@ Two regimes recorded — `INFERENCE_MAX_WORKERS=16` (initial, pre-GRPO partial r
 | `enable_thinking` | False default in re-search code | True (Qwen3 hybrid soft-switch needs it for the model to actually reason) |
 | Prompt template variant | `re_search_template_sys` (system-prompt that emphasises `<think>`-then-act loop) | `QWEN3_0_6B_TEMPLATE` aka `p1_basic_w_ex` (basic rules + Hamlet 2-search example, no explicit `<think>` instruction; model emits `<think>` anyway because it was trained on Qwen3 hybrid which does this by default) |
 | Reward at training time | EM-only, paper-faithful (verl_legacy `qa_em.py`) | same |
-| Tags ablated | `<search>/<result>` (paper's original) **vs** `<tool_call>/<tool_response>` (Qwen-native, in v1 ReSearch block) | `<search>/<result>` only (we evaluate the v0 checkpoint trained with these tags) |
+| Tags ablated | `<search>/<result>` (matches both the published Search-R1 paper and the published ReSearch paper — verified upstream at `re-search` commit `51d98e1`) **vs** `<tool_call>/<tool_response>` (Qwen-native; *our local ablation* introduced in `re-search` commit `2c32dd3`, 2026-04-12, and tested in our v1 block — **not** the published paper's scheme) | `<search>/<result>` only (we evaluate the v0 checkpoint trained with these tags) |
 
 **Net**: M3 eval is byte-equivalent to a re-execution of the verl-legacy training rollout for `p1_basic_w_ex`, with the only deltas being (a) the SGLang inference backend instead of vLLM, (b) the eval-side wiring through FlashRAG, (c) the retriever served by `local_retriever/` instead of an in-process call.
 

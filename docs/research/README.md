@@ -3,7 +3,7 @@ title: README
 tags: []
 source: internal
 created: 2026-05-04
-updated: 2026-05-06
+updated: 2026-05-07
 ---
 
 # Research: Literature, Algorithms, Systems
@@ -13,7 +13,9 @@ Two strands live in this folder:
 1. **Literature** (`LITERATURE_REVIEW.md` + the three `SURVEY*.md` files): the RLVR paper landscape, project-personal annotations, and the project-specific recipe selection.
 2. **Algorithm + systems engineering** (`INTEGRATION_GUIDE.md`, `PARADIGM_REVIEW.md`, `RUNTIME_EFFICIENCY.md`): how to make GRPO training efficient and effective for a 2B model on multi-hop search-augmented QA on a single A100.
 
-Both strands feed the M2 ablation plan (E2H curriculum + S-GRPO + MC-GRPO with a JustRL plain-GRPO control); see [`CONVERSATION_CONTEXT.md`](CONVERSATION_CONTEXT.md) for the strand-level snapshot and [`../report/SUPERVISOR_MEETING_2026-05-07.md`](../report/SUPERVISOR_MEETING_2026-05-07.md) § 2 for the supervisor-facing version.
+Both strands feed the M2 ablation plan (E2H curriculum + S-GRPO + MC-GRPO with a JustRL plain-GRPO control); see [`CONVERSATION_CONTEXT.md`](CONVERSATION_CONTEXT.md) for the strand-level snapshot and [`../report/SUPERVISOR_MEETING_2026-05-07.md`](../report/SUPERVISOR_MEETING_2026-05-07.md) § 6 for the supervisor-facing version.
+
+Alongside the two strands, [`QUESTIONS.md`](QUESTIONS.md) is the running register of open research questions and uncertainties to chase later. When the user "registers a question", entries are appended there.
 
 ---
 
@@ -42,8 +44,9 @@ A complete decision guide covering:
 |---|---|
 | [`LITERATURE_REVIEW.md`](LITERATURE_REVIEW.md) | Project-personal working notebook. Thesis framing, introduction outline, per-paper annotations with `==notes==` and `⭐` markers, and five appendices preserving thinking-as-it-happened. Drove the v0 / v1 decisions. |
 | [`SURVEY.md`](SURVEY.md) | Reference-style survey of the RLVR field. 14 thematic sections (Foundations, Verifier Design, Policy Optimization, Exploration, Reward Hacking, Self-Verification, Multi-Task, Open-Ended, Tool-Use, Mechanism Studies, Theoretical Foundations, Measurement, Open Challenges, Bibliography). Each section ends with paper cards in standardised Summary / Problem / Method / Result / Takeaway / ELI5 format. 96 cards total. |
-| [`SURVEY_FOCUSED.md`](SURVEY_FOCUSED.md) | Project-specific subset of `SURVEY.md`: only the papers relevant to Qwen3.5-2B / single-A100 / search-augmented. Source of the next-steps recipe (E2H curriculum + S-GRPO + MC-GRPO) used in § 2 of `../report/SUPERVISOR_MEETING_2026-05-07.md`. |
+| [`SURVEY_FOCUSED.md`](SURVEY_FOCUSED.md) | Project-specific subset of `SURVEY.md`: only the papers relevant to Qwen3.5-2B / single-A100 / search-augmented. Source of the next-steps recipe (E2H curriculum + S-GRPO + MC-GRPO) used in § 6 of `../report/SUPERVISOR_MEETING_2026-05-07.md`. |
 | [`SURVEY_OVERFLOW.md`](SURVEY_OVERFLOW.md) | 15 adjacent papers (foundational priors, surveys, alternative directions) kept for completeness. |
+| [`QUESTIONS.md`](QUESTIONS.md) | Running register of open research questions and uncertainties; one heading per question, resolved entries kept in place with a `Resolution` block as a learning trail. |
 
 ---
 

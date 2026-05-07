@@ -94,7 +94,7 @@ See [`README.md`](README.md) in this directory for the full per-file index. Quic
 
 Cross-folder pointers worth knowing:
 
-- [`../report/SUPERVISOR_MEETING_2026-05-07.md`](../report/SUPERVISOR_MEETING_2026-05-07.md): supervisor-facing two-page brief (uses §2 to propose the recipe).
+- [`../report/SUPERVISOR_MEETING_2026-05-07.md`](../report/SUPERVISOR_MEETING_2026-05-07.md): supervisor-facing canonical chapter-closing brief (uses § 6 to propose the recipe).
 - [`../report/RESULTS_v0.md`](../report/RESULTS_v0.md), [`RESULTS_v1.md`](../report/RESULTS_v1.md): Phase-1 Qwen3-0.6B ablation findings that grounded the literature search.
 - [`../training/PAPER_VS_OURS_TRAINING.md`](../training/PAPER_VS_OURS_TRAINING.md): hyperparameter cross-check vs Search-R1 paper.
 - [`../training/SMOKE_RESULTS_2026-05-06.md`](../training/SMOKE_RESULTS_2026-05-06.md): measured per-step numbers feeding `RUNTIME_EFFICIENCY.md`.

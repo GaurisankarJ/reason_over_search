@@ -10,7 +10,7 @@ updated: 2026-05-06
 
 > Two purposes. (1) Describe each of the 7 QA benchmarks Search-R1 evaluates on (hops, sizes, structure, real example, our v1 EM). (2) Map difficulty for the E2H curriculum (NQ → HotpotQA → MuSiQue) and record how the E2H paper schedules training.
 >
-> See also: [SURVEY_FOCUSED.md §5.4 + §6.1 to §6.8](SURVEY_FOCUSED.md), [PARADIGM_REVIEW.md §17](PARADIGM_REVIEW.md), [docs/papers/2506.06632_e2h.md](../papers/2506.06632_e2h.md), [docs/report/SUPERVISOR_MEETING_2026-05-07.md §2](../report/SUPERVISOR_MEETING_2026-05-07.md).
+> See also: [SURVEY_FOCUSED.md §5.4 + §6.1 to §6.8](SURVEY_FOCUSED.md), [PARADIGM_REVIEW.md §17](PARADIGM_REVIEW.md), [docs/papers/2506.06632_e2h.md](../papers/2506.06632_e2h.md), [docs/report/SUPERVISOR_MEETING_2026-05-07.md § 6](../report/SUPERVISOR_MEETING_2026-05-07.md).
 
 **Last updated**: 2026-05-06
 
@@ -462,6 +462,6 @@ Largest gains on Blocksworld (planning) and Countdown (arithmetic); both tasks w
 - [SURVEY_FOCUSED.md](SURVEY_FOCUSED.md): paper cards for datasets and retrieval methods (E2H card at §5.4).
 - [PARADIGM_REVIEW.md](PARADIGM_REVIEW.md) §17: full Variant C stack with E2H included.
 - [INTEGRATION_GUIDE.md](INTEGRATION_GUIDE.md): decision tree for recipe runs.
-- [docs/report/SUPERVISOR_MEETING_2026-05-07.md §2](../report/SUPERVISOR_MEETING_2026-05-07.md): supervisor-facing recipe proposal.
+- [docs/report/SUPERVISOR_MEETING_2026-05-07.md § 6](../report/SUPERVISOR_MEETING_2026-05-07.md): supervisor-facing recipe proposal.
 - [docs/training/CONVERSATION_CONTEXT.md](../training/CONVERSATION_CONTEXT.md): Phase-2 training pipeline status.
 - [docs/milestone_one/COMPARISON_PLAN_B_v1.md](../milestone_one/COMPARISON_PLAN_B_v1.md): per-dataset v1 EM vs paper.

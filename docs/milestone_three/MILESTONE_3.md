@@ -52,23 +52,32 @@ Question: What is the nationality of the author of Hamlet?
 
 ## Plan B settings (carry-over from M1)
 
-All settings from [docs/milestone_one/FROZEN_CONFIG_v1.md](../milestone_one/FROZEN_CONFIG_v1.md) apply unchanged, except:
+> **⚠ Superseded by M3 actual run (2026-05-07)**: this section captures the *originally planned* Plan B settings carried over from M1. The actual M3 run diverged on several knobs to match the verl-legacy training rollout byte-for-byte (see [`../report/CODE_SETUP_v2.md`](../report/CODE_SETUP_v2.md) §3 for the 14-fix audit), and ran on **full Plan A test/dev sets** (51,713 items / variant) rather than 1k subsamples because `sample_num` is not respected by the FlashRAG `search_r1` pipeline path. Authoritative actual configuration: [`../report/RESULTS_v2.md`](../report/RESULTS_v2.md) § 4. Kept here for plan-vs-execution traceability.
 
-| Setting | M1 value | M3 value | Reason |
-|---|---|---|---|
-| Model | Search-R1 Qwen2.5-3B checkpoints | `eval/qwen_3_0.6b/` and `eval/qwen_3_0.6b_v0/` | Different model |
-| Prompt format | `SEARCH_R1_TEMPLATE` (user message) | p1_basic_w_ex (system message) | Match training distribution |
-| Retrieval response wrapper | `<information>` | `<result>` | Match training distribution |
-| Hardware | Vast.ai RTX 4090 24GB | ALICE A100 80GB | In-house cluster |
-| `apply_chat` | `True` for both variants | `True` (Qwen3 hybrid) | Same rule |
-| Retriever index | Flat IP (`--num_retriever 2`) | IVF-SQ8 × 8 workers | Throughput under concurrent eval |
-| Eval pipeline source | `evaluation_search_r1/` | `evaluation_research/` | M3-adapted fork |
+All settings from [docs/milestone_one/FROZEN_CONFIG_v1.md](../milestone_one/FROZEN_CONFIG_v1.md) applied unchanged, except:
 
-**Unchanged from M1**: greedy decoding (`temperature=0.0`), `max_search_turns=4`, `step_limit=500`, `max_obs_length=500 tokens`, `retrieval_topk=3`, 7 datasets, 1k subsamples (bamboogle=125, musique=full 2417).
+| Setting | M1 value | M3 planned | M3 actual (2026-05-07) | Reason |
+|---|---|---|---|---|
+| Model | Search-R1 Qwen2.5-3B checkpoints | `eval/qwen_3_0.6b/` and `eval/qwen_3_0.6b_v0/` | same as planned | Different model |
+| Prompt format | `SEARCH_R1_TEMPLATE` (user message) | p1_basic_w_ex (system message) | same as planned | Match training distribution |
+| Retrieval response wrapper | `<information>` | `<result>` | same as planned (with leading space, byte-aligned to `vllm_rollout.py:419`) | Match training distribution |
+| Hardware | Vast.ai RTX 4090 24GB | ALICE A100 80GB | same as planned | In-house cluster |
+| `apply_chat` | `True` for both variants | `True` (Qwen3 hybrid) | same as planned | Same rule |
+| Retriever index | Flat IP (`--num_retriever 2`) | IVF-SQ8 × 8 workers | same as planned | Throughput under concurrent eval |
+| Eval pipeline source | `evaluation_search_r1/` | `evaluation_research/` | same as planned | M3-adapted fork |
+| `max_search_turns` | 4 | 4 | **5** (training observed max) | Alignment with training rollout |
+| `step_limit` (per call) | 500 | 500 | **8192** (no cap; bounded by `remain_length=4096`) | Alignment with training rollout (no per-step cap) |
+| `max_obs_length` | 500 tokens | 500 tokens | **256 tokens** | Match training `max_tool_response_length` |
+| `retrieval_topk` | 3 | 3 | **5** | Match training `top_n=5` |
+| `enable_thinking` | n/a | n/a | **True** | Otherwise Qwen3 hybrid auto-injects empty `<think></think>` |
+| `generator_max_input_len` | 1024 | 1024 | **4096** | Match training `response_length=4096` |
+| Subsampling | 1k stratified for the 5 large datasets | 1k stratified for the 5 large datasets | **none — full test/dev sets** (51,713 items / variant; happy-accident upgrade: `sample_num` not respected by FlashRAG `search_r1` path) | See `RESULTS_v2.md` §10.4 |
 
 ## Statistical justification
 
-M3 uses **1 seed × Plan B** (subsampled: 1k each for nq/triviaqa/popqa/hotpotqa/2wiki; full for bamboogle=125 and musique=2417). This section justifies that against the alternative — Plan A (full test sets) with multiple seeds — and quantifies the residual uncertainty.
+> **⚠ Superseded (2026-05-07)**: this section justifies the originally planned **1 × Plan B** scope. The actual run executed **full Plan A** (51,713 items / variant; population EMs, not subsample estimates), making the SE / McNemar analysis below moot. Kept for reference. See `RESULTS_v2.md` § 10.4 for the actual scope.
+
+M3 was originally planned as **1 seed × Plan B** (subsampled: 1k each for nq/triviaqa/popqa/hotpotqa/2wiki; full for bamboogle=125 and musique=2417). This section justifies that against the alternative — Plan A (full test sets) with multiple seeds — and quantifies the residual uncertainty.
 
 ### Greedy decoding makes multi-seed Plan A redundant
 

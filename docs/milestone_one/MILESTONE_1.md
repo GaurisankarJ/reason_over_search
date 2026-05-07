@@ -3,10 +3,12 @@ title: MILESTONE 1
 tags: []
 source: internal
 created: 2026-05-01
-updated: 2026-05-01
+updated: 2026-05-07
 ---
 
 # Milestone 1: Baseline [Search-R1](https://www.alphaxiv.org/abs/2503.09516)
+
+> **Status (2026-05-07): CLOSED.** Plan B v1 within ±2.5 pp of paper across 7 datasets on both base and instruct variants. Locked numerical record: [`COMPARISON_PLAN_B_v1.md`](COMPARISON_PLAN_B_v1.md), [`RESULTS_PLAN_B.md`](RESULTS_PLAN_B.md). Frozen reproducer config: [`FROZEN_CONFIG_v1.md`](FROZEN_CONFIG_v1.md). 3-fix audit: [`../eval/PAPER_VS_OURS_AUDIT.md`](../eval/PAPER_VS_OURS_AUDIT.md). Plan A on Vast.ai (5 seeds × 7 datasets × 2 variants) was Jose-owned and was not executed before the project pivoted to recipe-focused Phase-2 work — see `../report/SUPERVISOR_MEETING_2026-05-07.md` § 2.
 
 ## Phase 1 Context
 

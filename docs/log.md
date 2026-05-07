@@ -3,7 +3,7 @@ title: Log
 tags: []
 source: internal
 created: 2026-05-06
-updated: 2026-05-06
+updated: 2026-05-07
 ---
 
 # Wiki log
@@ -28,6 +28,13 @@ Conventions:
 - Don't rewrite past entries; if a fact turns out wrong, add a correcting bullet on the day the correction was made.
 
 ---
+
+## 2026-05-07
+
+- Decision: M3 closed. First evaluation of the v0 GRPO checkpoint (`p1_basic_w_ex_z7kcxfof`, 1046 / 9968 steps, 23h 47m 30s wall on 1× A100-40GB) vs. the untrained Qwen3-0.6B hybrid on the 7 paper QA benchmarks. Headline: average EM 0.102 → 0.155 (+0.053 absolute, +52 % relative) across full Plan A (51,713 items / variant); 6 / 7 datasets improved; held-out generalisation rules out memorisation. The eval pipeline is now pinned and reusable for Phase-2 NeMo-RL evaluation. Full record: [`report/RESULTS_v2.md`](report/RESULTS_v2.md); consolidated brief: [`report/SUPERVISOR_MEETING_2026-05-07.md`](report/SUPERVISOR_MEETING_2026-05-07.md) § 4; closed milestone: [`milestone_three/MILESTONE_3.md`](milestone_three/MILESTONE_3.md).
+- Decision: ReSearch action-format attribution corrected. The published ReSearch paper uses `<search>` / `<result>` tags (verified upstream `re-search` commit `51d98e1`); the `<tool_call>` JSON variant in our local `re-search/` checkout is a separate ablation we introduced (commit `2c32dd3`, 2026-04-12) and tested in the v1 block. Earlier docs that called `<tool_call>` "ReSearch's format" were misattributing our own ablation. Fixed in `report/SUPERVISOR_MEETING_2026-05-07.md` § 4.5 and `report/RESULTS_v2.md` § 10.7.
+- Decision: heavy rebuild of `report/SUPERVISOR_MEETING_2026-05-07.md` into a 6-section canonical chapter-closing summary (§ 0 TL;DR · § 1 Phase-1 · § 2 M1 baseline · § 3 M2 NeMo-RL pivot · § 4 M3 results · § 5 compute reality + reframed RQ · § 6 next-steps recipe). Cross-references in downstream docs bumped from old § 1 / § 2 / § 3 to the new section numbers.
+- Created: [`research/QUESTIONS.md`](research/QUESTIONS.md), running register for open research questions and "register this as a question" entries. Threaded into [`../claude/CLAUDE.md`](../claude/CLAUDE.md) (repo layout + new "register a question" rule under "How I want you to work with me"), [`research/README.md`](research/README.md) (intro + doc inventory), and [`research/CONVERSATION_CONTEXT.md`](research/CONVERSATION_CONTEXT.md) (doc inventory). First question filed: Q1 sequence packing in verl and NeMo-RL, works with Qwen3 but not Qwen3.5.
 
 ## 2026-05-06
 

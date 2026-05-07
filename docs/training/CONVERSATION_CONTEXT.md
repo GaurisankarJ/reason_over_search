@@ -23,7 +23,7 @@ Two parallel concerns:
 1. **Faithful reproduction** of Search-R1's GRPO training (paper-vs-ours audit, hyperparameter parity, EM reward, retrieval HTTP contract).
 2. **Engineering for our hardware** (1x A100 80GB SXM via Vast.ai; ~$1000 budget; thesis deadline 2026-06-15). Forces departures from the paper: smaller batch (102 prompts/step vs paper's 512), `sequence_packing: false` (Qwen3.5 GatedDeltaNet kernel crashes with packing), `train_micro_batch_size: 2` (without packing), IVF-SQ8 FAISS index (flat IP times out under rollout HTTP load).
 
-The active question (the supervisor-facing reframe of the thesis, see [`docs/report/SUPERVISOR_MEETING_2026-05-07.md`](../report/SUPERVISOR_MEETING_2026-05-07.md) §2): *"Is it feasible to post-train a small LM to Search-R1-level results under realistic resource constraints, and what is the optimised training recipe?"*. Candidate answer: a stack of E2H curriculum + S-GRPO + MC-GRPO on a Search-R1 GRPO baseline, with a JustRL plain-GRPO control alongside.
+The active question (the supervisor-facing reframe of the thesis, see [`docs/report/SUPERVISOR_MEETING_2026-05-07.md`](../report/SUPERVISOR_MEETING_2026-05-07.md) § 5): *"Is it feasible to post-train a small LM to Search-R1-level results under realistic resource constraints, and what is the optimised training recipe?"*. Candidate answer ([`SUPERVISOR_MEETING_2026-05-07.md`](../report/SUPERVISOR_MEETING_2026-05-07.md) § 6): a stack of E2H curriculum + S-GRPO + MC-GRPO on a Search-R1 GRPO baseline, with a JustRL plain-GRPO control alongside.
 
 ---
 
