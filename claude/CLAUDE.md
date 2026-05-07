@@ -34,7 +34,7 @@ This work is a Master's thesis (Leiden University; supervisors track in `docs/re
 | 2026-06-15 | Thesis submission |
 | ~2026-07-15 | Defense |
 
-**Compute and budget**: 1× A100-80GB rented on Vast.ai (ALICE retired going forward). ~$1000 USD total training budget. Observed wall-clock for a full Search-R1-shape Qwen3.5-2B GRPO run is **11 to 17 days on 1× A100** (5 to 8.5 d on 1× H100, 6.5 to 9.5 d on 2× A100). That gives **2 to 3 full runs**, so reward-ablation sweeps are off the table.
+**Compute and budget**: 1× A100-80GB rented on Vast.ai (ALICE retired going forward). ~\$1000 USD total training budget. Observed wall-clock for a Search-R1-shape Qwen3.5-2B GRPO run **at our affordable budget** (1005 steps × 102 prompts/step ≈ **0.604 epochs** of the 169,615-row train corpus) is **11 to 17 days on 1× A100-80GB** (5 to 8.5 d on 1× H100, 6.5 to 9.5 d on 2× A100). Matching the paper's **3-epoch** schedule at our batch shape would need ~5× the steps → ~55–85 d / run on 1× A100-80GB (~\$1,600–2,400 / run). The 0.6-epoch budget gives **2 to 3 affordable runs**; the paper-faithful 3-epoch budget gives 0. Reward-ablation sweeps off the table either way. **Phase-2 will start with Qwen3.5-0.8B** for cheap iteration (the M2 NeMo-RL pipeline ports trivially since 0.8B and 2B share the same architecture); extension to 2B comes after the recipe holds.
 
 **Reframed thesis question** (after Phase-2 wall-clock reality landed): from "extend RLVR via tool-use" to **"is it feasible to post-train a small LM to Search-R1-level results under realistic resource constraints, and what is the optimised training recipe?"**. The candidate answer is a stack of three drop-in additions on a Search-R1 GRPO baseline run: **E2H curriculum + S-GRPO + MC-GRPO**, with a **JustRL plain-GRPO control** alongside (per [arxiv 2512.16649](https://arxiv.org/abs/2512.16649) "tricks may hurt"). Full proposal: [docs/report/SUPERVISOR_MEETING_2026-05-07.md § 6](../docs/report/SUPERVISOR_MEETING_2026-05-07.md).
 
@@ -118,7 +118,7 @@ Canonical state lives in [docs/MILESTONE_1.md](../docs/milestone_one/MILESTONE_1
 
 Format-validity (`</answer>` close-rate): base ≥99.6 % every dataset; instruct 91.4–100 %. Length-truncation ≤0.4 % across the board.
 
-**Plan A — YES (unconditional)**. All decision criteria met. Vast.ai cost analysis: 8× RTX 4090 ≈ $58–77 / 24 h ([docs/VAST_AI_PLAN_A.md](../docs/setup/VAST_AI_PLAN_A.md)).
+**Plan A — YES (unconditional)**. All decision criteria met. Vast.ai cost analysis: 8× RTX 4090 ≈ \$58–77 / 24 h ([docs/VAST_AI_PLAN_A.md](../docs/setup/VAST_AI_PLAN_A.md)).
 
 **Plan B v0** (pre-fix baseline) — archived: [docs/archive/RESULTS_PLAN_B_v0.md](../docs/archive/RESULTS_PLAN_B_v0.md), [docs/COMPARISON_PLAN_B.md](../docs/milestone_one/COMPARISON_PLAN_B.md). Base avg was −8.3 pp vs paper (one-sided → systematic, fixed by D1+D-prompt-micro+D8).
 
@@ -130,7 +130,7 @@ Format-validity (`</answer>` close-rate): base ≥99.6 % every dataset; instruct
 5. **`<tool_call>` in-distribution tags cost nothing** at equal step count vs paper `<search>` tags.
 6. **Qwen3-0.6B is too slow for reward-function ablation** under the timeline; pivoted to Qwen3.5-2B on NeMo-RL.
 
-**Phase-2 (M2) NeMo-RL training pipeline** — built and smoke-tested end-to-end on Vast.ai 1× A100 80GB ([`docs/training/SMOKE_RESULTS_2026-05-06.md`](../docs/training/SMOKE_RESULTS_2026-05-06.md); training-side bootstrap doc at [`docs/training/CONVERSATION_CONTEXT.md`](../docs/training/CONVERSATION_CONTEXT.md)): ~57 s/step at smoke shape (20 traj/step); full Search-R1 schedule extrapolates to **11 to 17 days / run, ~$300 to $490 / run** at $1.20/h on 1× A100 (smoke-anchored math in §"Full-training wall-clock + cost" of that file and [`docs/training/PAPER_VS_OURS_TRAINING.md §7`](../docs/training/PAPER_VS_OURS_TRAINING.md#7-compute)). Reward-ablation killed by this. The active recipe and ablation plan now drives Phase-2 work (see "What's next" below). Earlier smoke runs (2026-05-02 small shape; 2026-05-04 v2 seed=42) are archived under [`docs/archive/training/`](../docs/archive/training/).
+**Phase-2 (M2) NeMo-RL training pipeline** — built and smoke-tested end-to-end on Vast.ai 1× A100 80GB ([`docs/training/SMOKE_RESULTS_2026-05-06.md`](../docs/training/SMOKE_RESULTS_2026-05-06.md); training-side bootstrap doc at [`docs/training/CONVERSATION_CONTEXT.md`](../docs/training/CONVERSATION_CONTEXT.md)): ~57 s/step at smoke shape (20 traj/step); full Search-R1 schedule **at our 0.6-epoch budget** extrapolates to **11 to 17 days / run, ~\$300 to \$490 / run** at \$1.20/h on 1× A100 (smoke-anchored math in §"Full-training wall-clock + cost" of that file and [`docs/training/PAPER_VS_OURS_TRAINING.md §7`](../docs/training/PAPER_VS_OURS_TRAINING.md#7-compute)). Paper-equivalent 3-epoch training would be ~5× → 55–85 d / run, infeasible. Reward-ablation killed by this either way. The active recipe and ablation plan now drives Phase-2 work (see "What's next" below). Earlier smoke runs (2026-05-02 small shape; 2026-05-04 v2 seed=42) are archived under [`docs/archive/training/`](../docs/archive/training/).
 
 **Milestone 3 (M3) — first eval of the v0 GRPO checkpoint** — **closed 2026-05-07**. Evaluated `p1_basic_w_ex_z7kcxfof` (the only Phase-1 run that converged on heavy-tool 2-call/4-turn behaviour; 1046 / 9968 GRPO steps, 23h 47m 30s wall on 1× A100-40GB) against the untrained Qwen3-0.6B hybrid on the 7 paper QA benchmarks. **Average EM 0.102 → 0.155 (+0.053 absolute, +52% relative)** across full Plan A test/dev sets (51,713 items / variant; ALICE 1× A100-80GB; greedy decode); 6 / 7 datasets improved (2WikiMultiHopQA tied −0.003); held-out generalisation rules out memorisation. Eval pipeline aligned to the verl-legacy training rollout via 14 fixes ([`docs/report/CODE_SETUP_v2.md`](../docs/report/CODE_SETUP_v2.md) §3). Pre-GRPO interactive ~115 min, post-GRPO sbatch 2h 26m 33s. **The eval pipeline is now pinned and reusable for any future Qwen3.5-2B checkpoint that uses the `<search>` / `<result>` tag scheme.** Full numerical record: [`docs/report/RESULTS_v2.md`](../docs/report/RESULTS_v2.md). Consolidated brief: [`docs/report/SUPERVISOR_MEETING_2026-05-07.md` § 4](../docs/report/SUPERVISOR_MEETING_2026-05-07.md).
 
@@ -206,7 +206,7 @@ If a path you're tempted to link to is gitignored or lives outside the repo, eit
 
 ## What's next
 
-Two parallel tracks. The canonical M1 list is at [docs/MILESTONE_1.md#whats-left](../docs/milestone_one/MILESTONE_1.md#whats-left); the canonical M2 ablation path is in [`docs/TODO_2026-05-04.md`](../docs/TODO_2026-05-04.md). Active target: **make a Qwen3.5-2B GRPO + search-tool training run stable enough to ablate in ≤10 hours on 1× A100 80GB.**
+Two parallel tracks. The canonical M1 list is at [docs/MILESTONE_1.md#whats-left](../docs/milestone_one/MILESTONE_1.md#whats-left); the canonical M2 ablation path is in [`docs/TODO_2026-05-04.md`](../docs/TODO_2026-05-04.md). Active target: **make a Qwen3.5 small-model (starting Qwen3.5-0.8B; extending to 2B if the recipe holds) GRPO + search-tool training run stable enough to ablate in ≤10 hours on 1× A100 80GB.**
 
 ### Active ablation plan (M2, recipe-search)
 
@@ -233,7 +233,7 @@ After (2) we know whether JustRL "tricks may hurt" holds in our setting. After (
 
 1. **Tabulate format-validity / length-truncation rate** per (dataset, variant) from v1 sweep JSONs. Extend `aggregate.py` to surface `'</answer>' in final_response` close-rate.
 2. **One-seed full-data runs** for both base and instruct (~4 h × 2 on a 4090) to confirm v1 config converges at scale, not just on 1 k subsamples.
-3. **Plan A on Vast.ai** — Jose's job; instructions in [docs/VAST_AI_PLAN_A.md](../docs/setup/VAST_AI_PLAN_A.md) (5 seeds × 7 × 2 = 70 runs, ≤24 h on a fleet, ~$58–108 budget).
+3. **Plan A on Vast.ai** — Jose's job; instructions in [docs/VAST_AI_PLAN_A.md](../docs/setup/VAST_AI_PLAN_A.md) (5 seeds × 7 × 2 = 70 runs, ≤24 h on a fleet, ~\$58–108 budget).
 4. **Aggregate, write up, publish**: per-benchmark means + std-dev across the 5 seeds, side-by-side with paper, plus the audit + cost summary.
 
 Do **not** change `temperature` or `top_p`; paper eval is greedy. See note above.

@@ -21,7 +21,7 @@ updated: 2026-05-06
 Two parallel concerns:
 
 1. **Faithful reproduction** of Search-R1's GRPO training (paper-vs-ours audit, hyperparameter parity, EM reward, retrieval HTTP contract).
-2. **Engineering for our hardware** (1x A100 80GB SXM via Vast.ai; ~$1000 budget; thesis deadline 2026-06-15). Forces departures from the paper: smaller batch (102 prompts/step vs paper's 512), `sequence_packing: false` (Qwen3.5 GatedDeltaNet kernel crashes with packing), `train_micro_batch_size: 2` (without packing), IVF-SQ8 FAISS index (flat IP times out under rollout HTTP load).
+2. **Engineering for our hardware** (1x A100 80GB SXM via Vast.ai; ~\$1000 budget; thesis deadline 2026-06-15). Forces departures from the paper: smaller batch (102 prompts/step vs paper's 512), `sequence_packing: false` (Qwen3.5 GatedDeltaNet kernel crashes with packing), `train_micro_batch_size: 2` (without packing), IVF-SQ8 FAISS index (flat IP times out under rollout HTTP load).
 
 The active question (the supervisor-facing reframe of the thesis, see [`docs/report/SUPERVISOR_MEETING_2026-05-07.md`](../report/SUPERVISOR_MEETING_2026-05-07.md) § 5): *"Is it feasible to post-train a small LM to Search-R1-level results under realistic resource constraints, and what is the optimised training recipe?"*. Candidate answer ([`SUPERVISOR_MEETING_2026-05-07.md`](../report/SUPERVISOR_MEETING_2026-05-07.md) § 6): a stack of E2H curriculum + S-GRPO + MC-GRPO on a Search-R1 GRPO baseline, with a JustRL plain-GRPO control alongside.
 
@@ -29,9 +29,9 @@ The active question (the supervisor-facing reframe of the thesis, see [`docs/rep
 
 ## State of the world (2026-05-06)
 
-**Pipeline status: built end-to-end and smoke-tested.** Four smoke combos (`{base, hybrid} × {qwen_native, paper}`) ran successfully on Vast.ai 1x A100 80GB. ~57 s / step at smoke shape (20 traj/step). Extrapolates linearly to ~24 min / step at the real config (510 traj/step) -> 1005 steps in **11 to 17 days** on 1x A100 (5 to 8.5 d on 1x H100). Cost: **$300 to $490 / run** at $1.20/GPU-h on 1x A100. **Smoke-anchored, with cited math; full derivation in [`SMOKE_RESULTS_2026-05-06.md` "Full-training wall-clock + cost"](SMOKE_RESULTS_2026-05-06.md#full-training-wall-clock--cost-phase-2-real-config) and [`PAPER_VS_OURS_TRAINING.md §7`](PAPER_VS_OURS_TRAINING.md#7-compute).**
+**Pipeline status: built end-to-end and smoke-tested.** Four smoke combos (`{base, hybrid} × {qwen_native, paper}`) ran successfully on Vast.ai 1x A100 80GB. ~57 s / step at smoke shape (20 traj/step). Extrapolates linearly to ~24 min / step at the real config (510 traj/step) -> 1005 steps in **11 to 17 days** on 1x A100 (5 to 8.5 d on 1x H100). Cost: **\$300 to \$490 / run** at \$1.20/GPU-h on 1x A100 (this is for the affordable 0.6-epoch budget = 1005 steps × 102 prompts ≈ 102k prompts of the 169k-row corpus; matching paper's 3-epoch schedule at our batch shape would be ~5× → ~55–85 d, ~\$1,600–2,400 / run). **Smoke-anchored, with cited math; full derivation in [`SMOKE_RESULTS_2026-05-06.md` "Full-training wall-clock + cost"](SMOKE_RESULTS_2026-05-06.md#full-training-wall-clock--cost-phase-2-real-config) and [`PAPER_VS_OURS_TRAINING.md §7`](PAPER_VS_OURS_TRAINING.md#7-compute).**
 
-**Plan reframe.** The original 6-run plan (3 seeds x 2 variants) is **superseded** by the recipe-ablation plan in [`docs/TODO_2026-05-04.md`](../TODO_2026-05-04.md). With ~$1000 USD budget and 11 to 17 d / run on 1x A100, that supports ~2 to 3 runs total: the JustRL plain-GRPO control + the optimised stack. Reward-ablation sweeps are off the table.
+**Plan reframe.** The original 6-run plan (3 seeds x 2 variants) is **superseded** by the recipe-ablation plan in [`docs/TODO_2026-05-04.md`](../TODO_2026-05-04.md). With ~\$1000 USD budget and 11 to 17 d / run on 1x A100 at the affordable 0.6-epoch budget, that supports ~2 to 3 runs total: the JustRL plain-GRPO control + the optimised stack. Phase-2 will **start with Qwen3.5-0.8B** (cheaper smoke + iteration; the architecture is shared with 2B so the pipeline ports trivially) before extending to 2B if the recipe holds. Reward-ablation sweeps are off the table.
 
 **First-pass training config currently disables both validation and checkpointing** (see [`VALIDATION.md`](VALIDATION.md)). The first long run is mechanics verification only; flip the `[DISABLED for first-pass training]` blocks back on per [`VALIDATION.md §7`](VALIDATION.md#7-re-enabling-validation-planned-not-active) before kicking off ablations.
 
@@ -83,8 +83,9 @@ Order matters. Each file has a clear job; cross-references between them resolve 
 | Wall-clock 1x A100 SXM | **11 to 17 d** (264 to 408 h) | 1005 x {15, 24} min |
 | Wall-clock 1x H100 SXM | 5 to 8.5 d (120 to 204 h) | smoke table; H100 ≈ 2x A100 bf16 |
 | Wall-clock 2x A100 SXM | 6.5 to 9.5 d (156 to 228 h) | smoke table; 1.7x speedup once decolocated |
-| $/run 1x A100 (Vast median) | **$300 to $490** at $1.20/h (264 x $1.20 = $317; 408 x $1.20 = $490) | [`SMOKE_RESULTS_2026-05-06.md` "Full-training wall-clock"](SMOKE_RESULTS_2026-05-06.md#full-training-wall-clock--cost-phase-2-real-config) |
-| $/run 1x H100 (recommended) | $240 to $410 at $2.00/h | same |
+| \$/run 1x A100 (Vast median, 0.6-epoch budget) | **\$300 to \$490** at \$1.20/h (264 x \$1.20 = \$317; 408 x \$1.20 = \$490) | [`SMOKE_RESULTS_2026-05-06.md` "Full-training wall-clock"](SMOKE_RESULTS_2026-05-06.md#full-training-wall-clock--cost-phase-2-real-config) |
+| \$/run 1x H100 (recommended, 0.6-epoch budget) | \$240 to \$410 at \$2.00/h | same |
+| \$/run 1x A100 (paper-equivalent 3-epoch) | ~\$1,600 to \$2,400 (~5× the 0.6-epoch numbers) | derived; infeasible on \$1000 thesis budget |
 | Retriever index | **IVF4096-SQ8** (~16 GB on disk) | [`local_retriever/retriever_config.yaml`](../../local_retriever/retriever_config.yaml); flat IP times out under training rollout HTTP load |
 | Retriever workers (training) | **8** | [`bootstrap.sh`](../../training/scripts/bootstrap.sh); each `flashrag.utils.get_retriever()` loads its own copy of the index |
 | Host RAM | **≥150 GB** (8 workers x ~16 GB index ≈ 128 GB resident) | [`bootstrap.sh`](../../training/scripts/bootstrap.sh) sanity check; PHASE_2_RUNBOOK |

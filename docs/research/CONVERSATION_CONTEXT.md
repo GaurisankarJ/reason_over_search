@@ -24,7 +24,7 @@ The research strand has two arms that are now both ready to drive Phase-2 ablati
 
 The supervisor-facing reframe of the thesis (see [`../report/SUPERVISOR_MEETING_2026-05-07.md`](../report/SUPERVISOR_MEETING_2026-05-07.md) § 5):
 
-> *Is it feasible to post-train a small LM (Qwen3.5-2B) to Search-R1-level results under realistic resource constraints (1× A100-80GB, ~$1000), and what is the optimised training recipe?*
+> *Is it feasible to post-train a small LM (Qwen3.5-2B) to Search-R1-level results under realistic resource constraints (1× A100-80GB, ~\$1000), and what is the optimised training recipe?*
 
 Candidate answer (from this folder): a stack of E2H curriculum + S-GRPO + MC-GRPO on a Search-R1 GRPO baseline, with a **JustRL plain-GRPO control** alongside.
 
@@ -42,7 +42,7 @@ Candidate answer (from this folder): a stack of E2H curriculum + S-GRPO + MC-GRP
 ## 4. Compute and budget (links into thesis snapshot)
 
 - **GPU**: 1× A100-80GB rented on Vast.ai. ALICE retired going forward.
-- **Budget**: ~$1000 USD total training.
+- **Budget**: ~\$1000 USD total training.
 - **Per-run wall-clock**: 11 to 17 days on 1× A100 (5 to 8.5 d on 1× H100, 6.5 to 9.5 d on 2× A100). With systems wins R1+R2+R4+R5+O1: 6 to 12 days on 1× A100.
 - **Implication**: 2 to 3 full Qwen3.5-2B GRPO runs feasible. The C / C-minimal pair is the affordable comparison; per-trick ablation is not.
 
