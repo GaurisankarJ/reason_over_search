@@ -11,6 +11,7 @@ local_retriever/models/
 # Evaluation
 evaluation_search_r1/search_r1_base_model/
 evaluation_search_r1/search_r1_instruct_model/
+evaluation_search_r1/qwen_25_3b_instruct/
 
 # M3 evaluation: Qwen3-0.6B model checkpoints (HF safetensors, ~1.5 GB each)
 eval/qwen_3_0.6b/

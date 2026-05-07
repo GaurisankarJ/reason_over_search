@@ -19,8 +19,10 @@ Per [`STAGING.md`](STAGING.md). Instance shape: `_____` (1×4090 or CPU-only). H
   - corpus (~14 GB), index (~16 GB), encoder (~2 GB), Search-R1 base + instruct ckpts (2 × ~13 GB), Qwen2.5-3B-Instruct in `$HF_HOME` (~7 GB)
 - [ ] Search-R1 base ckpt sha256-verified: `7ac54e1b...`
 - [ ] Search-R1 instruct ckpt sha256-verified: `3d787062...`
-- [ ] **Async fix smoke** — `local_retriever/smoke_concurrent.sh 3005 8` returned: `_____` (target: PASS, ≥3× speedup)
-  - sequential time: `_____ s`, parallel time: `_____ s`, speedup: `_____×`
+- [ ] `evaluation_search_r1/qwen_25_3b_instruct/` populated (~7 GB)
+- [ ] **Async fix smoke** — target PASS (≥3×) at N=8 OR N=16:
+  - `smoke_concurrent.sh 3005 8` returned: `_____` (sequential `_____ s`, parallel `_____ s`, speedup `_____×`)
+  - if N=8 was OK band: `smoke_concurrent.sh 3005 16` returned: `_____` (speedup `_____×`)
 - [ ] (GPU instance only) Single-GPU SGLang smoke EM on Bamboogle qwen_25_3b_instruct: `_____`
 - [ ] Persistent volume detached / snapshot ID: `_____`
 
@@ -36,12 +38,13 @@ Per [`BOOTSTRAP.md`](BOOTSTRAP.md). Instance shape: `8× RTX 4090`. Hourly rate:
 - [ ] Repo branch `plan-a-eval` at commit `<sha>`: `_____`
 - [ ] Host RAM ≥ 200 GB confirmed (`free -h`): `___ GB`
 - [ ] Host CPU ≥ 64 cores confirmed (`nproc`): `___ cores`
-- [ ] `HF_HOME` exported to `/workspace/hf_cache`: `echo $HF_HOME` → `___`
+- [ ] `HF_HOME=/workspace/hf_cache`, `HF_DATASETS_CACHE=/workspace/hf_datasets_cache`, `TRANSFORMERS_CACHE=/workspace/hf_cache` all exported
+- [ ] `evaluation_search_r1/qwen_25_3b_instruct/config.json` present
 - [ ] All 8 GPUs visible (`nvidia-smi --query-gpu=count --format=csv,noheader`): `___`
 - [ ] All staged artifacts present (Step 2 of BOOTSTRAP, no `MISS:` printed)
 - [ ] Async fix on this checkout: `grep -c '^async def search' local_retriever/retriever_serving.py` → `0`
 - [ ] Retriever fleet `/health` on ports 3005..3012 — all 8 healthy
-- [ ] Re-validation `smoke_concurrent.sh 3005 8` → PASS
+- [ ] Re-validation `smoke_concurrent.sh` → PASS (N=8 or N=16)
 - [ ] OMP cap verified: per-proc Threads via `cat /proc/$PID/status | grep Threads`
 
 ## Smoke (Step 6)
@@ -126,7 +129,7 @@ To be filled at run end. Mirror the format of [`docs/PLAN_A_5090x4.md`](../../PL
 1. **Async fix + paired-retriever fleet unblocks 8-GPU throughput** — 5090 run was 41% GPU util at 4 shards (single placebo retriever, no async fix). With both fixes and 1:1 SGLang↔retriever pairing at `OMP_NUM_THREADS=8`, expect ≥75% GPU util across 8 shards. Falsifiable by `nvidia-smi dmon -s u` averages and `system_metrics.tsv`.
 2. **Paired-retriever RAM ~136 GB** — 8 processes × ~17 GB. Sum across `ps -o rss` on the 8 fleet pids should land in the 130-150 GB band; total host free RAM after fleet boot ≥ 50 GB.
 3. **OMP cap holds** — total FAISS thread count across all 8 retriever processes stays ≤ 8 × 8 = 64 (sum of `Threads` in `/proc/PID/status`). If unbounded, contention will tank throughput.
-4. **HF cache survives container restart** — `$HF_HOME/hub/models--Qwen--Qwen2.5-3B-Instruct/` persists; second `start_fleet qwen_25_3b_instruct` finishes in <30 s (no re-download).
+4. **Qwen local dir survives container restart** — `evaluation_search_r1/qwen_25_3b_instruct/` persists across the volume re-attach; second `start_fleet qwen_25_3b_instruct` finishes in <30 s (no re-download, no HF hub call — SGLang loads the local path).
 5. **GRPO delta is positive on the instruct row** — Search-R1 instruct GRPO will outscore raw Qwen2.5-3B-Instruct on every benchmark. The interesting question is *by how much*, per dataset.
 
 ## Open questions to resolve before the next run

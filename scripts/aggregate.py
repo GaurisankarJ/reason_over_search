@@ -273,7 +273,16 @@ def main():
     if th:
         md.append(th)
 
-    args.output.write_text("\n".join(md))
+    SENTINEL = "<!-- aggregator: managed region below -->"
+    existing = args.output.read_text() if args.output.exists() else ""
+    preamble = ""
+    if SENTINEL in existing:
+        preamble = existing.split(SENTINEL, 1)[0] + SENTINEL + "\n\n"
+    elif existing.startswith("---\n"):
+        end = existing.find("\n---\n", 4)
+        if end != -1:
+            preamble = existing[: end + len("\n---\n")] + "\n"
+    args.output.write_text(preamble + "\n".join(md))
     print(f"wrote {args.output} ({len(runs)} runs aggregated, {len(trace)} with trace health)")
 
 

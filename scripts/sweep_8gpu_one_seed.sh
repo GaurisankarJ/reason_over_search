@@ -28,10 +28,14 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LOG_ROOT="$REPO_ROOT/logs/sweep_8gpu_$(date +%Y%m%d_%H%M%S)"
 mkdir -p "$LOG_ROOT"
 
-# Defensive HF cache pin — matches docker/reason-over-search-v1/Dockerfile:138.
-# Ensures SGLang's hub-id model-paths (e.g. Qwen/Qwen2.5-3B-Instruct) land on the
-# persistent /workspace volume, not the host's ~/.cache/huggingface.
-export HF_HOME="${HF_HOME:-/workspace/hf_cache}"
+# Defensive HF cache pins — all three are load-bearing.
+#   HF_HOME: ancillary HF cache writes stay on persistent /workspace.
+#   HF_DATASETS_CACHE: flashrag/retriever/utils.py:130 calls datasets.load_dataset
+#     and writes a ~14 GB parquet cache; default location OOMs the overlay root.
+#   TRANSFORMERS_CACHE: tokenizer/encoder cache, same root-disk concern.
+export HF_HOME="${HF_HOME:-/workspace/hf_cache}" \
+       HF_DATASETS_CACHE="${HF_DATASETS_CACHE:-/workspace/hf_datasets_cache}" \
+       TRANSFORMERS_CACHE="${TRANSFORMERS_CACHE:-/workspace/hf_cache}"
 
 SEED=1
 DATASETS=(nq triviaqa popqa hotpotqa 2wikimultihopqa musique bamboogle)

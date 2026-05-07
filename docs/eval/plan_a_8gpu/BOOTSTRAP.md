@@ -23,6 +23,20 @@ Output of this run: [`RESULTS.md`](RESULTS.md). Predecessor 4-shard run: [`docs/
 
 **Architecture:** 8 retriever processes on ports 3005..3012 paired 1:1 with 8 SGLang servers on ports 3000..3007. All 8 SGLang serve the same variant per phase; we cycle through three variants. GPU N → SGLang :300N → retriever :$((3005+N)).
 
+**4090 VRAM headroom is tight.** 22 GB est. on a 24 GB card leaves ~2 GB. Before launching the full sweep, validate one card:
+
+```bash
+CUDA_VISIBLE_DEVICES=0 PORT=3000 scripts/manage_sglang.sh start qwen_25_3b_instruct
+PORT=3000 scripts/manage_sglang.sh wait 600
+nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits   # post-load
+curl -sS -X POST http://127.0.0.1:3000/generate -H 'Content-Type: application/json' \
+  -d '{"text":"Hello.","sampling_params":{"max_new_tokens":256,"temperature":0}}' >/dev/null
+nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits   # post one-call peak
+scripts/manage_sglang.sh stop
+```
+
+If post-call MiB ≥ 22500, lower the per-server budget before the fleet boot: edit `scripts/manage_sglang.sh:_launch_one` to add `--mem-fraction-static 0.85`, or drop `--context-length` from 8192 to 6144 (cuts KV cache ~25 %). The 4×5090 predecessor run (`docs/PLAN_A_5090x4.md`) hit no OOMs at this config but had 32 GB cards; treat any `CUDA out of memory` in `/tmp/sglang_*_p3000.log` at fleet boot as a config fix, not a hardware mismatch.
+
 No flat-FAISS fallback; IVF-SQ8 throughout (`docs/setup/VAST_AI_PLAN_A.md:54-56`).
 
 ## Step 1 — provision the instance + mount the staged volume
@@ -53,14 +67,18 @@ test -f local_retriever/indexes/wiki18_100w_e5_ivf4096_sq8.index     || echo "MI
 test -d local_retriever/models/e5-base-v2                            || echo "MISS: encoder"
 test -d evaluation_search_r1/search_r1_base_model                    || echo "MISS: base ckpt"
 test -d evaluation_search_r1/search_r1_instruct_model                || echo "MISS: instruct ckpt"
-test -d /workspace/hf_cache/hub/models--Qwen--Qwen2.5-3B-Instruct    || echo "MISS: qwen2.5-3b-instruct"
+test -d evaluation_search_r1/qwen_25_3b_instruct                     || echo "MISS: qwen2.5-3b-instruct"
 
 # Async fix on this branch
 [[ "$(grep -c '^async def search' local_retriever/retriever_serving.py)" == "0" ]] \
   || echo "MISS: async fix not present in this checkout"
 
-# Persistent HF cache pin (matches docker/reason-over-search-v1/Dockerfile:138)
-export HF_HOME="${HF_HOME:-/workspace/hf_cache}"
+# Persistent HF cache pin + datasets cache redirect (flashrag/retriever/utils.py:130
+# materializes a ~14 GB parquet cache via datasets.load_dataset; default location
+# would land on the ephemeral overlay root and OOM the box).
+export HF_HOME="${HF_HOME:-/workspace/hf_cache}" \
+       HF_DATASETS_CACHE="${HF_DATASETS_CACHE:-/workspace/hf_datasets_cache}" \
+       TRANSFORMERS_CACHE="${TRANSFORMERS_CACHE:-/workspace/hf_cache}"
 
 # Hardware
 nvidia-smi --query-gpu=count --format=csv,noheader | head -1     # expect 8
@@ -87,7 +105,9 @@ Stage 1 validated one retriever. Re-run the parallelism check on at least port 3
 
 ```bash
 local_retriever/smoke_concurrent.sh 3005 8
-# expected: [smoke] PASS — async fix is working (≥3× speedup)
+# PASS (≥3×) → done. OK (2–3×) on a ≥64-core host → retry at N=16:
+local_retriever/smoke_concurrent.sh 3005 16
+# PASS at N=8 OR N=16 satisfies the gate.
 
 for p in 3006 3007 3008 3009 3010 3011 3012; do
   printf 'port %s: ' "$p"
@@ -136,7 +156,9 @@ nohup scripts/sample_metrics_8gpu.sh > /tmp/sampler.log 2>&1 &
 
 Three phases run sequentially: `base` → `instruct` → `qwen_25_3b_instruct`. Within each phase, all 8 GPUs serve the same variant; 7 datasets dispatched in parallel across GPUs 0–6 (GPU 7 idle). NQ (longest) is pinned to GPU 0. Per-phase wall-clock ~2 h + ~5 min model swap. Three phases ≈ 6 h.
 
-The sweep is resume-aware: `run_one.sh` skips any `(variant, dataset, seed=1)` cell that already has a `metric_score.txt`, so a crashed sweep can be re-launched without re-running completed runs.
+Disk: the sweep produces ~1–2 GB of new results under `evaluation_search_r1/results/` (21 result dirs × 5–14 MB `intermediate_data.json` plus ~10 KB metric files). Combined with the staged ~67 GB, expect ~70 GB total used on `/workspace`. `system_metrics.tsv` adds ~200 KB.
+
+The sweep is resume-aware: `run_one.sh` skips any `(variant, dataset, seed=1)` cell that already has a `metric_score.txt`, so a crashed sweep can be re-launched without re-running completed runs. `metric_score.txt` is written atomically at the end of `run_eval.py`'s pipeline (`flashrag/evaluator/evaluator.py:69`), so a partial-rollout crash leaves no metric file → that cell re-runs cleanly.
 
 ## Step 6 — aggregate + tear down
 
@@ -163,6 +185,8 @@ Detach the persistent volume after tear-down so you keep the result artifacts (a
 - **`OMP_NUM_THREADS` not set on retriever fleet** — without `OMP_RETRIEVER` (or `OMP_NUM_THREADS`) capping each process, FAISS spawns ~24 OMP threads per search per process; 8 unbounded processes request ~192 cores on a 64-core box → severe contention. `launch_ivfsq8.sh` sets `OMP_NUM_THREADS=8` by default; verify via `cat /proc/$PID/status | grep Threads` on a fleet pid.
 - **Port collision** — stale SGLang on 3000–3007 or stale retriever on 3005–3012 makes `wait_fleet` time out. `scripts/manage_sglang.sh stop` and `local_retriever/launch_ivfsq8.sh stop_fleet` clear them.
 - **HF cache lost** — `$HF_HOME` must point to the persistent volume (`/workspace/hf_cache`). If it isn't pinned, the Qwen2.5-3B-Instruct model lands in `~/.cache/huggingface` (ephemeral) and gets downloaded again. `sweep_8gpu_one_seed.sh` exports `HF_HOME` defensively.
+- **Datasets cache OOMs root disk** — without `HF_DATASETS_CACHE=/workspace/hf_datasets_cache` exported before the retriever fleet starts, `flashrag/retriever/utils.py:130` materializes ~14 GB of parquet to `~/.cache/huggingface/datasets/` on the ephemeral overlay and the retrievers crash with `[Errno 28] No space left on device` during cold load. Step 2 already exports it; verify with `echo $HF_DATASETS_CACHE` before launching the fleet.
+- **`MISS: qwen2.5-3b-instruct` in Step 2** — re-run [`STAGING.md`](STAGING.md) Step 4's `hf download Qwen/Qwen2.5-3B-Instruct --local-dir qwen_25_3b_instruct` from inside `evaluation_search_r1/`. SGLang and the eval pipeline both resolve the variant via this absolute local directory; no HF cache or symlink involved.
 - **`pkill -f` foot-gun** — don't kill SGLang or `run_eval.py` by elapsed-time substring; use the pidfiles at `/tmp/sglang_fleet.pids` and `/tmp/retriever_fleet.pids` (`docs/PLAN_A_5090x4.md` §9.3).
 - **Resume hazard** — a successful run leaves `metric_score.txt` and `run_one.sh` skips it. To force a re-run: `rm -rf evaluation_search_r1/results/<dataset>/<dataset>_*_search_r1_<variant>_seed1`.
 - **GPU 7 idle** — by design (7 datasets, 8 GPUs). Retriever 8 (port 3012) launches but goes unused. To use GPU 7, split the longest dataset (NQ) across two GPUs — out of scope for this 1-seed run.

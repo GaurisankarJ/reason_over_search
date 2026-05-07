@@ -17,13 +17,15 @@ updated: 2026-05-07
 **Source script**: [`scripts/sweep_8gpu_one_seed.sh`](../../../scripts/sweep_8gpu_one_seed.sh)
 **Aggregator**: [`scripts/aggregate.py`](../../../scripts/aggregate.py) writes this file directly.
 
-> **Status:** rows below are empty until the sweep finishes. `aggregate.py` overwrites this file at the end of [`sweep_8gpu_one_seed.sh`](../../../scripts/sweep_8gpu_one_seed.sh). The header sections (everything above the table) survive the rewrite if `aggregate.py` is configured to preserve frontmatter — otherwise re-paste them.
+> **Status:** rows below are empty until the sweep finishes. `aggregate.py` overwrites everything *under* the sentinel comment at the end of [`sweep_8gpu_one_seed.sh`](../../../scripts/sweep_8gpu_one_seed.sh); the frontmatter, intro, and Variants list survive the rewrite. The placeholder table immediately below is replaced by the aggregator's per-metric tables.
 
 ## Variants
 
 1. **`base`** — `PeterJinGo/SearchR1-nq_hotpotqa_train-qwen2.5-3b-em-grpo` (Search-R1 GRPO from Qwen2.5-3B-Base)
 2. **`instruct`** — `PeterJinGo/SearchR1-nq_hotpotqa_train-qwen2.5-3b-it-em-grpo` (Search-R1 GRPO from Qwen2.5-3B-Instruct)
 3. **`qwen_25_3b_instruct`** — `Qwen/Qwen2.5-3B-Instruct` (raw, non-finetuned — isolates GRPO effect)
+
+<!-- aggregator: managed region below -->
 
 ## Per-(variant, dataset) results
 

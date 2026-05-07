@@ -24,7 +24,9 @@ updated: 2026-05-07
 | **Retriever RAM** | ~17 GB (single index) | ~136 GB (8 × 17 GB) — fits the 200-250 GB host; deliberate trade for predictable per-shard latency and `OMP_NUM_THREADS` bounds |
 | **FAISS OMP cap** | unbounded (~24 cores per search) | `OMP_NUM_THREADS=8` per retriever process (8 × 8 = 64 cores total on 64-core host) |
 | **Index** | IVF-SQ8 (default) or flat IP (paper-quality option) | IVF-SQ8 only — no flat fallback for this run |
-| **`HF_HOME`** | unset, falls back to `~/.cache/huggingface` | exported to `/workspace/hf_cache` (matches Dockerfile); raw Qwen pre-fetched in Step 4 |
+| **`HF_HOME`** | unset, falls back to `~/.cache/huggingface` | exported to `/workspace/hf_cache` (matches Dockerfile); ancillary HF cache writes stay on the persistent volume |
+| **`HF_DATASETS_CACHE` / `TRANSFORMERS_CACHE`** | unset → ephemeral overlay root | exported to `/workspace/hf_datasets_cache` and `/workspace/hf_cache`; required to keep the 14 GB corpus parquet off the 25 GB overlay |
+| **`qwen_25_3b_instruct` model location** | n/a (variant didn't exist) | flat local dir at `evaluation_search_r1/qwen_25_3b_instruct/`, identical convention to `search_r1_base_model/`. SGLang and eval pipeline both resolve via this absolute path; no HF cache, no symlink, no `model2path` entry. |
 | **Sweep wrapper** | `sweep_c_one_seed.sh` (sequential 14 runs) | `sweep_8gpu_one_seed.sh` (parallel 21 runs) |
 | **Wall-clock** | ~80 h (Plan C, 14 runs) | ~6 h (this run, 21 runs) |
 | **Output docs** | one-off `docs/RESULTS_PLAN_C.md` | folder `docs/eval/plan_a_8gpu/` (BOOTSTRAP / CODE_SETUP / RESULTS / SESSION_LOG) |
@@ -53,7 +55,7 @@ These are paper-faithful and stay identical:
 | `scripts/run_one.sh` | Add `SGL_PORT="${SGL_PORT:-3000}"`; replace `127.0.0.1:3000` with `127.0.0.1:$SGL_PORT` in `--sgl_remote_url` | Each shard worker can point at its own SGLang port without forking the script. | cherry-pick of commit `425c833` from `plan-a-5090x4` |
 | `scripts/run_one.sh` | Add `qwen_25_3b_instruct` variant case (`apply_chat=True`, `generator_model=qwen_25_3b_instruct`) | New raw baseline — same family/size as the Search-R1 instruct ckpt's pre-training base, isolates GRPO contribution. | this work |
 | `scripts/run_one.sh` | Add `RETRIEVER_URL="${RETRIEVER_URL:-127.0.0.1:3005}"`; thread into `--remote_retriever_url`. | Each shard worker hits its paired retriever port (3005..3012). Mirrors the SGL_PORT pattern. | Q3 delta |
-| `scripts/manage_sglang.sh` | Parametrize `PORT` via env var (default 3000); add `qwen_25_3b_instruct` case (`Qwen/Qwen2.5-3B-Instruct` HF hub path); add `_launch_one` helper; add `start_fleet` / `wait_fleet` / `stop_fleet` subcommands tracking pids in `/tmp/sglang_fleet.pids`; `wait_ready` accepts optional port | Programmatic 8-GPU bring-up; the 5090 session did this manually with ad-hoc bash loops, lost runs to `pkill -f` foot-guns. | this work + `PLAN_A_5090x4.md` §9.3 |
+| `scripts/manage_sglang.sh` | Parametrize `PORT` via env var (default 3000); add `qwen_25_3b_instruct` case using `$EVAL_DIR/qwen_25_3b_instruct` (mirrors the `base`/`instruct` cases — all three variants resolve to flat dirs under `evaluation_search_r1/`); add `_launch_one` helper; add `start_fleet` / `wait_fleet` / `stop_fleet` subcommands tracking pids in `/tmp/sglang_fleet.pids`; `wait_ready` accepts optional port | Programmatic 8-GPU bring-up; the 5090 session did this manually with ad-hoc bash loops, lost runs to `pkill -f` foot-guns. Uniform path resolution lets the eval pipeline's `model2path.get(name, name)` fallback work for all three variants without `model2path` entries. See §5d. | this work + `PLAN_A_5090x4.md` §9.3 |
 | `local_retriever/launch_ivfsq8.sh` (new) | `start` / `stop` / `wait` for single-instance (smoke); `start_fleet` / `wait_fleet` / `stop_fleet` for paired fleet on ports 3005..3012 with `OMP_NUM_THREADS=${OMP_RETRIEVER:-8}`. Pidfiles at `/tmp/retriever_ivfsq8_PORT.pid` (per-port) and `/tmp/retriever_fleet.pids` (fleet list). | Standardize lifecycle; `OMP_NUM_THREADS` cap is the load-bearing knob to avoid CPU oversubscription with 8 paired retrievers. | this work + Q3 delta |
 | `local_retriever/smoke_concurrent.sh` (new) | Health check + sample query + sequential-vs-parallel timing. PASS at ≥3× speedup, OK at 2-3×, FAIL at <2×. Run after `start_fleet` to confirm the async fix is live before launching the full sweep. | Single-command verification that the retriever is loaded AND parallelizing — catches a stale-`.pyc` regression in seconds. | this work |
 | `scripts/sweep_8gpu_one_seed.sh` (new) | Top-level driver: defensive `export HF_HOME=${HF_HOME:-/workspace/hf_cache}`; bring up retriever fleet once; for each variant `start_fleet` (sglang) → parallel dispatch of 7 datasets via `SGL_PORT=$((3000+i))` + `RETRIEVER_URL=127.0.0.1:$((3005+i))` → `wait` → SGLang `stop_fleet`. Trap stops both fleets on exit. Aggregates into `RESULTS.md`. | Equivalent of what `plan-a-5090x4` ran as 4 manual bash for-loops, now with paired retriever pinning. | this work + Q3 delta + Q2 |
@@ -104,9 +106,27 @@ Single-shared retriever post-async-fix works for ≤4 clients but oversubscribes
 
 The 5090 session's 8-worker single-process retriever (~140 GB) was the wrong shape because the 8 in-process workers were a placebo (option 1 without the fix); we get the same RAM cost as a side-effect of the right shape (option 2 with the fix).
 
-### 5c. HF cache pinning
+### 5c. HF cache pinning + datasets-cache redirect
 
-`Qwen/Qwen2.5-3B-Instruct` is loaded from the HF hub by SGLang. Without `HF_HOME` pinned, the cache lands in `~/.cache/huggingface` — ephemeral on Vast.ai container restarts, and forces a re-download on every fresh bring-up. Pinning to `/workspace/hf_cache` (matches `docker/reason-over-search-v1/Dockerfile:138`) keeps the ~7 GB on the persistent volume. Plus a Step-4 pre-fetch avoids 8 parallel downloads when `start_fleet qwen_25_3b_instruct` runs.
+Three env vars cooperate; missing any one breaks a different part of the pipeline.
+
+`HF_HOME=/workspace/hf_cache` — model weights are now downloaded to flat dirs under `evaluation_search_r1/` (see §5d), so `HF_HOME` no longer governs Qwen storage directly. It still matters for any incidental cache writes by `huggingface_hub` (download metadata, partial-download recovery, and any HF tokenizer fetches that aren't redirected via `TRANSFORMERS_CACHE`). Pinning to `/workspace/hf_cache` keeps those off the ephemeral overlay root and matches `docker/reason-over-search-v1/Dockerfile:138`.
+
+`HF_DATASETS_CACHE=/workspace/hf_datasets_cache` — `flashrag/retriever/utils.py:130` calls `datasets.load_dataset('json', data_files=corpus_path, split="train")` to ingest the 14 GB wiki corpus, materializing a parquet/arrow cache. The default location is `~/.cache/huggingface/datasets/` on the small overlay root (~25 GB total). Without redirect, the retriever crashes mid-cold-load with `[Errno 28] No space left on device`. STAGING.md Step 5 and BOOTSTRAP.md Step 2 both export this defensively.
+
+`TRANSFORMERS_CACHE=/workspace/hf_cache` — the encoder (`intfloat/e5-base-v2`) and tokenizer caches; same root-disk concern as `HF_HOME`. Setting it to the same path keeps everything on the persistent volume.
+
+### 5d. Qwen variant path resolution (`qwen_25_3b_instruct`)
+
+The eval pipeline expects `generator_model_path` to be a local directory: `flashrag/utils/utils.py:47` opens `config.json` from it directly, and `flashrag/config/config.py:219` does `model2path.get(name, name)` — falling through to use the alias as the path itself if no entry exists. From `cd $EVAL_DIR` (which `run_eval.py` does), the alias `qwen_25_3b_instruct` resolves to the relative directory `evaluation_search_r1/qwen_25_3b_instruct/`. The `base`/`instruct` variants work the same way — their aliases (`search_r1_base_model`, `search_r1_instruct_model`) match local directory names under `evaluation_search_r1/`. No `model2path` entry needed for any of the three.
+
+`scripts/manage_sglang.sh` mirrors this on the SGLang side: all three variant cases pass `$EVAL_DIR/<name>` as `--model-path`. SGLang accepts both HF identifiers and local paths; using the local path keeps everything one-source-of-truth and avoids an HF-hub round-trip when the model is already on disk.
+
+STAGING.md Step 4 downloads the raw Qwen with `hf download Qwen/Qwen2.5-3B-Instruct --local-dir qwen_25_3b_instruct` (run from inside `evaluation_search_r1/`). BOOTSTRAP.md Step 2 verifies it survived the volume re-attach via `test -d evaluation_search_r1/qwen_25_3b_instruct`.
+
+### 5e. Smoke gate at N=8 vs N=16
+
+`smoke_concurrent.sh` PASS threshold is ≥3× speedup. On hosts with ≥64 cores, fixed per-call overhead (encoder pass, JSON parse, mmap I/O on the corpus arrow) caps the N=8 ratio at ~2.4–2.8× even with the async fix fully active — landing in the OK band. The canonical recipe is now: run `smoke 3005 8` first; if verdict is OK, retry at `smoke 3005 16`. PASS at either count satisfies the hard gate. On smaller staging boxes (16-core), N=8 alone clears 3× because per-call overhead is a smaller share of the wall-clock.
 
 ## 6. Smoke results (state at run-start)
 

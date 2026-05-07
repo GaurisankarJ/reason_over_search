@@ -43,7 +43,7 @@ _launch_one() {
       served="search_r1_instruct${suffix}"
       ;;
     qwen_25_3b_instruct)
-      model_path="Qwen/Qwen2.5-3B-Instruct"
+      model_path="$EVAL_DIR/qwen_25_3b_instruct"
       served="qwen_25_3b_instruct${suffix}"
       ;;
     *)
