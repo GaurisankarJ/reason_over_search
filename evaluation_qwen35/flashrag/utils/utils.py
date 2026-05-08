@@ -42,7 +42,16 @@ def get_generator(config, **params):
 
     if config['framework'] == 'openai':
         return getattr(importlib.import_module("flashrag.generator"), "OpenaiGenerator")(config, **params)
-    
+
+    # `sgl_remote` and `openai` both delegate to an external HTTP endpoint that
+    # already knows how to serve the model (text-only or VL). The local
+    # multimodal-routing check below is for in-process generators (HF / vLLM)
+    # only — short-circuit before it. Qwen3.5 ships with `vision_config` in
+    # its config.json (it's the VL family); the in-process check would otherwise
+    # mis-route it to HFMultiModalGenerator even though we're talking to SGLang.
+    if config["framework"] == "sgl_remote":
+        return getattr(importlib.import_module("flashrag.generator"), "SGLRemoteGenerator")(config, **params)
+
     # judge multimodal model
     with open(os.path.join(config["generator_model_path"], "config.json"), "r") as f:
         model_config = json.load(f)
@@ -51,7 +60,7 @@ def get_generator(config, **params):
         is_mm = False
     else:
         is_mm = True
-    
+
     if is_mm:
         return getattr(importlib.import_module("flashrag.generator"), "HFMultiModalGenerator")(config, **params)
     else:
@@ -64,8 +73,6 @@ def get_generator(config, **params):
                 return getattr(importlib.import_module("flashrag.generator"), "EncoderDecoderGenerator")(config, **params)
             else:
                 return getattr(importlib.import_module("flashrag.generator"), "HFCausalLMGenerator")(config, **params)
-        elif config["framework"] == "sgl_remote":
-            return getattr(importlib.import_module("flashrag.generator"), "SGLRemoteGenerator")(config, **params)
         else:
             raise NotImplementedError
 
