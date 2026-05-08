@@ -46,14 +46,14 @@ RETRIEVER_LOG="logs/m3_${SLURM_JOB_ID:-local}_retriever.log"
 export OMP_NUM_THREADS=4
 if [[ -f "$IVF_INDEX" ]]; then
   echo "Using IVF-SQ8 index (× 8 workers): $IVF_INDEX"
-  /home/s4374886/.conda/envs/retriever/bin/python local_retriever/retriever_serving.py \
+  /home/s4374886/.conda/envs/retriever/bin/python -u local_retriever/retriever_serving.py \
     --config local_retriever/retriever_config.yaml \
     --num_retriever 8 \
     --index "$IVF_INDEX" \
     --port 3005 > "$RETRIEVER_LOG" 2>&1 &
 else
   echo "IVF index not found; falling back to flat IP (× 2 workers)"
-  /home/s4374886/.conda/envs/retriever/bin/python local_retriever/retriever_serving.py \
+  /home/s4374886/.conda/envs/retriever/bin/python -u local_retriever/retriever_serving.py \
     --config local_retriever/retriever_config.yaml \
     --num_retriever 2 \
     --index "$FLAT_INDEX" \
@@ -63,9 +63,13 @@ RETRIEVER_PID=$!
 echo "Retriever PID: $RETRIEVER_PID  log: $RETRIEVER_LOG"
 
 # First-time HF arrow build of wiki18_100w.jsonl (~21M passages) can take 5–10 min;
-# subsequent loads (cache warm) are seconds. 600 s = 10 min total wait.
-echo "Waiting for retriever to load index (up to 600 s) ..."
-for i in $(seq 1 120); do
+# subsequent loads (cache warm) are seconds. 1200 s = 20 min total wait (bumped from
+# 600 s after sbatch 2134663 on node873 hit the cold-cache cliff: empty log at 600 s,
+# retriever Python process alive throughout — index mmap + arrow loading were just
+# slower than the prior 570 s reference; doubling gives a margin without affecting
+# warm-cache performance, since the loop breaks on /health=200 the moment it's ready).
+echo "Waiting for retriever to load index (up to 1200 s) ..."
+for i in $(seq 1 240); do
   sleep 5
   if curl -sf http://127.0.0.1:3005/health > /dev/null 2>&1; then
     echo "Retriever healthy after $((i*5)) s"
@@ -78,7 +82,7 @@ for i in $(seq 1 120); do
   fi
 done
 if ! curl -sf http://127.0.0.1:3005/health > /dev/null 2>&1; then
-  echo "ERROR: retriever still not healthy after 600 s — last log lines:" >&2
+  echo "ERROR: retriever still not healthy after 1200 s — last log lines:" >&2
   tail -30 "$RETRIEVER_LOG" >&2
   kill "$RETRIEVER_PID" 2>/dev/null || true
   exit 1
