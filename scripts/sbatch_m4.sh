@@ -30,6 +30,10 @@ REPO_ROOT="${SLURM_SUBMIT_DIR:-/zfsstore/user/s4374886/omega/reason_over_search}
 IVF_INDEX="$REPO_ROOT/indexes/wiki18_100w_e5_ivf4096_sq8.index"
 FLAT_INDEX="/zfsstore/user/s4374886/omega/re-search/assets/indexes/wiki18_100w_e5_flat_inner.index"
 
+# lmod isn't always auto-init'd inside SLURM batch shells (CODE_SETUP_v2 #3
+# flagged this for ssh sessions; observed under sbatch on `node870` 2026-05-08
+# job 2150669, exit 127). Source explicitly so `module` resolves.
+source /etc/profile.d/lmod.sh 2>/dev/null || true
 module purge
 module load ALICE/default
 module load Miniconda3/24.7.1-0
