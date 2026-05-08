@@ -24,8 +24,13 @@ eval/qwen_3_0.6b/
 eval/qwen_3_0.6b_v0/
 eval/qwen_3_0.6b_v0_no_ex/
 
-# evaluation_research/: results dir (per-run artifacts; aggregated reports live in docs/)
+# M4 evaluation: Qwen3.5-0.8B model checkpoints (HF safetensors, ~1.7 GB each)
+eval/qwen3.5_0.8b/
+eval/qwen3.5_0.8b_base/
+
+# evaluation_research/ + evaluation_qwen35/: results dirs (per-run artifacts; aggregated reports live in docs/)
 evaluation_research/results/
+evaluation_qwen35/results/
 
 # Environment
 /.venv
@@ -46,9 +51,12 @@ evaluation_search_r1/results/
 *.pid
 *.pid_text
 
-# M3 sbatch / interactive job logs (per-job stdout/stderr; large retriever + sglang traces)
+# M3 / M4 sbatch / interactive job logs (per-job stdout/stderr; large retriever + sglang traces)
 logs/m3_*.out
 logs/m3_*.err
+logs/m4_*.out
+logs/m4_*.err
+logs/m4_*.log
 
 # Training run artifacts (commit smoke trace jsonls explicitly; ignore W&B dirs and checkpoints)
 logs/**/wandb/
