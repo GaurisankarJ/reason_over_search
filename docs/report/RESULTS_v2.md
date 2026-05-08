@@ -352,7 +352,7 @@ Identical to M3 except for the prompt template and the checkpoint:
 
 | Setting | M3 (z7kcxfof) | M3.1 (el6s2d2h) |
 |---|---|---|
-| Checkpoint dir | `eval/qwen_3_0.6b_v0/` (1046 steps) | `eval/qwen_3_0.6b_v0_no_ex/` (step 2000; verl-FSDP → HF via `verl.model_merger`) |
+| Checkpoint dir | `eval/qwen_3_0.6b_v0/` (1046 steps; HF: [`pantomiman/Qwen3-0.6B-v0`](https://huggingface.co/pantomiman/Qwen3-0.6B-v0)) | `eval/qwen_3_0.6b_v0_no_ex/` (step 2000; verl-FSDP → HF via `verl.model_merger`; HF: [`pantomiman/Qwen3-0.6B-v0.1`](https://huggingface.co/pantomiman/Qwen3-0.6B-v0.1)) |
 | Prompt template | `QWEN3_0_6B_TEMPLATE` | **`P3_DECIDE_NO_EX_TEMPLATE`** (new in `evaluation_research/flashrag/search_r1/templates.py`; verbatim from training) |
 | `prompt_mode` | `qwen3` | `qwen3_p3_decide_no_ex` (new; in the `qwen3*` family — same retrieval format / budgets / `enable_thinking=True`) |
 | Hardware | ALICE 1× A100-80GB | same |
@@ -362,9 +362,11 @@ Pipeline change is additive (no fixes; the M3 14-fix audit holds). Detail: [`COD
 
 ### 14.3 Job
 
-**sbatch 2134645**, gpu-short partition, 4 h limit, submitted 2026-05-08T00:33Z. Will start retriever (IVF-SQ8 × 8) + SGLang on `eval/qwen_3_0.6b_v0_no_ex/`, run all 7 datasets via `bash scripts/run_m3.sh qwen3_0.6b_v0_no_ex <dataset> 1`. Expected wall-clock ~2.5 h per the M3 v0 sbatch (job 2125009) reference.
+**sbatch 2134663**, gpu-short partition, 4 h limit, submitted 2026-05-08 (after a first attempt **2134645** failed at the SGLang `/health`-readiness wait — 300 s budget, M3 reference was 260 s, this run was on the cold-cache side of the cliff; bumped to 600 s in `scripts/sbatch_m3.sh`). The retriever + checkpoint + pipeline were healthy at the first failure — only the wait window was too tight. Will start retriever (IVF-SQ8 × 8) + SGLang on `eval/qwen_3_0.6b_v0_no_ex/`, run all 7 datasets via `bash scripts/run_m3.sh qwen3_0.6b_v0_no_ex <dataset> 1`. Expected wall-clock ~2.5 h per the M3 v0 sbatch (job 2125009) reference.
 
-Logs: `logs/m3_2134645_*.{out,err,log}`. Per-dataset results: `evaluation_research/results/<dataset>/<dataset>_*_m3_qwen3_0.6b_v0_no_ex_seed1/`.
+Logs: `logs/m3_2134663_*.{out,err,log}`. Per-dataset results: `evaluation_research/results/<dataset>/<dataset>_*_m3_qwen3_0.6b_v0_no_ex_seed1/`.
+
+Checkpoint also published to HF: [`pantomiman/Qwen3-0.6B-v0.1`](https://huggingface.co/pantomiman/Qwen3-0.6B-v0.1) (parallel to [`pantomiman/Qwen3-0.6B-v0`](https://huggingface.co/pantomiman/Qwen3-0.6B-v0)).
 
 ### 14.4 Headline (TBD, populated when job completes)
 

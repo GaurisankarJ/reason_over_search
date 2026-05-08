@@ -101,8 +101,8 @@ SGLANG_LOG="logs/m3_${SLURM_JOB_ID:-local}_sglang.log"
 SGLANG_PID=$!
 echo "SGLang PID: $SGLANG_PID  log: $SGLANG_LOG"
 
-echo "Waiting for SGLang to load model (up to 300 s) ..."
-for i in $(seq 1 60); do
+echo "Waiting for SGLang to load model (up to 600 s) ..."
+for i in $(seq 1 120); do
   sleep 5
   if curl -sf http://127.0.0.1:3000/health > /dev/null 2>&1; then
     echo "SGLang healthy after $((i*5)) s"
@@ -115,7 +115,7 @@ for i in $(seq 1 60); do
   fi
 done
 if ! curl -sf http://127.0.0.1:3000/health > /dev/null 2>&1; then
-  echo "ERROR: SGLang still not healthy after 300 s — last log lines:" >&2
+  echo "ERROR: SGLang still not healthy after 600 s — last log lines:" >&2
   tail -30 "$SGLANG_LOG" >&2
   kill "$SGLANG_PID" 2>/dev/null || true
   exit 1

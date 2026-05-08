@@ -307,9 +307,22 @@ After M3 closed, we evaluate `p3_decide_no_ex_el6s2d2h` — the Phase-1 v0 run w
 
 (~1 min on the login node; output is a 1.5 GB `model.safetensors` + tokenizer files. Step 2000 is the closest checkpointed step to end-of-run 2280; same approach as M3, which used z7kcxfof's step 1000 of 1046.)
 
+**HF publication**: the converted checkpoint is also published to HuggingFace Hub at [`pantomiman/Qwen3-0.6B-v0.1`](https://huggingface.co/pantomiman/Qwen3-0.6B-v0.1) (parallel to the M3 checkpoint at [`pantomiman/Qwen3-0.6B-v0`](https://huggingface.co/pantomiman/Qwen3-0.6B-v0); the `.1` minor-version suffix distinguishes the no-example variant from the same base + algorithm + reward + data, varying only the prompt). To reproduce the upload:
+
+```bash
+export HF_TOKEN='<your_write_token>'
+hf repo create pantomiman/Qwen3-0.6B-v0.1 --repo-type model
+cd eval/qwen_3_0.6b_v0_no_ex
+hf upload pantomiman/Qwen3-0.6B-v0.1 . . --repo-type model
+```
+
+The repo also ships a model card (`README.md` in the same directory) that documents the run id, training-time signature, action format (`<search>` / `<information>`, matching the published Search-R1 / ReSearch papers), and the `v0` ↔ `v0.1` relationship.
+
 **Variant dispatch**: `scripts/run_m3.sh` and `scripts/sbatch_m3.sh` add a `qwen3_0.6b_v0_no_ex` variant case that points at `eval/qwen_3_0.6b_v0_no_ex/` and passes `--prompt_mode qwen3_p3_decide_no_ex`. Same SGLang flags, same retriever, same datasets.
 
-For results see [`RESULTS_v2.md`](RESULTS_v2.md) §M3.1 (sbatch job 2134645, queued 2026-05-08).
+**SGLang readiness budget — bumped 300 → 600 s.** The first M3.1 sbatch (`2134645`, 2026-05-08) failed at the post-launch `/health`-readiness wait: M3 reference was 260 s, this run was on the cold-cache side of the cliff and crossed the 300 s budget. The retriever + checkpoint + pipeline were all healthy at failure time; only the wait window was too tight. `scripts/sbatch_m3.sh` SGLang wait was bumped to `for i in $(seq 1 120); do sleep 5; …` (600 s, 2× the prior budget) and the doc strings updated. Re-submitted as `2134663`.
+
+For results see [`RESULTS_v2.md`](RESULTS_v2.md) §14 (sbatch job 2134663 after the 2134645 timeout).
 
 ---
 

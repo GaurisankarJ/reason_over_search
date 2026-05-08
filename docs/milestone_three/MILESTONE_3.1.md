@@ -35,7 +35,7 @@ Reuses the M3 pipeline byte-for-byte except for the **prompt template**: `p3_dec
 
 | Setting | M3 (z7kcxfof) | M3.1 (el6s2d2h) |
 |---|---|---|
-| Checkpoint | `eval/qwen_3_0.6b_v0/` (1046 steps) | `eval/qwen_3_0.6b_v0_no_ex/` (2000 steps; converted via `verl.model_merger merge --backend fsdp`) |
+| Checkpoint | `eval/qwen_3_0.6b_v0/` (1046 steps; HF: [`pantomiman/Qwen3-0.6B-v0`](https://huggingface.co/pantomiman/Qwen3-0.6B-v0)) | `eval/qwen_3_0.6b_v0_no_ex/` (2000 steps; converted via `verl.model_merger merge --backend fsdp`; HF: [`pantomiman/Qwen3-0.6B-v0.1`](https://huggingface.co/pantomiman/Qwen3-0.6B-v0.1)) |
 | Prompt template | `QWEN3_0_6B_TEMPLATE` (= `p1_basic_w_ex`) | **`P3_DECIDE_NO_EX_TEMPLATE`** (new; `evaluation_research/flashrag/search_r1/templates.py`) |
 | `prompt_mode` | `qwen3` | **`qwen3_p3_decide_no_ex`** (new; falls in the `qwen3*` family — same retrieval format, same budgets, same `enable_thinking`) |
 | Action format | `<search>` / `<result>` | same |
@@ -87,7 +87,9 @@ Same `gpu-short` partition, 4 h time limit, IVF-SQ8 × 8 retriever workers, 32 i
 
 ## Status
 
-**2026-05-08 (queued)**: sbatch job **2134645** submitted, gpu-short partition, 4 h limit, pending Priority. Will start retriever + SGLang on `eval/qwen_3_0.6b_v0_no_ex/`, run all 7 datasets, then cleanup. Logs at `logs/m3_2134645_*.{out,err,log}`. Per-dataset results land at `evaluation_research/results/<dataset>/<dataset>_*_m3_qwen3_0.6b_v0_no_ex_seed1/`.
+**2026-05-08 (queued, then re-queued)**: first attempt was **sbatch 2134645**, which failed at `00:50:05` after exhausting the 300 s SGLang `/health`-readiness budget; the M3 reference run took 260 s, so this one was on the wrong side of the cliff (cold cache on `node875`). The retriever + checkpoint + pipeline were all healthy at failure time — only the wait window was too tight. Bumped `scripts/sbatch_m3.sh` SGLang timeout 300 → 600 s and resubmitted as **sbatch 2134663** (gpu-short, 4 h limit). Logs at `logs/m3_2134663_*.{out,err,log}`. Per-dataset results land at `evaluation_research/results/<dataset>/<dataset>_*_m3_qwen3_0.6b_v0_no_ex_seed1/`.
+
+**Checkpoint also published to HF**: [`pantomiman/Qwen3-0.6B-v0.1`](https://huggingface.co/pantomiman/Qwen3-0.6B-v0.1) (parallel to [`pantomiman/Qwen3-0.6B-v0`](https://huggingface.co/pantomiman/Qwen3-0.6B-v0)).
 
 Numerical results will be populated in [`docs/report/RESULTS_v2.md`](../report/RESULTS_v2.md) §M3.1 once the job completes.
 
@@ -97,8 +99,9 @@ Numerical results will be populated in [`docs/report/RESULTS_v2.md`](../report/R
 2. [x] Add `P3_DECIDE_NO_EX_TEMPLATE` and `QWEN3_TEMPLATES` registry to `evaluation_research/flashrag/search_r1/templates.py`.
 3. [x] Wire `prompt_mode='qwen3_p3_decide_no_ex'` through `active_pipeline.py` and `run_eval.py`; switch `qwen3` checks to family-prefix matching.
 4. [x] Add `qwen3_0.6b_v0_no_ex` variant case to `scripts/run_m3.sh` and `scripts/sbatch_m3.sh`.
-5. [x] Submit sbatch (job 2134645).
-6. [ ] Job completes successfully (all 7 datasets).
-7. [ ] Per-dataset EM / ACC / F1 added to [`docs/report/RESULTS_v2.md`](../report/RESULTS_v2.md) §M3.1.
-8. [ ] Side-by-side M3 vs M3.1 comparison table (pre-GRPO / z7kcxfof / el6s2d2h) added to RESULTS_v2 + supervisor brief.
-9. [ ] Training-plot comparison panel (with-example z7kcxfof vs no-example el6s2d2h: reward, tool calls, num_turns, response_length curves) — already-trained data, only the visualisation is new. Tracked in [`docs/report/SUPERVISOR_MEETING_2026-05-07.md`](../report/SUPERVISOR_MEETING_2026-05-07.md) §4.8 plan.
+5. [x] Submit sbatch (job 2134645 failed on /health timeout; re-submitted as 2134663 with the SGLang wait window bumped 300 → 600 s).
+6. [x] Publish checkpoint to HF: [`pantomiman/Qwen3-0.6B-v0.1`](https://huggingface.co/pantomiman/Qwen3-0.6B-v0.1) (parallel to [`pantomiman/Qwen3-0.6B-v0`](https://huggingface.co/pantomiman/Qwen3-0.6B-v0)).
+7. [ ] Job completes successfully (all 7 datasets).
+8. [ ] Per-dataset EM / ACC / F1 added to [`docs/report/RESULTS_v2.md`](../report/RESULTS_v2.md) §M3.1.
+9. [ ] Side-by-side M3 vs M3.1 comparison table (pre-GRPO / z7kcxfof / el6s2d2h) added to RESULTS_v2 + supervisor brief.
+10. [ ] Training-plot comparison panel (with-example z7kcxfof vs no-example el6s2d2h: reward, tool calls, num_turns, response_length curves) — already-trained data, only the visualisation is new. Tracked in [`docs/report/SUPERVISOR_MEETING_2026-05-07.md`](../report/SUPERVISOR_MEETING_2026-05-07.md) §4.8 plan.
