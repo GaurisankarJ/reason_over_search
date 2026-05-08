@@ -333,9 +333,11 @@ To swap to a different checkpoint, drop it under `eval/<name>/` and add the case
 
 ---
 
-## 14. M3.1 — second checkpoint, second prompt (queued 2026-05-08)
+## 14. M3.1 — second checkpoint, second prompt (completed 2026-05-08)
 
 After M3 closed, a second eval was launched against `p3_decide_no_ex_el6s2d2h` — the Phase-1 v0 run with the **highest end-of-run rollout reward (0.215)** but a different prompt and behavioral signature than the M3-evaluated `z7kcxfof`. Asks the question: does the rollout-reward gap (0.215 vs 0.190) translate to held-out EM, and which prompt-conditioned-on behavioural mode (heavy-tool with-example vs standard-tool no-example) generalises better?
+
+**Headline answer**: yes, modestly. M3.1 lifts simple-mean EM from M3's 0.155 to **0.169** (+0.014 abs, +9 % rel; +0.067 vs pre-GRPO baseline, +66 % rel). 5 / 7 datasets improve over M3, 1 / 7 ties, **1 / 7 (bamboogle) regresses by 0.032** — likely small-N noise on N = 125. The biggest gains are concentrated on **PopQA (+0.058)**, **TriviaQA (+0.037)**, and **HotpotQA (+0.028)**; the 2Wiki tie and bamboogle regression sit within ±0.03 of M3.
 
 ### 14.1 The two checkpoints, side by side (training-time signature)
 
@@ -362,36 +364,54 @@ Pipeline change is additive (no fixes; the M3 14-fix audit holds). Detail: [`COD
 
 ### 14.3 Job
 
-**sbatch 2134663**, gpu-short partition, 4 h limit, submitted 2026-05-08 (after a first attempt **2134645** failed at the SGLang `/health`-readiness wait — 300 s budget, M3 reference was 260 s, this run was on the cold-cache side of the cliff; bumped to 600 s in `scripts/sbatch_m3.sh`). The retriever + checkpoint + pipeline were healthy at the first failure — only the wait window was too tight. Will start retriever (IVF-SQ8 × 8) + SGLang on `eval/qwen_3_0.6b_v0_no_ex/`, run all 7 datasets via `bash scripts/run_m3.sh qwen3_0.6b_v0_no_ex <dataset> 1`. Expected wall-clock ~2.5 h per the M3 v0 sbatch (job 2125009) reference.
+The eval finally landed on **sbatch 2150167** (gpu-short, A100-80GB on `node870`, COMPLETED 2026-05-08 08:41 in **1 h 32 m 15 s** wall — well under the 2.5 h M3 reference). Retriever healthy in 145 s (warm cache), SGLang healthy in 495 s (cold-cache import + flashinfer JIT warmup). Two prior attempts failed at infrastructure waits, not at training/eval logic:
 
-Logs: `logs/m3_2134663_*.{out,err,log}`. Per-dataset results: `evaluation_research/results/<dataset>/<dataset>_*_m3_qwen3_0.6b_v0_no_ex_seed1/`.
+| sbatch | Node | Failure | Fix |
+|---|---|---|---|
+| 2134645 | node875 | SGLang `/health` wait timed out at 300 s (M3 ref 260 s; cold cache crossed the cliff) | bumped 300 → 600 s in `scripts/sbatch_m3.sh` |
+| 2134663 | node873 | Retriever `/health` wait timed out at 600 s (M3 ref 570 s; cold cache crossed *that* cliff) | bumped 600 → 1200 s |
+| **2150167** | **node870** | — | **completed all 7 datasets** |
+
+Both timeout fixes are pure-margin changes (the loops break the moment `/health` returns 200, so warm-cache wall-clock is unaffected). The only "wrong" thing across all three runs was the budget vs the cold-cache import time on a fresh node.
+
+Logs: `logs/m3_2150167_*.{out,err,log}`. Per-dataset results: `evaluation_research/results/<dataset>/<dataset>_2026_05_08_*_m3_qwen3_0.6b_v0_no_ex_seed1/`.
 
 Checkpoint also published to HF: [`pantomiman/Qwen3-0.6B-v0.1`](https://huggingface.co/pantomiman/Qwen3-0.6B-v0.1) (parallel to [`pantomiman/Qwen3-0.6B-v0`](https://huggingface.co/pantomiman/Qwen3-0.6B-v0)).
 
-### 14.4 Headline (TBD, populated when job completes)
+### 14.4 Headline
 
-| Metric        | pre-GRPO  | M3 (z7kcxfof, with example) | **M3.1 (el6s2d2h, no example)** | Δ M3.1 vs M3 |
-| ------------- | --------- | ----------- | --------------- | --- |
-| **EM** (avg)  | **0.102** | **0.155**   | _TBD_           | _TBD_ |
-| ACC (avg)     | 0.123     | 0.189       | _TBD_           | _TBD_ |
-| F1 (avg)      | 0.140     | 0.223       | _TBD_           | _TBD_ |
+Simple per-dataset means across all 7 paper QA benchmarks (full Plan A, 51,713 items / variant):
 
-### 14.5 Per-dataset breakdown (TBD)
+| Metric        | pre-GRPO  | M3 (z7kcxfof, with example) | **M3.1 (el6s2d2h, no example)** | Δ M3.1 vs M3       | Δ M3.1 vs pre |
+| ------------- | --------: | --------------------------: | ------------------------------: | ------------------: | ------------: |
+| **EM** (avg)  | **0.102** | **0.155**                   | **0.169**                       | **+0.014 (+9 %)**   | +0.067 (+66 %) |
+| ACC (avg)     | 0.123     | 0.189                       | **0.212**                       | +0.023 (+12 %)      | +0.089 (+72 %) |
+| F1 (avg)      | 0.140     | 0.223                       | **0.255**                       | +0.032 (+14 %)      | +0.115 (+82 %) |
 
-| Dataset               | Items  | pre-GRPO EM | M3 v0 EM | M3.1 EM | Δ M3.1 vs M3 |
-| --------------------- | ------ | ----------- | -------- | ------- | --- |
-| bamboogle (test)      | 125    | 0.056       | 0.088    | _TBD_   | _TBD_ |
-| nq (test)             | 3,610  | 0.113       | 0.191    | _TBD_   | _TBD_ |
-| triviaqa (test)       | 11,313 | 0.178       | 0.302    | _TBD_   | _TBD_ |
-| popqa (test)          | 14,267 | 0.133       | 0.227    | _TBD_   | _TBD_ |
-| hotpotqa (dev)        | 7,405  | 0.083       | 0.116    | _TBD_   | _TBD_ |
-| 2wikimultihopqa (dev) | 12,576 | 0.141       | 0.138    | _TBD_   | _TBD_ |
-| musique (dev)         | 2,417  | 0.010       | 0.023    | _TBD_   | _TBD_ |
-| **average**           | 51,713 | 0.102       | 0.155    | _TBD_   | _TBD_ |
+The +0.025 rollout-reward gap (0.215 vs 0.190) translates into a real but modest held-out EM gap (+0.014). A non-trivial chunk of the rollout-reward gap is the partial-credit-floor artifact ([`RESULTS_v0.md`](RESULTS_v0.md) Finding 4) — but **not all of it**: ACC and F1 widen the gap to +12 % and +14 %, suggesting el6s2d2h's no-example + decision-rules combination genuinely produces higher-quality answers, just not always within EM's strict-match window.
 
-### 14.6 Hypothesis
+### 14.5 Per-dataset breakdown
 
-If the rollout-reward gap (0.215 vs 0.190) is meaningful, el6s2d2h should beat z7kcxfof on at least the single-hop datasets (NQ / TriviaQA / PopQA), where M3 had headroom and the lift was concentrated. If the gap is mostly the partial-credit-floor artifact ([`RESULTS_v0.md`](RESULTS_v0.md) finding 4), the EM gap will be smaller than the rollout-reward gap suggests. Either result settles a Phase-1 ambiguity.
+| Dataset               | Items  | pre-GRPO EM | M3 v0 EM | **M3.1 EM** | Δ M3.1 vs M3 | Notes |
+| --------------------- | -----: | ----------: | -------: | ----------: | -----------: | --- |
+| bamboogle (test)      | 125    | 0.056       | 0.088    | **0.056**   | **−0.032 (−36 %)** | regresses to pre-GRPO; N = 125 → SE ≈ 0.02, so the −0.032 is on the edge of small-N noise |
+| nq (test)             | 3,610  | 0.113       | 0.191    | **0.197**   | +0.006 (+3 %)      | essentially tied with M3; both well above pre-GRPO |
+| triviaqa (test)       | 11,313 | 0.178       | 0.302    | **0.339**   | +0.037 (+12 %)     | clean win; biggest single-hop absolute lift |
+| popqa (test)          | 14,267 | 0.133       | 0.227    | **0.285**   | **+0.058 (+26 %)** | **biggest M3.1-vs-M3 win**, also the largest dataset by item count |
+| hotpotqa (dev)        | 7,405  | 0.083       | 0.116    | **0.144**   | +0.028 (+24 %)     | best multi-hop result; closes some of the gap M3 left vs pre on multi-hop |
+| 2wikimultihopqa (dev) | 12,576 | 0.141       | 0.138    | **0.134**   | −0.004 (−3 %)      | tied with M3; both ≈ pre-GRPO — 0.6B is capacity-bound on this benchmark either way |
+| musique (dev)         | 2,417  | 0.010       | 0.023    | **0.028**   | +0.005 (+21 %)     | small absolute, large relative — but off a near-zero base |
+| **simple mean**       | 51,713 | **0.102**   | **0.155** | **0.169**  | **+0.014 (+9 %)**  | 5 / 7 datasets improve, 1 ties, 1 regresses |
+
+(Items column = test/dev split sizes; "simple mean" = average of the per-dataset rates, the same convention used in M3.)
+
+### 14.6 Hypothesis vs result
+
+The 14.6 hypothesis was: *if the rollout-reward gap (0.215 vs 0.190) is meaningful, el6s2d2h should beat z7kcxfof on at least the single-hop datasets (NQ / TriviaQA / PopQA); if it's mostly the partial-credit-floor artifact, the EM gap will be smaller than the reward gap suggests.*
+
+**Both turn out to be partly true.** The reward gap is +0.025 (+13 % rel of M3's 0.190); the held-out EM gap is +0.014 (+9 % rel of M3's 0.155) — smaller, consistent with some partial-credit-floor inflation in the training signal. But the gap is *not* zero, the wins concentrate exactly where the hypothesis predicted (PopQA, TriviaQA — and bonus HotpotQA on multi-hop), and ACC / F1 widen the gap further (to +12 % / +14 %). The structural finding from Phase-1 — that **decision-rule scaffolding can substitute for the few-shot example, and the no-example variant has more headroom** — held up under held-out evaluation. Bamboogle's regression is the one anti-result; on 125 items it doesn't dent the structural conclusion, but it's flagged as a follow-up question (does the no-example variant lose something on out-of-domain hard multi-hop, or is this small-N noise?).
+
+The implication for Phase-2: **the no-example + decision-rules prompt ablation is a real lever**, not a partial-credit artifact, and the recipe ports to Qwen3.5 with low risk.
 
 ### 14.7 Planned follow-up: training-plot comparison panel
 
