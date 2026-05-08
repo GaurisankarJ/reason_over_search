@@ -69,7 +69,7 @@ Phase-1 context: across the v0 ALICE block (Apr 3 – 9, 14 runs total) + v1 ALI
 | Compile     | `use_torch_compile=True`, `attn_implementation=sdpa`                                          |
 | Prompt      | `re_search_template_sys` slot filled with the `p1_basic_w_ex` body (see §3)                   |
 | Apply chat  | `True`                                                                                        |
-| Wall-clock observed | **23 h 47 m 30 s for 1046 / 9968 steps** (W&B run wall-clock; effective ~82 s/step on 1× A100-40GB including end-of-run async checkpoint save + validation rollouts); full 9968-step horizon ≈ **~9.5 days per run** at the observed rate for this rollout shape. Across the 9 v0 hybrid prompt-ablation runs, full-horizon projections cluster at **~5–10 days** depending on rollout length distribution. None of the 29 Phase-1 runs reached the full horizon (longest hybrid: `p4_think_w_ex`, 2281 / 9968 steps in 31.7 h). |
+| Wall-clock observed | **23 h 47 m 30 s for 1046 / 9968 steps** (W&B run wall-clock; effective ~82 s/step on 1× A100-40GB including end-of-run async checkpoint save + validation rollouts); full 9968-step horizon ≈ **~9.5 days per run** at the observed rate for this rollout shape. Across the 9 v0 hybrid prompt-ablation runs, full-horizon projections cluster at **~5–10 days** depending on rollout length distribution. None of the 29 Phase-1 runs reached the full horizon (longest hybrid: `p4_think_w_ex`, 2280 / 9968 steps in 31.7 h). |
 
 
 **Training behavior at end of run** (per `RESULTS_v0.md` §11):

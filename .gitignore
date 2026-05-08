@@ -3,10 +3,12 @@ __pycache__/
 *.egg-info/
 **/.DS_Store
 
-# Local Retriever
-local_retriever/corpus/
-local_retriever/indexes/
-local_retriever/models/
+# Local Retriever — these are symlinks to /corpus, /indexes, /models at repo root
+# (set up in BOOTSTRAP_NEW_INSTANCE.md). No trailing slash so the rules match
+# symlinks (which git treats as files), not just real directories.
+local_retriever/corpus
+local_retriever/indexes
+local_retriever/models
 
 # M3 evaluation runtime data (corpus + 16 GB IVF index + encoder model;
 # sourced from /zfsstore/user/s4374886/omega/flash-rag/{corpus,models} via symlinks
@@ -23,6 +25,13 @@ evaluation_search_r1/search_r1_instruct_model/
 eval/qwen_3_0.6b/
 eval/qwen_3_0.6b_v0/
 eval/qwen_3_0.6b_v0_no_ex/
+
+# M4 evaluation: Qwen3.5-0.8B model checkpoints (HF safetensors, ~1.7 GB each).
+# v1 is the "pre-M4" branch; these dirs may exist on the shared filesystem because
+# the M4 worktree shares this `eval/` directory, so the rules are defensive — they
+# prevent accidental tracking of large model weights from any branch.
+eval/qwen3.5_0.8b/
+eval/qwen3.5_0.8b_base/
 
 # evaluation_research/: results dir (per-run artifacts; aggregated reports live in docs/)
 evaluation_research/results/
