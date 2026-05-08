@@ -78,93 +78,94 @@ Detail: [`CODE_SETUP_v1.md`](CODE_SETUP_v1.md), [`../milestone_two/MILESTONE_2.m
 
 ---
 
-## 4. M3 — first evaluation of the v0 GRPO checkpoint vs untrained Qwen3-0.6B (2026-05-07)
+## 4. M3 + M3.1 — parallel evaluation of two v0 GRPO checkpoints vs untrained Qwen3-0.6B (2026-05-07 / 2026-05-08)
 
-Between the previous meeting (2026-05-04) and this one (2026-05-07), M3 closed: the **only Phase-1 GRPO checkpoint that converged on heavy-tool behaviour** (`p1_basic_w_ex_z7kcxfof`, 1046 steps, 2 search calls / 4 turns / ~2050-token responses, end-of-run rollout reward 0.190 — see [`RESULTS_v0.md`](RESULTS_v0.md) §10) was evaluated against the untrained Qwen3-0.6B hybrid base on the same 7 paper QA benchmarks. **Eval ran on full Plan A test/dev sets (51,713 items per variant, no subsampling)** rather than the originally planned 1k subsamples — `sample_num` is not respected by the FlashRAG `search_r1` pipeline path; the upgrade is a happy accident that removes any subsampling-noise objection.
+Between the previous meeting (2026-05-04) and this one (2026-05-07 / 2026-05-08), **two evaluations of v0 Phase-1 GRPO checkpoints** closed back-to-back on the same eval pipeline and the same 7 paper QA benchmarks at **full Plan A** (51,713 items / variant, no subsampling — `sample_num` is not respected by the FlashRAG `search_r1` pipeline path; happy accident). Reported in parallel because they share the pipeline and answer two complementary questions:
 
-### 4.1 Headline result
+- **M3** (closed 2026-05-07): does the **only Phase-1 run that converged on heavy-tool behaviour** (`p1_basic_w_ex_z7kcxfof`, 1046 steps, 2 search calls / 4 turns / ~2050-token responses; end-of-run rollout reward **0.190**, +28 % rel — see [`RESULTS_v0.md`](RESULTS_v0.md) §10) generalise to held-out QA? **Yes**: average EM 0.102 → 0.155 (+0.053 abs, +52 % rel; 6 / 7 datasets up).
+- **M3.1** (closed 2026-05-08): does the **highest-reward Phase-1 run** (`p3_decide_no_ex_el6s2d2h`, 2280 steps, no example + decision rules, standard 1 search / 3 turns / ~1117-token responses; end-of-run rollout reward **0.215**, +43 % rel) translate its rollout-reward gap into held-out EM, or is the gap mostly the partial-credit-floor artifact (Finding 4)? **Partly true on both sides**: average EM lifts to 0.169 (+0.014 abs / +9 % rel over M3; smaller than the rollout-reward gap of +13 % rel, consistent with some partial-credit-floor inflation) — but the gap is *not* zero, the wins concentrate where the hypothesis predicted (PopQA, TriviaQA, HotpotQA), and ACC / F1 widen the gap further to +12 % / +14 %.
 
-Across all 7 datasets (51,713 items per variant; ALICE A100-80GB; greedy decode):
+The two checkpoints together let the brief read M3 + M3.1 as one parallel experiment: same base + algorithm + reward + data, **only the prompt differs** — yet the two prompts produced two qualitatively different tool-use regimes (heavy-tool vs standard) and two different held-out EMs. The structural finding from Phase-1 (decision-rule scaffolding can substitute for the few-shot example, and the no-example variant has more headroom) **holds under held-out evaluation**. This makes the recipe transfer to Qwen3.5 (Phase-2) lower-risk: we have evidence the prompt-design lever works at 0.6 B, and Phase-2 can ablate it on 0.8 B / 2 B without re-discovering it.
 
-| Metric       | pre-GRPO  | post-GRPO (z7kcxfof) | Δ absolute | Δ relative |
-| ------------ | --------- | -------------------- | ---------- | ---------- |
-| **EM** (avg) | **0.102** | **0.155**            | **+0.053** | **+52 %**  |
-| ACC (avg)    | 0.123     | 0.189                | +0.066     | +54 %      |
-| F1 (avg)     | 0.140     | 0.223                | +0.083     | +59 %      |
+### 4.1 Headline result (parallel)
 
-**6 of 7 datasets improved on EM**; the seventh (2WikiMultiHopQA) was statistically tied (−0.003 EM).
+Simple-mean across all 7 datasets (51,713 items / variant; ALICE 1× A100-80GB; greedy):
 
-### 4.2 Per-dataset breakdown (EM)
+| Metric        | pre-GRPO  | M3 (z7kcxfof, with example) | **M3.1 (el6s2d2h, no example)** | Δ M3 vs pre        | Δ M3.1 vs M3       | Δ M3.1 vs pre      |
+| ------------- | --------: | --------------------------: | ------------------------------: | ------------------: | ------------------: | ------------------: |
+| **EM** (avg)  | **0.102** | **0.155**                   | **0.169**                       | **+0.053 (+52 %)** | **+0.014 (+9 %)**   | +0.067 (+66 %)     |
+| ACC (avg)     | 0.123     | 0.189                       | **0.212**                       | +0.066 (+54 %)     | +0.023 (+12 %)      | +0.089 (+72 %)     |
+| F1 (avg)      | 0.140     | 0.223                       | **0.255**                       | +0.083 (+59 %)     | +0.032 (+14 %)      | +0.115 (+82 %)     |
 
-| Dataset               | Items  | pre-GRPO EM | v0 EM     | Δ EM       | Δ %       |
-| --------------------- | ------ | ----------- | --------- | ---------- | --------- |
-| bamboogle (test)      | 125    | 0.056       | **0.088** | +0.032     | +57 %     |
-| nq (test)             | 3,610  | 0.113       | **0.191** | +0.078     | +69 %     |
-| triviaqa (test)       | 11,313 | 0.178       | **0.302** | +0.124     | +70 %     |
-| popqa (test)          | 14,267 | 0.133       | **0.227** | +0.094     | +71 %     |
-| hotpotqa (dev)        | 7,405  | 0.083       | **0.116** | +0.033     | +40 %     |
-| 2wikimultihopqa (dev) | 12,576 | **0.141**   | 0.138     | −0.003     | −2 %      |
-| musique (dev)         | 2,417  | 0.010       | **0.023** | +0.013     | +130 %    |
-| **average**           | 51,713 | 0.102       | **0.155** | **+0.053** | **+52 %** |
+Both lifts are well outside any plausible noise band. The +0.025 rollout-reward gap (0.215 vs 0.190) translates into +0.014 EM (smaller, consistent with partial-credit-floor inflation) but +12–14 % ACC / F1 (the no-example variant produces higher-quality answers that don't always pass EM's strict-match window).
 
-The lift is **concentrated on single-hop QA** (NQ +69 %, TriviaQA +70 %, PopQA +71 %). **Multi-hop saturates at 0.6 B parameters**: HotpotQA +40 %, 2WikiMultiHopQA tied. MuSiQue (3-hop) doubles in absolute EM but from a small base. Multi-hop weakness is a **capacity ceiling**, not a training-side issue.
+### 4.2 Per-dataset breakdown — EM (parallel)
 
-### 4.3 The training run that produced the evaluated checkpoint
+| Dataset               | Items  | pre-GRPO  | M3 v0     | **M3.1**  | Δ M3 vs pre        | Δ M3.1 vs M3        |
+| --------------------- | -----: | --------: | --------: | --------: | ------------------: | -------------------: |
+| bamboogle (test)      | 125    | 0.056     | **0.088** | 0.056     | +0.032 (+57 %)     | **−0.032 (−36 %)**  |
+| nq (test)             | 3,610  | 0.113     | 0.191     | **0.197** | +0.078 (+69 %)     | +0.006 (+3 %)       |
+| triviaqa (test)       | 11,313 | 0.178     | 0.302     | **0.339** | +0.124 (+70 %)     | +0.037 (+12 %)      |
+| popqa (test)          | 14,267 | 0.133     | 0.227     | **0.285** | +0.094 (+71 %)     | **+0.058 (+26 %)**  |
+| hotpotqa (dev)        | 7,405  | 0.083     | 0.116     | **0.144** | +0.033 (+40 %)     | +0.028 (+24 %)      |
+| 2wikimultihopqa (dev) | 12,576 | **0.141** | 0.138     | 0.134     | −0.003 (−2 %)      | −0.004 (−3 %)       |
+| musique (dev)         | 2,417  | 0.010     | 0.023     | **0.028** | +0.013 (+130 %)    | +0.005 (+21 %)      |
+| **simple mean**       | 51,713 | **0.102** | **0.155** | **0.169** | **+0.053 (+52 %)** | **+0.014 (+9 %)**   |
 
-`z7kcxfof` (`p1_basic_w_ex`), 2026-04-06, v0 block, ALICE 1× A100-40GB. **1046 / 9968 steps trained** (the load-bearing fact for §5). Paper-faithful Search-R1 EM-only reward (`qa_em.py`); GRPO with `lr=1e-6`, KL coef 0.001, `max_response_length=4096`, rollout `n=3`, `top_n=5`, `max_turns=4`. Behavioural signature: heavy-tool (2 calls / 4 turns / ~2050 tokens), the only Phase-1 run that converged on this 2-call regime (the Hamlet 2-search example in the prompt anchors it). Full config and end-of-run metrics: [`RESULTS_v2.md`](RESULTS_v2.md) §2.
+**M3 shape**: lift concentrated on single-hop (NQ +69 %, TriviaQA +70 %, PopQA +71 %); multi-hop saturates (HotpotQA +40 %, 2Wiki tied) — a **capacity ceiling** at 0.6 B, not a training-side issue.
+**M3.1 shape**: 5 / 7 datasets beat M3 (PopQA +0.058 the biggest, also the largest dataset; TriviaQA +0.037; HotpotQA +0.028); 2Wiki is tied with both ≈ pre (0.6 B is capacity-bound on this benchmark either way); bamboogle regresses by 0.032 on N = 125 — SE ≈ 0.02, on the edge of significance, flagged as a follow-up question.
 
-### 4.4 The prompt
+### 4.3 The two training runs that produced the evaluated checkpoints
 
-Verbatim `p1_basic_w_ex` system message — byte-for-byte at training and eval. See [`RESULTS_v2.md`](RESULTS_v2.md) §3 (or [`../milestone_three/MILESTONE_3.md`](../milestone_three/MILESTONE_3.md) §"The p1_basic_w_ex prompt").
+| Run                  | Prompt              | Behavioural signature                | Steps        | Block date | First-decile reward | Last-decile reward | Δ rel reward |
+| -------------------- | ------------------- | ------------------------------------ | -----------: | ---------- | ------------------: | ------------------: | ------------: |
+| `z7kcxfof` (**M3**)  | `p1_basic_w_ex`     | heavy-tool 2-call / 4-turn / ~2050 tok | 1046 / 9968  | 2026-04-06 | 0.148               | **0.190**          | +28 %         |
+| `el6s2d2h` (**M3.1**) | `p3_decide_no_ex` | standard 1-call / 3-turn / ~1117 tok  | 2280 / 9968 | 2026-04-09 | 0.151               | **0.215**          | **+43 %**     |
 
-### 4.5 vs ReSearch paper setup
+Both: ALICE 1× A100-40GB, paper-faithful Search-R1 EM-only reward (`qa_em.py`), GRPO with `lr=1e-6`, KL coef 0.001, `max_response_length=4096`, rollout `n=3`, `top_n=5`, `max_turns=4`. **The only structural delta is the prompt.** z7kcxfof is the only Phase-1 run that converged on the 2-call / 4-turn regime (the Hamlet 2-search example anchors it); el6s2d2h is the highest-reward Phase-1 run overall, demonstrating that decision-rule scaffolding can substitute for the few-shot example. Full configs and end-of-run metrics: [`RESULTS_v2.md`](RESULTS_v2.md) §2 (M3) + [`RESULTS_v0.md`](RESULTS_v0.md) §10–11 (Phase-1 cross-run summary, both runs).
 
-M3 uses the same `<search>` / `<result>` action format as the **published** ReSearch and Search-R1 papers (verified upstream at `re-search` commit `51d98e1`). The `<tool_call>` JSON variant present in our local `re-search/` checkout — and tested in our v1 block — is a separate ablation introduced by us (`re-search` commit `2c32dd3`, 2026-04-12), **not** the paper's scheme. Remaining differences vs ReSearch's eval defaults are budget-level: `top_n=5`, `max_search_turns=5`, `step_limit` uncapped (bounded by `remain_length=4096`), `generator_max_input_len=4096`, `enable_thinking=True` (otherwise Qwen3 hybrid auto-injects empty `<think></think>` and produces shallow answers). Full 14-fix audit between clone-and-run and the first clean comparison: [`CODE_SETUP_v2.md`](CODE_SETUP_v2.md) §3.
+### 4.4 The two prompts
 
-### 4.6 Wall-clock
+- **M3 — `p1_basic_w_ex`**: basic rules + Hamlet 2-search example. Anchors heavy-tool behaviour. Verbatim text: [`RESULTS_v2.md`](RESULTS_v2.md) §3.
+- **M3.1 — `p3_decide_no_ex`**: basic rules + two extra decision-rule sentences ("After each search result, decide whether another search is needed…" / "If a search result is incomplete, search again…"); **no example**. Verbatim text: [`../milestone_three/MILESTONE_3.1.md`](../milestone_three/MILESTONE_3.1.md) "Setup".
 
-| Variant                  | Run mode                                        | Total wall-clock      |
-| ------------------------ | ----------------------------------------------- | --------------------- |
-| pre-GRPO (`qwen_3_0.6b`) | Interactive `srun` (job 2120423, node870)       | ~115 min              |
-| v0 (`qwen_3_0.6b_v0`)    | `sbatch` (job 2125009, node875)                 | **2h 26m 33s**        |
+Both prompts share the same surface structure (system message, `<search>`/`<result>` tags, final-answer format); the difference is the rules section + presence/absence of the example.
 
-`INFERENCE_MAX_WORKERS` 16 → 32 mid-run gave a measured ~2× speedup; concurrency-tuning detail is in [`RESULTS_v2.md`](RESULTS_v2.md) §7.
+### 4.5 vs ReSearch paper setup (applies to both)
 
-### 4.7 Implications
+Both M3 and M3.1 use the same `<search>` / `<result>` action format as the **published** ReSearch and Search-R1 papers (verified upstream at `re-search` commit `51d98e1`). The `<tool_call>` JSON variant present in our local `re-search/` checkout — and tested in our v1 block — is a separate ablation introduced by us (`re-search` commit `2c32dd3`, 2026-04-12), **not** the paper's scheme. Remaining differences vs ReSearch's eval defaults are budget-level: `top_n=5`, `max_search_turns=5`, `step_limit` uncapped (bounded by `remain_length=4096`), `generator_max_input_len=4096`, `enable_thinking=True` (otherwise Qwen3 hybrid auto-injects empty `<think></think>` and produces shallow answers). The pipeline is byte-identical between M3 and M3.1; M3.1 added only two purely additive surface changes (new `P3_DECIDE_NO_EX_TEMPLATE` + `QWEN3_TEMPLATES` registry; `prompt_mode` family-prefix matching) so the **M3 14-fix audit holds for M3.1 unchanged**. Full audit: [`CODE_SETUP_v2.md`](CODE_SETUP_v2.md) §3 (the original 14 fixes) + §13.5 (the M3.1 additive deltas).
 
-1. **Phase-1 GRPO did teach useful behavior.** A clean +0.053 EM (+52 % rel) lift across 51,713 items per variant on full Plan A is well outside any plausible noise band. Heavy-tool mode (2 calls / 4 turns) emerges from the 2-search Hamlet example anchor — the same behavioural signature documented at training time.
-2. **0.6 B is the capacity ceiling for multi-hop.** Confirms the Phase-1 finding that 0.6 B is too small to support reward-function ablation on multi-hop.
-3. **Held-out generalisation rules out memorisation.** `z7kcxfof` was trained on MuSiQue with EM reward; the lift transfers to the other 6 benchmarks (NQ, TriviaQA, PopQA, HotpotQA, 2Wiki, Bamboogle), so the model learned a tool-use *skill*, not training-set answers.
-4. **The eval pipeline is now pinned and reusable** for Phase-2. Any future Qwen3-0.6 B / 2 B / 3.5-2 B checkpoint that uses the `<search>` / `<result>` tag scheme can be plugged in via `eval/<name>/` and `bash scripts/run_m3.sh` without touching the eval code. This was the missing piece that was blocking Phase-2 evaluation.
-5. **Phase-2 expectation**: scaling to the Qwen3.5 small-model family (0.8B for cheap iteration; 2B as the 3.3× capacity step over the M3-evaluated 0.6B; same hybrid soft-switch reasoning) should expand the multi-hop lift if the capacity-ceiling hypothesis is right. Single-hop is already close to ceiling under this prompt; multi-hop has the room.
+The M3.1 checkpoint required one additional one-time conversion: el6s2d2h step 2000 verl-FSDP → HF safetensors via `python -m verl.model_merger merge --backend fsdp …` (~1 min); output at [`eval/qwen_3_0.6b_v0_no_ex/`](../../eval/qwen_3_0.6b_v0_no_ex/) **and published to HF as [`pantomiman/Qwen3-0.6B-v0.1`](https://huggingface.co/pantomiman/Qwen3-0.6B-v0.1)** (parallel to the M3 checkpoint at [`pantomiman/Qwen3-0.6B-v0`](https://huggingface.co/pantomiman/Qwen3-0.6B-v0); the `.1` distinguishes the no-example variant trained from the same base + algorithm + reward + data, varying only the prompt).
 
-Full numerical record: [`RESULTS_v2.md`](RESULTS_v2.md). Code-setup diff and 14-fix audit: [`CODE_SETUP_v2.md`](CODE_SETUP_v2.md). Milestone narrative: [`../milestone_three/MILESTONE_3.md`](../milestone_three/MILESTONE_3.md).
+### 4.6 Wall-clock (parallel)
 
-### 4.8 M3.1 — second checkpoint, second prompt (completed 2026-05-08)
+| Variant                                  | Run mode                                      | Job ID, node                  | Total wall-clock      |
+| ---------------------------------------- | --------------------------------------------- | ----------------------------- | --------------------- |
+| pre-GRPO (`qwen_3_0.6b`)                 | Interactive `srun`                            | 2120423, node870              | ~115 min              |
+| **M3** v0 (`qwen_3_0.6b_v0`)             | `sbatch`                                      | 2125009, node875              | **2 h 26 m 33 s**     |
+| **M3.1** v0_no_ex (`qwen_3_0.6b_v0_no_ex`) | `sbatch`                                      | 2150167, node870              | **1 h 32 m 15 s**     |
 
-The M3 lift was measured on `p1_basic_w_ex_z7kcxfof` (the *with-example* run that anchored heavy-tool 2/4 behaviour, end reward 0.190 over 1046 steps, +28 % rel). But that **was not the highest-reward Phase-1 run** — `p3_decide_no_ex_el6s2d2h` (no example, decision rules, end reward **0.215** over 2280 steps, **+43 % rel**) was. M3.1 evaluates that second checkpoint on the same 7 paper QA benchmarks at full Plan A, using the byte-identical `p3_decide_no_ex` prompt that produced it. The question this answers: does the higher rollout reward translate to higher held-out EM, or is the gap mostly the partial-credit-floor artifact (Finding 4)?
+M3.1 is **40 %–faster than M3** because the no-example variant emits ~half the response budget per episode (1100 vs 2050 tokens) — a direct consequence of the standard-tool 1/3 vs heavy-tool 2/4 regime split. M3.1 had two prior infra-wait failures (`2134645` SGLang `/health` 300 s cliff → bumped to 600 s; `2134663` retriever `/health` 600 s cliff → bumped to 1200 s); both fixes are pure-margin in `scripts/sbatch_m3.sh` (the loops break the moment `/health` returns 200, so warm-cache wall-clock is unaffected). The M3 sbatch also benefited from an `INFERENCE_MAX_WORKERS` 16 → 32 mid-run change (~2× speedup; concurrency-tuning detail: [`RESULTS_v2.md`](RESULTS_v2.md) §7).
 
-**Headline result**: M3.1 simple-mean EM is **0.169** vs M3's 0.155 (+0.014 abs, +9 % rel; +0.067 abs / +66 % rel vs pre-GRPO). 5 / 7 datasets improve over M3, 1 ties (2Wiki, both ≈ pre), **1 regresses by 0.032 (bamboogle, N = 125 — small-N noise on the edge of significance)**. Wins concentrate exactly where the hypothesis predicted: PopQA **+0.058**, TriviaQA **+0.037**, HotpotQA **+0.028**. ACC / F1 widen the M3.1-vs-M3 gap to **+0.023 (+12 %) / +0.032 (+14 %)** — meaning the no-example variant produces higher-quality answers that don't always make it through EM's strict-match window.
+### 4.7 Training-curve comparison (built from archived W&B histories)
 
-**Conclusion**: The +0.025 rollout-reward gap (0.215 vs 0.190) is *partly* the partial-credit floor artifact (the EM gap is smaller than the reward gap), but it is *not entirely* the artifact — the structural finding from Phase-1 (decision-rule scaffolding can substitute for the few-shot example, and the no-example variant has more headroom) **holds under held-out evaluation**. The no-example + decision-rules prompt is a real lever, not a partial-credit illusion. This makes the recipe transfer to Qwen3.5 (Phase-2) lower-risk: we have evidence the prompt-design lever works at 0.6B, and Phase-2 can ablate it on 0.8B / 2B without re-discovering it.
-
-| Run | Prompt | Behaviour | Steps | End reward | Δ rel reward | **Held-out EM** | **vs M3 EM** |
-|---|---|---|---:|---:|---:|---:|---:|
-| `z7kcxfof` (M3) | `p1_basic_w_ex` | heavy-tool 2/4 | 1046 | **0.190** | +28 % | **0.155** | — |
-| `el6s2d2h` (**M3.1**) | `p3_decide_no_ex` | standard 1/3 | 2280 | **0.215** | **+43 %** | **0.169** | **+0.014 (+9 %)** |
-
-**Pipeline change is additive only** (no fixes; the M3 14-fix audit holds). Two pieces:
-
-- New prompt template constant `P3_DECIDE_NO_EX_TEMPLATE` (verbatim from training, recovered from `RESULTS_v0.md`); `templates.py` now exposes a `QWEN3_TEMPLATES` registry keyed on `prompt_mode`. `active_pipeline.py` and `run_eval.py` switched their `prompt_mode == 'qwen3'` checks to `prompt_mode.startswith('qwen3')` so all qwen3 modes share retrieval format / budgets / `enable_thinking=True`; only the system message differs.
-- Checkpoint conversion: el6s2d2h step 2000 verl-FSDP → HF safetensors via `python -m verl.model_merger merge --backend fsdp …`. ~1 min; output at [`eval/qwen_3_0.6b_v0_no_ex/`](../../eval/qwen_3_0.6b_v0_no_ex/) **and published to HF as [`pantomiman/Qwen3-0.6B-v0.1`](https://huggingface.co/pantomiman/Qwen3-0.6B-v0.1)** (parallel to the M3 checkpoint at [`pantomiman/Qwen3-0.6B-v0`](https://huggingface.co/pantomiman/Qwen3-0.6B-v0); the `.1` distinguishes the no-example variant trained from the same base).
-
-**Status**: completed on **sbatch 2150167** (gpu-short, A100-80GB on `node870`, 2026-05-08 08:41, **1 h 32 m wall** — well under the 2.5 h M3 reference). Two prior attempts failed at infrastructure waits, not at training/eval logic: `2134645` SGLang `/health` 300 s budget (M3 ref 260 s, cold-cache cliff → bumped to 600 s); `2134663` retriever `/health` 600 s budget (M3 ref 570 s, *another* cold-cache cliff → bumped to 1200 s). Both fixes are pure-margin in `scripts/sbatch_m3.sh` (the loops break the moment `/health` returns 200, so warm-cache wall-clock is unaffected). Numerical results: [`RESULTS_v2.md`](RESULTS_v2.md) §14. Milestone: [`../milestone_three/MILESTONE_3.1.md`](../milestone_three/MILESTONE_3.1.md). Setup diff: [`CODE_SETUP_v2.md`](CODE_SETUP_v2.md) §13.5.
-
-**Training-curve comparison** (built from archived W&B histories; SMA window = 20; generated by [`../../scripts/plot_m3_1_panel.py`](../../scripts/plot_m3_1_panel.py)):
+SMA window = 20; generated by [`../../scripts/plot_m3_1_panel.py`](../../scripts/plot_m3_1_panel.py).
 
 ![z7kcxfof vs el6s2d2h training curves](results_v0_assets/comparison_z7kcxfof_vs_el6s2d2h.png)
 
-Reading the panels: both runs reach the 0.18–0.22 reward band (the partial-credit floor at 0.1 confines all v0 runs there), but the *behavioural* signature is starkly different. Same base + algorithm + reward + data — only the prompt differs. **z7kcxfof anchors at heavy-tool 2-call / 4-turn / ~2050-tok** from very early (the Hamlet 2-search example does its job); **el6s2d2h converges to standard 1-call / 3-turn / ~1100-tok at slightly higher final reward**. The no-example + decision-rules variant is therefore a **pareto improvement**: lower compute per episode (~½ the response budget, 1 fewer tool call) **and** higher held-out EM. That's a useful signal for Phase-2 budget design — when the recipe ports to Qwen3.5, the no-example prompt should be on the candidate list. Full reading + per-panel commentary: [`RESULTS_v2.md`](RESULTS_v2.md) §14.7.
+Reading the panels: both runs reach the 0.18–0.22 reward band (the partial-credit floor at 0.1 confines all v0 runs there), but the *behavioural* signature is starkly different. Same base + algorithm + reward + data — only the prompt differs. **z7kcxfof anchors at heavy-tool 2-call / 4-turn / ~2050-tok** from very early (the Hamlet 2-search example does its job); **el6s2d2h converges to standard 1-call / 3-turn / ~1100-tok at slightly higher final reward**. The no-example + decision-rules variant is therefore a **pareto improvement**: lower compute per episode (~½ the response budget, 1 fewer tool call) **and** higher held-out EM. Full reading + per-panel commentary: [`RESULTS_v2.md`](RESULTS_v2.md) §14.7.
+
+### 4.8 Implications (combined)
+
+1. **Phase-1 GRPO did teach useful behaviour.** M3 = +0.053 EM (+52 % rel) and M3.1 = +0.067 EM (+66 % rel) over pre-GRPO across 51,713 items per variant on full Plan A — both well outside any plausible noise band.
+2. **0.6 B is the capacity ceiling for multi-hop.** 2WikiMultiHopQA stays at 0.13–0.14 EM across pre-GRPO / M3 / M3.1; HotpotQA improves modestly under both prompts (M3 +40 %, M3.1 +24 % over M3); MuSiQue doubles from a small base. Confirms that 0.6 B is too small to support reward-function ablation on multi-hop and that scaling to Qwen3.5 small models (0.8B / 2B) is the right next step.
+3. **Held-out generalisation rules out memorisation.** Both checkpoints were trained on MuSiQue with EM reward; the lift transfers to the other 6 benchmarks (NQ, TriviaQA, PopQA, HotpotQA, 2Wiki, Bamboogle), so each model learned a tool-use *skill*, not training-set answers.
+4. **Prompt design is a real lever, not just a partial-credit-floor artifact.** The M3.1 vs M3 EM gap (+9 %) is smaller than the rollout-reward gap (+13 %) — consistent with some partial-credit-floor inflation in the training signal — but the gap is **not zero**, the wins concentrate exactly where the hypothesis predicted (single-hop with headroom + the easier multi-hop), and ACC / F1 widen the gap to +12 % / +14 %. The structural Phase-1 finding (decision-rule scaffolding can substitute for the few-shot example, no-example variant has more headroom) survives held-out evaluation.
+5. **No-example is a pareto improvement.** M3.1 emits ~half the response tokens per episode (~1100 vs ~2050) at higher EM and higher ACC / F1, with a 40 %-faster eval wall-clock as a direct consequence. For Phase-2 budget design, the no-example + decision-rules prompt should be on the candidate list when the recipe ports to Qwen3.5.
+6. **The eval pipeline is now pinned and reusable** for Phase-2. Any future Qwen3-0.6 B / 2 B / 3.5-2 B checkpoint that uses the `<search>` / `<result>` tag scheme can be plugged in via `eval/<name>/` and `bash scripts/run_m3.sh` without touching the eval code. M3.1 demonstrated this: a new prompt template was added in two purely additive lines, with no fixes needed and no regression on the M3 14-fix audit.
+7. **Phase-2 expectation**: scaling to Qwen3.5-0.8 B (cheap iteration) → Qwen3.5-2 B (3.3× capacity step over the M3-evaluated 0.6 B; same hybrid soft-switch reasoning) should expand the multi-hop lift if the capacity-ceiling hypothesis is right. Single-hop is already close to ceiling under M3.1's prompt; multi-hop has the room.
+
+Full numerical record: [`RESULTS_v2.md`](RESULTS_v2.md) §4–9 (M3) + §14 (M3.1). Code-setup diff and 14-fix audit: [`CODE_SETUP_v2.md`](CODE_SETUP_v2.md) §3 + §13.5. Milestone narratives: [`../milestone_three/MILESTONE_3.md`](../milestone_three/MILESTONE_3.md) (M3) + [`../milestone_three/MILESTONE_3.1.md`](../milestone_three/MILESTONE_3.1.md) (M3.1).
 
 ---
 
