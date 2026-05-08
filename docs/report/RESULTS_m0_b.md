@@ -79,7 +79,7 @@ The instruct vs base split also implies a chat-format split: instruct runs use `
 
 Color-coded by experimental subgroup: instruct-new-prompts (blue), 80GB smoke (orange), instruct-experiments (green), base (red), late-instruct (purple).
 
-![reward focus all](./results_v1_assets/reward_focus_all.png)
+![reward focus all](./archive/m0_b/reward_focus_all.png)
 
 What the chart shows at a glance:
 - The **instruct band 0.14 to 0.18** (blue and orange curves) is consistent with the v0 instruct runs but lower-ceiling. v0 best instruct was 0.215 (`p3_decide_no_ex`); v1 best instruct is 0.179 (`r1_query_object`).
@@ -93,7 +93,7 @@ What the chart shows at a glance:
 
 Three prompts, all using the new `<tool_call>` JSON format. Each tests a different rules verbosity: `r0_strict_contract` (very strict OUTPUT CONTRACT), `r1_query_object` (medium-length, JSON-arg with example), `r2_concise` (short).
 
-![combined instruct new prompts](./results_v1_assets/combined_instruct_new_prompts.png)
+![combined instruct new prompts](./archive/m0_b/combined_instruct_new_prompts.png)
 
 All three converge to the same standard 1-tool / 3-turn pattern. Reward ordering: `r1_query_object` (0.179) > `r0_strict_contract` (0.149) ≥ `r2_concise` (0.138). The middle-verbosity prompt with explicit JSON arg schema and an example wins, mirroring v0's finding that decision rules + example is the working regime.
 
@@ -103,13 +103,13 @@ All three converge to the same standard 1-tool / 3-turn pattern. Reward ordering
 
 Three short bring-up runs on the 80GB profile (no notes). All <100 steps; not interpretable as ablations, kept as record.
 
-![combined instruct 80gb](./results_v1_assets/combined_instruct_80gb.png)
+![combined instruct 80gb](./archive/m0_b/combined_instruct_80gb.png)
 
 ---
 
 ## 7. Combined view: EXPERIMENT ZERO / EXPERIMENT ONE (Apr 17)
 
-![combined instruct exp](./results_v1_assets/combined_instruct_exp.png)
+![combined instruct exp](./archive/m0_b/combined_instruct_exp.png)
 
 - **`exp_zero`** (cse8dhqk, 350 steps): tool-use collapses from 0.10 to 0.00 over training; reward climbs to 0.144 via the partial-credit floor. Same behavioral signature as v0's `p1_basic_no_ex` and `p2_basic2_no_ex` collapse modes.
 - **`exp_one`** (urlw74yz, 218 steps): reward stays at 0.000 for the entire 218 steps despite tool calls happening (~0.66 mean) and reasonable response lengths (~870 tokens). The format validator is likely rejecting every rollout, suggesting a prompt/validator mismatch.
@@ -120,7 +120,7 @@ Three short bring-up runs on the 80GB profile (no notes). All <100 steps; not in
 
 Five attempts to train the Qwen3-0.6B-Base model. **None of them got the base model to emit a tool call.**
 
-![combined base](./results_v1_assets/combined_base.png)
+![combined base](./archive/m0_b/combined_base.png)
 
 | Run | Prompt style | Steps | Reward (first to last) | Tool calls | Resp len |
 |---|---|---:|---|---|---|
@@ -140,7 +140,7 @@ The `base_breakthrough` outlier is the diagnostic finding of this block; see §1
 
 ## 9. Combined view: late instruct (Apr 19)
 
-![combined late instruct](./results_v1_assets/combined_late_instruct.png)
+![combined late instruct](./archive/m0_b/combined_late_instruct.png)
 
 - **`think_prefill`** (huw425rb, 38 steps): added a `<think>` prefill to the assistant header. Crashed too early to interpret.
 - **`reward_v3`** (w00kccwq, 594 steps): "NEW REWARD FORMAT 3"; reward stuck at 0.000 for all 594 steps, despite tool calls happening (~0.4 mean) and response lengths >1000 tokens. The new reward format is broken or not finding the answer; the model is otherwise behaving normally.
@@ -195,7 +195,7 @@ result
 </tool_response>
 ```
 
-![r0_strict_contract](./results_v1_assets/single_r0_strict_contract_xtcb7mo9.png)
+![r0_strict_contract](./archive/m0_b/single_r0_strict_contract_xtcb7mo9.png)
 
 Standard 1-tool / 3-turn / ~1100-token responses; reward 0.052 → 0.149. Note `arguments` is a plain string here (`"arguments": "query"`), not a JSON object.
 
@@ -246,7 +246,7 @@ Example valid trace:
 </tools>
 ```
 
-![r1_query_object](./results_v1_assets/single_r1_query_object_0bhfwm68.png)
+![r1_query_object](./archive/m0_b/single_r1_query_object_0bhfwm68.png)
 
 Standard 1-tool / 3-turn; response_length grows 1010 → 1981; reward 0.137 → 0.179. Best of the v1 instruct prompts. The schema with `{"query": ...}` and the worked example anchor the model on valid JSON tool-call output.
 
@@ -280,7 +280,7 @@ Rules:
 </tools>
 ```
 
-![r2_concise](./results_v1_assets/single_r2_concise_gzz5amvj.png)
+![r2_concise](./archive/m0_b/single_r2_concise_gzz5amvj.png)
 
 Standard 1-tool / 3-turn / ~1000-token responses; reward 0.113 → 0.138. The shortened prompt loses ~4 pp of final reward vs `r1_query_object` despite running longer (1176 vs 884 steps); the explicit "Hard rules" list in `r1` is doing real work.
 
@@ -290,11 +290,11 @@ Standard 1-tool / 3-turn / ~1000-token responses; reward 0.113 → 0.138. The sh
 
 Three short bring-up runs on the 80GB profile; no notes; 31, 79, 96 steps respectively.
 
-![r3_80gb_a](./results_v1_assets/single_r3_80gb_a_x7ya3ev3.png)
+![r3_80gb_a](./archive/m0_b/single_r3_80gb_a_x7ya3ev3.png)
 
-![r3_80gb_b](./results_v1_assets/single_r3_80gb_b_jv6g32zu.png)
+![r3_80gb_b](./archive/m0_b/single_r3_80gb_b_jv6g32zu.png)
 
-![r3_80gb_c](./results_v1_assets/single_r3_80gb_c_iz3w4cxj.png)
+![r3_80gb_c](./archive/m0_b/single_r3_80gb_c_iz3w4cxj.png)
 
 All three reach ~1.0 tool calls before crashing. Not interpretable as ablations.
 
@@ -304,7 +304,7 @@ All three reach ~1.0 tool calls before crashing. Not interpretable as ablations.
 
 W&B note: `EXPERIMENT ZERO`. Prompt body not in notes.
 
-![exp_zero](./results_v1_assets/single_exp_zero_cse8dhqk.png)
+![exp_zero](./archive/m0_b/single_exp_zero_cse8dhqk.png)
 
 Tool-use collapses from 0.10 to 0.00 over training; num_turns drops to 2 (think + answer); response length 449 → 533. Reward 0.086 → 0.144 via the partial-credit floor. Same collapse mode as v0's `p1_basic_no_ex` / `p2_basic2_no_ex`.
 
@@ -314,7 +314,7 @@ Tool-use collapses from 0.10 to 0.00 over training; num_turns drops to 2 (think 
 
 W&B note: `EXPERIMENT ONE`. Prompt body not in notes. Reward stuck at 0 the entire run despite ~0.66 tool calls and ~870 token responses, suggesting the format validator is rejecting every rollout (likely a tag mismatch between this prompt body and the reward function).
 
-![exp_one](./results_v1_assets/single_exp_one_urlw74yz.png)
+![exp_one](./archive/m0_b/single_exp_one_urlw74yz.png)
 
 ---
 
@@ -343,9 +343,9 @@ State machine (STRICT):
 User: {prompt}. Assistant:
 ```
 
-![base_state_machine_a](./results_v1_assets/single_base_state_machine_a_hmf76bfd.png)
+![base_state_machine_a](./archive/m0_b/single_base_state_machine_a_hmf76bfd.png)
 
-![base_state_machine_b](./results_v1_assets/single_base_state_machine_b_zrphud77.png)
+![base_state_machine_b](./archive/m0_b/single_base_state_machine_b_zrphud77.png)
 
 Both ran 2301 steps. Both: 0 tool calls throughout, num_turns = 2 throughout, response_length ≈ 110 to 125 tokens, reward ≈ 0 throughout (slightly negative early due to KL). The base model never produces a `<tool_call>` segment. With this strict prompt, the model emits a short answer-like text directly, format validation fails, score is 0 (or very small partial), KL penalty makes the net reward slightly negative. This is the **expected outcome of trying to teach a base (non-instruction-tuned) checkpoint to follow a structured tool-call format from cold start**.
 
@@ -391,9 +391,9 @@ User: {prompt}
 Assistant: <think>
 ```
 
-![base_with_example_a](./results_v1_assets/single_base_with_example_a_guzkoeg4.png)
+![base_with_example_a](./archive/m0_b/single_base_with_example_a_guzkoeg4.png)
 
-![base_with_example_b](./results_v1_assets/single_base_with_example_b_d5ey6zj9.png)
+![base_with_example_b](./archive/m0_b/single_base_with_example_b_d5ey6zj9.png)
 
 Both crashed early (115 and 204 steps). Tool calls 0 throughout. Response length collapses from ~600 to ~1 token over the course of the short runs: the model finds it easier to emit a single token than the structured format. The `Assistant: <think>` prefill does not help: the base model has no idea what to do after the prefill.
 
@@ -403,7 +403,7 @@ Both crashed early (115 and 204 steps). Tool calls 0 throughout. Response length
 
 W&B note: (none). Run name `qwen3_0.6b_base_grpo_gpu_1_40gb_20260418_204148` (Apr 18 evening, ~12 hours after `base_state_machine_a/b`). **Identical W&B config** to `base_state_machine_a` (same `prompt_template_name`, same agent loop, same retriever URL, same chat-format flags), but **reward starts at 0.694 and stays at ~0.7 throughout 2301 steps**.
 
-![base_breakthrough](./results_v1_assets/single_base_breakthrough_b8vv0qe2.png)
+![base_breakthrough](./archive/m0_b/single_base_breakthrough_b8vv0qe2.png)
 
 Behavioral facts:
 - Tool calls: 0 throughout.
@@ -449,7 +449,7 @@ Do not put the final answer anywhere outside <answer>...</answer>.
 Do not output anything after the closing </answer>.
 ```
 
-![think_prefill](./results_v1_assets/single_think_prefill_huw425rb.png)
+![think_prefill](./archive/m0_b/single_think_prefill_huw425rb.png)
 
 Crashed at 38 steps; not interpretable. Tool calls 0.12 → 0.27, response_length 444 → 505, reward 0.000 throughout (likely format validator rejecting the prefilled think block).
 
@@ -459,7 +459,7 @@ Crashed at 38 steps; not interpretable. Tool calls 0.12 → 0.27, response_lengt
 
 W&B note: `NEW REWARD FORMAT - 3`. Same prompt template body as `think_prefill`.
 
-![reward_v3](./results_v1_assets/single_reward_v3_w00kccwq.png)
+![reward_v3](./archive/m0_b/single_reward_v3_w00kccwq.png)
 
 594 steps; tool calls 0.40 → 0.35; response_length 1189 → 1114; **reward 0.000 throughout the entire run.** The model is behaving (calling tools, producing reasonable-length responses) but the new reward function never returns non-zero. Either the format validator is rejecting these specific outputs or the F1 / EM extraction is failing on this prompt's expected answer format.
 

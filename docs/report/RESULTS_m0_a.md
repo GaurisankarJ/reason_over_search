@@ -92,7 +92,7 @@ The only thing that varied between `run_1_4b` runs was the **system-prompt templ
 
 Single reward chart, all 9 prompt ablations, smoothed (window=20):
 
-![reward focus](./results_v0_assets/reward_focus_run_1_4b.png)
+![reward focus](./archive/m0_a/reward_focus_run_1_4b.png)
 
 All 9 curves climb. None stalls. Best end-of-run mean rewards: `p3_decide_no_ex` (0.215) and `p4_think_w_ex` (0.212), both at 2280 steps. Worst: `p2_basic2_no_ex` (0.159), the run with total tool-use collapse. No runaway, no oscillation, no reward hacking visible.
 
@@ -102,7 +102,7 @@ All 9 curves climb. None stalls. Best end-of-run mean rewards: `p3_decide_no_ex`
 
 Same 9 runs, all metrics overlaid:
 
-![run_1_4b combined](./results_v0_assets/combined_run_1_4b.png)
+![run_1_4b combined](./archive/m0_a/combined_run_1_4b.png)
 
 ### What pops out
 
@@ -137,7 +137,7 @@ For example, <search>search query here</search> <result>search result here</resu
 In the last part of the answer, the final exact answer is enclosed within \boxed{} with LaTeX format.
 ```
 
-![p_minimal](./results_v0_assets/single_p_minimal_un4quq94.png)
+![p_minimal](./archive/m0_a/single_p_minimal_un4quq94.png)
 
 Standard mode: 1 tool call, 3 turns, ~1348 token responses. End-of-run reward 0.189. No collapse, no surprises; this run is the closest direct comparison to a paper-faithful template.
 
@@ -162,7 +162,7 @@ Question: What is the capital of France?
 <answer>The final answer is \[ \boxed{Paris} \]</answer>
 ```
 
-![p0_paper_w_ex](./results_v0_assets/single_p0_paper_w_ex_fj9ew2ik.png)
+![p0_paper_w_ex](./archive/m0_a/single_p0_paper_w_ex_fj9ew2ik.png)
 
 Standard mode: 1 tool call, 3 turns, ~1425 token responses. End-of-run reward 0.181. The capital-of-France example is single-hop, simpler than the multi-hop Hamlet example used in iter_1+; behavior is the same standard 1-tool / 3-turn pattern.
 
@@ -189,7 +189,7 @@ Question: What is the nationality of the author of Hamlet?
 <answer>The final answer is \[ \boxed{English} \]</answer>
 ```
 
-![p1_basic_w_ex](./results_v0_assets/single_p1_basic_w_ex_z7kcxfof.png)
+![p1_basic_w_ex](./archive/m0_a/single_p1_basic_w_ex_z7kcxfof.png)
 
 **Heavy-tool mode**: 2 tool calls, 4 turns, ~2047 token responses. End-of-run reward 0.190. The 2-search Hamlet example seems to anchor the model on imitating "always do 2 searches"; this is the only run that converges on 2-call behavior.
 
@@ -209,7 +209,7 @@ You may use the search tool multiple times if needed before giving the final ans
 Provide the final answer in the format: <answer>The final answer is \[ \boxed{answer here} \]</answer>.
 ```
 
-![p1_basic_no_ex](./results_v0_assets/single_p1_basic_no_ex_e8l6r2kd.png)
+![p1_basic_no_ex](./archive/m0_a/single_p1_basic_no_ex_e8l6r2kd.png)
 
 **Tool-use collapse**: tool calls drift from 0.27 down to 0.08; num turns 2.27 → 2.08; response length 619 → 478. End-of-run reward 0.169 (lower than the `_w_ex` variant by ~2pp, despite the model abandoning the search tool). Confirms that the partial-credit reward floor (§7) carries the model upward even without tool use.
 
@@ -236,7 +236,7 @@ Question: What is the nationality of the author of Hamlet?
 <answer>The final answer is \[ \boxed{English} \]</answer>
 ```
 
-![p2_basic2_w_ex](./results_v0_assets/single_p2_basic2_w_ex_6dl2fz14.png)
+![p2_basic2_w_ex](./archive/m0_a/single_p2_basic2_w_ex_6dl2fz14.png)
 
 Standard mode: 1 tool call, 3 turns, ~1320 token responses. End-of-run reward 0.189. Dropping "multiple" from the opening line collapses the heavy-tool behavior of `p1_basic_w_ex` back to single-tool, even though the example still demonstrates two searches.
 
@@ -256,7 +256,7 @@ You may use the search tool multiple times if needed before giving the final ans
 Provide the final answer in the format: <answer>The final answer is \[ \boxed{answer here} \]</answer>.
 ```
 
-![p2_basic2_no_ex](./results_v0_assets/single_p2_basic2_no_ex_1cuveici.png)
+![p2_basic2_no_ex](./archive/m0_a/single_p2_basic2_no_ex_1cuveici.png)
 
 **Total tool-use collapse**: tool calls 0.06 → 0.00; num turns 2.06 → 2.00; response length 451 → 640. End-of-run reward 0.159 (worst of the block). The most extreme collapse case in the data: the model never makes a single search by the end of training, yet still finishes above the bare 0.1 partial-credit floor because of occasional F1 hits from parametric knowledge.
 
@@ -288,7 +288,7 @@ Reasoning Process 3
 <answer>The final answer is \[ \boxed{English} \]</answer>
 ```
 
-![p3_decide_w_ex](./results_v0_assets/single_p3_decide_w_ex_0rjkbaa1.png)
+![p3_decide_w_ex](./archive/m0_a/single_p3_decide_w_ex_0rjkbaa1.png)
 
 Standard mode: 1 tool call, 3 turns, ~1150 token responses. End-of-run reward 0.190. Adding the per-step decision rules does not push the model toward heavy-tool use here; the same standard pattern as `p2_basic2_w_ex`.
 
@@ -310,7 +310,7 @@ You may use the search tool multiple times if needed before giving the final ans
 Provide the final answer in the format: <answer>The final answer is \[ \boxed{answer here} \]</answer>.
 ```
 
-![p3_decide_no_ex](./results_v0_assets/single_p3_decide_no_ex_el6s2d2h.png)
+![p3_decide_no_ex](./archive/m0_a/single_p3_decide_no_ex_el6s2d2h.png)
 
 **Best reward of the block**: 0.215 at end-of-run. Tool calls climb 0.38 → 1.00; num turns 2.38 → 3.00; response length 599 → 1117. Tool-use **survives example removal here**, unlike the `p1_basic` and `p2_basic2` pairs. The two extra rule sentences (`After each search result, decide…` / `If a search result is incomplete, search again…`) are the difference. This run is the strongest argument that **decision-rule guidance can substitute for an example** in this regime.
 
@@ -357,7 +357,7 @@ Question: What is the nationality of the author of Hamlet?
 <answer>The final answer is \[ \boxed{English} \]</answer>
 ```
 
-![p4_think_w_ex](./results_v0_assets/single_p4_think_w_ex_2jfi1l4c.png)
+![p4_think_w_ex](./archive/m0_a/single_p4_think_w_ex_2jfi1l4c.png)
 
 **Second-best reward**: 0.212. Standard 1-tool / 3-turn behavior, ~1071 token responses. The `<think>` tags introduce explicit reasoning between tool calls; behaviorally the run looks like a regularised version of `p3_decide_w_ex` with slightly tighter responses.
 
@@ -403,32 +403,32 @@ The `p4_think_w_ex` prompt confirms the same pattern from a different angle: it 
 
 These five runs predate the actual ablation block. They are kept here as the bring-up record. None of them have full prompt bodies in W&B notes; only behavioral inference is possible.
 
-![pre_tag combined](./results_v0_assets/combined_pre_tag.png)
+![pre_tag combined](./archive/m0_a/combined_pre_tag.png)
 
 ### `setup_first_pipeline` (h3ga5d0w)
 77 steps. First successful end-to-end pipeline run. Too short to draw any conclusion.
 
-![setup_first_pipeline](./results_v0_assets/single_setup_first_pipeline_h3ga5d0w.png)
+![setup_first_pipeline](./archive/m0_a/single_setup_first_pipeline_h3ga5d0w.png)
 
 ### `setup_run0_old_prompt` (0wx183ke)
 464 steps, "Base line (old prompt)" per W&B notes. Tool-use collapses to 0; reward still climbs (0.004 → 0.151) via the partial-credit floor. This is the same collapse mode that `p1_basic_no_ex` and `p2_basic2_no_ex` later reproduce.
 
-![setup_run0_old_prompt](./results_v0_assets/single_setup_run0_old_prompt_0wx183ke.png)
+![setup_run0_old_prompt](./archive/m0_a/single_setup_run0_old_prompt_0wx183ke.png)
 
 ### `setup_new_prompt_smoke` (1oku1vc8)
 41 steps, "New Prompt" per W&B notes. Crashed early; not interpretable.
 
-![setup_new_prompt_smoke](./results_v0_assets/single_setup_new_prompt_smoke_1oku1vc8.png)
+![setup_new_prompt_smoke](./archive/m0_a/single_setup_new_prompt_smoke_1oku1vc8.png)
 
 ### `setup_stable_regime` (ykxpxapv)
 164 steps, "stable regime: tool use + learning + controlled outputs" per W&B notes. Reaches the same 1-tool / 3-turn pattern that most `run_1_4b` runs converge to. The label is consistent with the data.
 
-![setup_stable_regime](./results_v0_assets/single_setup_stable_regime_ykxpxapv.png)
+![setup_stable_regime](./archive/m0_a/single_setup_stable_regime_ykxpxapv.png)
 
 ### `setup_iter2_smoke` (89yif4ob)
 125 steps, untagged smoke of an early iter_2 prompt. In transition; reward climbing but no convergence yet.
 
-![setup_iter2_smoke](./results_v0_assets/single_setup_iter2_smoke_89yif4ob.png)
+![setup_iter2_smoke](./archive/m0_a/single_setup_iter2_smoke_89yif4ob.png)
 
 ---
 
