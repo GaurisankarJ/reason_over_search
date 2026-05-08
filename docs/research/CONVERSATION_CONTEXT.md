@@ -10,7 +10,7 @@ updated: 2026-05-07
 
 > Living snapshot of the literature + algorithm + systems strand that feeds the M2 ablation plan. Update this when a load-bearing decision changes; freeze older state below the line.
 >
-> Sibling snapshots: [`../report/CONVERSATION_CONTEXT.md`](../report/CONVERSATION_CONTEXT.md) (thesis writing + Phase-1 results), [`../training/CONVERSATION_CONTEXT.md`](../training/CONVERSATION_CONTEXT.md) (Phase-2 training pipeline), [`../internship/CONVERSATION_CONTEXT.md`](../internship/CONVERSATION_CONTEXT.md) (Alstom internship).
+> Sibling snapshots: [`../report/CONVERSATION_CONTEXT.md`](../report/CONVERSATION_CONTEXT.md) (thesis writing + Phase-1 results), [`../training/CONVERSATION_CONTEXT.md`](../training/CONVERSATION_CONTEXT.md) (Phase-2 training pipeline), [`../internship/CONVERSATION_CONTEXT.md`](../internship/CONVERSATION_CONTEXT.md) (Alstom internship — gitignored, lives on the user's own machines per `claude/CLAUDE.md`).
 
 **Last updated**: 2026-05-07 (M3 closed; Phase-2 NeMo-RL is the next chapter)
 

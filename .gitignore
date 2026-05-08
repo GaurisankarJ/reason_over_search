@@ -3,10 +3,12 @@ __pycache__/
 *.egg-info/
 **/.DS_Store
 
-# Local Retriever
-local_retriever/corpus/
-local_retriever/indexes/
-local_retriever/models/
+# Local Retriever — these are symlinks to /corpus, /indexes, /models at repo root
+# (set up in BOOTSTRAP_NEW_INSTANCE.md). No trailing slash so the rules match
+# symlinks (which git treats as files), not just real directories.
+local_retriever/corpus
+local_retriever/indexes
+local_retriever/models
 
 # M3 evaluation runtime data (corpus + 16 GB IVF index + encoder model;
 # sourced from /zfsstore/user/s4374886/omega/flash-rag/{corpus,models} via symlinks

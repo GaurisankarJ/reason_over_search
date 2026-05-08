@@ -320,9 +320,17 @@ The repo also ships a model card (`README.md` in the same directory) that docume
 
 **Variant dispatch**: `scripts/run_m3.sh` and `scripts/sbatch_m3.sh` add a `qwen3_0.6b_v0_no_ex` variant case that points at `eval/qwen_3_0.6b_v0_no_ex/` and passes `--prompt_mode qwen3_p3_decide_no_ex`. Same SGLang flags, same retriever, same datasets.
 
-**SGLang readiness budget — bumped 300 → 600 s.** The first M3.1 sbatch (`2134645`, 2026-05-08) failed at the post-launch `/health`-readiness wait: M3 reference was 260 s, this run was on the cold-cache side of the cliff and crossed the 300 s budget. The retriever + checkpoint + pipeline were all healthy at failure time; only the wait window was too tight. `scripts/sbatch_m3.sh` SGLang wait was bumped to `for i in $(seq 1 120); do sleep 5; …` (600 s, 2× the prior budget) and the doc strings updated. Re-submitted as `2134663`.
+**Readiness budgets — bumped on both `/health` waits (cold-cache cliffs).** Two consecutive M3.1 sbatches failed at the post-launch `/health`-readiness loops, both because the M3 reference timings were near the budget and a fresh node crossed the cliff:
 
-For results see [`RESULTS_v2.md`](RESULTS_v2.md) §14 (sbatch job 2134663 after the 2134645 timeout).
+| sbatch | Node | Failure | Fix in `scripts/sbatch_m3.sh` |
+|---|---|---|---|
+| 2134645 | node875 | SGLang `/health` timed out at 300 s (M3 ref 260 s) | bumped 300 → 600 s (`for i in $(seq 1 120); do sleep 5; …`) |
+| 2134663 | node873 | Retriever `/health` timed out at 600 s (M3 ref 570 s) | bumped 600 → 1200 s (`for i in $(seq 1 240); do sleep 5; …`) |
+| **2150167** | **node870** | — | **completed all 7 datasets in 1 h 32 m** |
+
+In all three cases the retriever + checkpoint + pipeline were healthy at failure time; only the wait windows were too tight for cold-cache imports. Both fixes are pure-margin (the loops break the moment `/health` returns 200, so warm-cache wall-clock is unaffected). The two budgets are now symmetric at 1200 s for retriever / 600 s for SGLang.
+
+For results see [`RESULTS_v2.md`](RESULTS_v2.md) §14 (sbatch job 2150167 after the two prior timeouts).
 
 ---
 
