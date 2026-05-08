@@ -1,9 +1,9 @@
 ---
-title: RESULTS v1
-tags: []
+title: Results v1 (Phase-1 verl training, 15 ALICE Qwen3-0.6B `<tool_call>` runs)
+tags: [report, training, phase1, v1]
 source: internal
 created: 2026-05-04
-updated: 2026-05-04
+updated: 2026-05-06
 ---
 
 # Results v1: Second Block (W&B project `research_revamp`)

@@ -1,17 +1,17 @@
 ---
-title: CODE SETUP v0
-tags: []
+title: Code Setup v0 (verl-legacy Qwen3-0.6B port)
+tags: [report, training, phase1, v0]
 source: internal
 created: 2026-05-04
-updated: 2026-05-04
+updated: 2026-05-08
 ---
 
 # Code Setup v0 — ReSearch Port: What Changed vs the Paper
 
-**Date**: 2026-05-03  
-**Updated**: 2026-05-06 (see §12 for reward/script changes; §13 for items not previously documented at all)
+**Date**: 2026-05-03
+**Updated**: 2026-05-08 (see §12 for reward/script changes; §13 for items not previously documented at all)
 
-> **Before retiring this repo:** Rotate the WANDB_API_KEY in `/home/s4374886/omega/re-search/.env` and `/home/s4374886/omega/re-search/verl_latest/.env`. The key `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` is live and in both files. Entity: `gaurisankarj1996-leiden-university`.
+> **Before retiring this repo:** Rotate the WANDB_API_KEY in `/home/s4374886/omega/re-search/.env` and `/home/s4374886/omega/re-search/verl_latest/.env` (the live key string was previously inlined here and has been REDACTED on 2026-05-08; if you have not already rotated it, do so now — git history retains the leaked value, so rotation is the only durable mitigation). Entity: `gaurisankarj1996-leiden-university`.
 **Scope**: Documents the experimental changes I made over the original ReSearch paper code (Agent-RL/ReSearch, alphaxiv 2503.19470) to fit a single-A100 / single-GPU regime with reward and prompt ablations.  
 **Cluster**: All experiments below were run on the **ALICE** HPC cluster (Leiden University). ALICE will not be used for further experiments.  
 **Source repo**: `/home/s4374886/omega/re-search/` (current local path; originally Mac path in this doc)

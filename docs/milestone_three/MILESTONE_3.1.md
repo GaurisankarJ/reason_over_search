@@ -27,7 +27,7 @@ If the rollout-reward gap (0.215 vs 0.190) is meaningful, el6s2d2h should beat z
 
 ## Goal
 
-Run the M3 evaluation pipeline against `eval/qwen_3_0.6b_v0_no_ex/` (HF-converted from `docs/archive/verl_runs/v0/p3_decide_no_ex_el6s2d2h/global_step_2000/actor`) on all 7 paper QA benchmarks at full Plan A; compare against the existing M3 numbers (pre-GRPO + z7kcxfof) populated in [`RESULTS_v2.md`](../report/RESULTS_v2.md).
+Run the M3 evaluation pipeline against `eval/qwen_3_0.6b_v0_no_ex/` (HF-converted from the `el6s2d2h` step-2000 verl-FSDP archive on the user's training machine; the raw archive is not retained in this repo) on all 7 paper QA benchmarks at full Plan A; compare against the existing M3 numbers (pre-GRPO + z7kcxfof) populated in [`RESULTS_v2.md`](../report/RESULTS_v2.md).
 
 ## Setup
 

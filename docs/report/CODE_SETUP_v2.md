@@ -1,9 +1,9 @@
 ---
-title: Code Setup v2 (M3 Qwen3-0.6B evaluation pipeline)
-tags: [report, eval, m3]
+title: Code Setup v2 (M3 + M3.1 Qwen3-0.6B evaluation pipeline)
+tags: [report, eval, m3, m3.1]
 source: internal
 created: 2026-05-07
-updated: 2026-05-07
+updated: 2026-05-08
 ---
 
 # Code Setup v2 — M3 Qwen3-0.6B Evaluation Pipeline: What Changed vs the Search-R1 Eval Port
@@ -296,12 +296,14 @@ After M3 closed, we evaluate `p3_decide_no_ex_el6s2d2h` — the Phase-1 v0 run w
    - **No Hamlet 2-search example** at the bottom (the headline structural difference)
 2. **`prompt_mode='qwen3_p3_decide_no_ex'`** added as a new mode. Implementation: `templates.py` exports `QWEN3_TEMPLATES = {"qwen3": ..., "qwen3_p1_basic_w_ex": ..., "qwen3_p3_decide_no_ex": ...}`. `active_pipeline.py` and `run_eval.py` switched their `prompt_mode == 'qwen3'` checks to `prompt_mode.startswith('qwen3')` so all qwen3 modes share retrieval format / budgets / `enable_thinking=True`; only the system message differs.
 
-**Checkpoint conversion**: el6s2d2h was archived in verl-FSDP format (`actor/model_world_size_1_rank_0.pt`); converted to HF safetensors via:
+**Checkpoint conversion**: el6s2d2h was archived in verl-FSDP format (`actor/model_world_size_1_rank_0.pt`) on the user's training machine — **the verl-FSDP run archives are not retained in this repo** (only the HF-converted safetensors live under `eval/`); converted to HF safetensors via:
 
 ```bash
+# <ARCHIVE_DIR> is the verl-FSDP run output, e.g.
+# /path/to/verl_runs/v0/p3_decide_no_ex_el6s2d2h/global_step_2000/actor
 /home/s4374886/.conda/envs/verl-latest/bin/python -m verl.model_merger merge \
     --backend fsdp \
-    --local_dir docs/archive/verl_runs/v0/p3_decide_no_ex_el6s2d2h/global_step_2000/actor \
+    --local_dir <ARCHIVE_DIR> \
     --target_dir eval/qwen_3_0.6b_v0_no_ex
 ```
 

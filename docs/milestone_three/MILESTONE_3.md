@@ -17,9 +17,9 @@ Two model snapshots are available for evaluation:
 | Snapshot | Location | Description |
 |---|---|---|
 | `qwen_3_0.6b` | [`eval/qwen_3_0.6b/`](../../eval/qwen_3_0.6b/) | Qwen3-0.6B hybrid (pre-GRPO; the frozen post-trained checkpoint Qwen releases) |
-| `qwen_3_0.6b_v0` | [`eval/qwen_3_0.6b_v0/`](../../eval/qwen_3_0.6b_v0/) | Qwen3-0.6B after 1046 GRPO steps with the p1_basic_w_ex prompt (HF checkpoint from `docs/archive/verl_runs/v0/p1_basic_w_ex_z7kcxfof/`) |
+| `qwen_3_0.6b_v0` | [`eval/qwen_3_0.6b_v0/`](../../eval/qwen_3_0.6b_v0/) | Qwen3-0.6B after 1046 GRPO steps with the p1_basic_w_ex prompt (HF safetensors converted from the `z7kcxfof` verl-FSDP archive on the user's training machine; the raw archive is not retained in this repo). Also published as [`pantomiman/Qwen3-0.6B-v0`](https://huggingface.co/pantomiman/Qwen3-0.6B-v0). |
 
-The archive run directory is preserved unchanged at `docs/archive/verl_runs/v0/p1_basic_w_ex_z7kcxfof/`.
+The verl-FSDP run archive lives externally on the training machine, not in this repo; only the HF-converted safetensors at `eval/qwen_3_0.6b_v0/` are retained.
 
 ## Goal
 

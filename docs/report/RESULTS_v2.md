@@ -1,9 +1,9 @@
 ---
-title: RESULTS v2
-tags: [report, eval, m3]
+title: Results v2 (M3 + M3.1 evaluation)
+tags: [report, eval, m3, m3.1]
 source: internal
 created: 2026-05-07
-updated: 2026-05-07
+updated: 2026-05-08
 ---
 
 # Results v2: M3 — First evaluation of the Phase-1 v0 GRPO checkpoint vs the untrained Qwen3-0.6B hybrid
@@ -11,7 +11,7 @@ updated: 2026-05-07
 **Date compiled**: 2026-05-07
 **Source**:
 
-- Training run: W&B project `[gaurisankarj1996-leiden-university/research](https://wandb.ai/gaurisankarj1996-leiden-university/research)`, run id `**z7kcxfof`** (compact name `p1_basic_w_ex`, archived at `docs/archive/verl_runs/v0/p1_basic_w_ex_z7kcxfof/`).
+- Training run: W&B project `[gaurisankarj1996-leiden-university/research](https://wandb.ai/gaurisankarj1996-leiden-university/research)`, run id `**z7kcxfof`** (compact name `p1_basic_w_ex`; verl-FSDP archive lives externally, not retained in this repo; HF mirror at [`pantomiman/Qwen3-0.6B-v0`](https://huggingface.co/pantomiman/Qwen3-0.6B-v0)).
 - Evaluation: ALICE SLURM jobs `2120423` (interactive `srun`, pre-GRPO) + `2125009` (`sbatch`, post-GRPO). Per-dataset result JSONs in `evaluation_research/results/<dataset>/<dataset>_<timestamp>_m3_<variant>_seed1/`.
 
 **Hardware**:
@@ -25,12 +25,12 @@ updated: 2026-05-07
 | Snapshot         | Source                                                                                                                     | Description                                                                 |
 | ---------------- | -------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
 | `qwen_3_0.6b`    | HF `Qwen/Qwen3-0.6B` (cached at `eval/qwen_3_0.6b/`)                                                                       | Pre-GRPO frozen hybrid checkpoint (untrained)                               |
-| `qwen_3_0.6b_v0` | HF checkpoint exported from `docs/archive/verl_runs/v0/p1_basic_w_ex_z7kcxfof/global_step_1000_rollout_20260407_002729_hf` | Post-GRPO: 1046 steps with the `p1_basic_w_ex` prompt + Search-R1 EM reward |
+| `qwen_3_0.6b_v0` | HF checkpoint exported from the verl-FSDP run archive (`global_step_1000_rollout_20260407_002729_hf`; archive external to this repo); also published as [`pantomiman/Qwen3-0.6B-v0`](https://huggingface.co/pantomiman/Qwen3-0.6B-v0) | Post-GRPO: 1046 steps with the `p1_basic_w_ex` prompt + Search-R1 EM reward |
 
 
 > **Bottom line up front**:
 >
-> 1. **Across all 7 paper benchmarks (51,713 items per variant, full Plan A test/dev sets), 1046 GRPO steps with the `p1_basic_w_ex` prompt lifted average EM from 0.102 to 0.155 (+5.3 pp absolute, +52% relative).** Six of seven datasets improved; one (2WikiMultiHopQA) was statistically tied.
+> 1. **Across all 7 paper benchmarks (51,713 items per variant, full Plan A test/dev sets), 1046 GRPO steps with the `p1_basic_w_ex` prompt lifted average EM from 0.102 to 0.155 (+0.053 absolute, +52 % relative).** Six of seven datasets improved; one (2WikiMultiHopQA) was statistically tied.
 > 2. **The largest lifts are on single-hop QA**: NQ +0.078 EM (+69%), TriviaQA +0.124 EM (+70%), PopQA +0.094 EM (+71%). MuSiQue (3-hop) doubled from 0.010 to 0.023, but at small absolute numbers.
 > 3. **Multi-hop saturates at 0.6B**: HotpotQA +0.033 EM (+40%) lifts modestly; 2WikiMultiHopQA −0.003 EM (essentially tied). Multi-hop reasoning at 600 M parameters appears to be capacity-bound, not training-bound.
 > 4. **The eval was Plan A (full test/dev sets), not Plan B (1k subsamples)** as MILESTONE_3.md originally planned — `sample_num` is not respected by the `search_r1` pipeline path. This makes the comparison statistically more rigorous than planned, with no subsampling noise.
@@ -326,7 +326,7 @@ To swap to a different checkpoint, drop it under `eval/<name>/` and add the case
 - v0 (post-GRPO) results: `evaluation_research/results/<dataset>/<dataset>_<timestamp>_m3_qwen3_0.6b_v0_seed1/`
 - v0 sbatch logs: `logs/m3_2125009_m3_eval.out`, `logs/m3_2125009_m3_eval.err`, `logs/m3_2125009_retriever.log`, `logs/m3_2125009_sglang.log`
 - Pre-GRPO interactive transcript: ssh-driven on node870 within job 2120423; foreground bash output preserved in the conversation log.
-- Training run archive: `docs/archive/verl_runs/v0/p1_basic_w_ex_z7kcxfof/` (training.log, W&B export, HF checkpoint at `global_step_1000_rollout_20260407_002729_hf/`)
+- Training run archive: external (verl-FSDP `actor/model_world_size_1_rank_0.pt` + training.log + W&B export; not retained in this repo). HF safetensors mirror: [`pantomiman/Qwen3-0.6B-v0`](https://huggingface.co/pantomiman/Qwen3-0.6B-v0)
 - M3 milestone: `docs/milestone_three/MILESTONE_3.md`
 - M3 code-setup diff: `docs/report/CODE_SETUP_v2.md`
 - Training-time per-run synthesis (29 ALICE runs): `docs/report/RESULTS_v0.md` (14 v0) + `docs/report/RESULTS_v1.md` (15 v1)

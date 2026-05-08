@@ -1,9 +1,9 @@
 ---
-title: PROGRESS REPORT 01
-tags: []
+title: Progress Report 01
+tags: [report, supervisor, m3, m3.1]
 source: internal
 created: 2026-05-05
-updated: 2026-05-07
+updated: 2026-05-08
 ---
 
 Leiden University
@@ -21,12 +21,13 @@ Gaurisankar Jayadas
 | **Co-supervisor:** | Dr. Álvaro Serra Gomez |
 | **Project term:** | February 2026 – July 2026 |
 | **E-mail:** | gaurisankarj1996@gmail.com |
-| **Window covered:** | 2026-04-23 – 2026-05-07 |
+| **Window covered:** | 2026-04-23 – 2026-05-08 |
 
 ## TL;DR
 
 - **Phase-1 (29 ALICE Qwen3-0.6B runs, Apr 3 – Apr 19)**: GRPO + paper Search-R1 EM reward is stable on the hybrid checkpoint, but the 0.6B base cannot bootstrap tool-use cold, the partial-credit reward floor at 0.1 masks the tool-use signal, and prompt phrasing dominates behaviour more than the reward.
-- **M3 (2026-05-07)**: 1046 GRPO steps lifted average EM **0.102 → 0.155 (+52 % relative, +0.053 absolute)** across all 7 paper benchmarks at full Plan A (51,713 items / variant). Held-out 6 / 7 datasets confirms a learned tool-use skill, not memorised answers. Eval pipeline is now pinned and reusable for Phase-2.
+- **M3 (2026-05-07)**: 1046 GRPO steps lifted average EM **0.102 → 0.155 (+52 % relative, +0.053 absolute)** across all 7 paper benchmarks at full Plan A (51,713 items / variant). Held-out 6 / 7 datasets confirms a learned tool-use skill, not memorised answers. Eval pipeline is now pinned and reusable for Phase-2. Checkpoint published: [`pantomiman/Qwen3-0.6B-v0`](https://huggingface.co/pantomiman/Qwen3-0.6B-v0).
+- **M3.1 (2026-05-08)**: second checkpoint `el6s2d2h` (no-example + decision-rules prompt, the **highest-reward Phase-1 run** at end-reward 0.215 / +43 % rel over 2280 steps) lifted simple-mean EM further to **0.169** (+9 % rel over M3, +66 % over pre-GRPO); ACC / F1 widen the M3.1-vs-M3 gap to +12 % / +14 %. The no-example variant is a **pareto improvement** (~½ the response budget per episode at higher EM, 40 %-faster eval wall-clock). Confirms that the Phase-1 structural finding (decision-rule scaffolding can substitute for the few-shot example) survives held-out evaluation; recipe transfer to Qwen3.5 is lower-risk. Checkpoint published: [`pantomiman/Qwen3-0.6B-v0.1`](https://huggingface.co/pantomiman/Qwen3-0.6B-v0.1).
 - **Pivot**: Phase-1 z7kcxfof stopped at 1046 / 9968 steps after **23 h 47 m 30 s** on 1× A100-40GB (W&B); full horizon ≈ **~9.5 d / run** at the observed pace, and none of the 29 Phase-1 runs reached the full horizon (across the 9 hybrid prompt-ablation runs the projected range is ~5–10 d). Phase-2 Qwen3.5-2B Vast-smoke 57 s/step → **~11–17 d / run on A100-80GB at our affordable 0.6-epoch budget** (1005 steps × 102 prompts/step ≈ 0.604 epochs; the paper's 3-epoch schedule at our batch shape would be ~5× → ~55–85 d / run). Reframed the RQ to *"is the recipe feasible under realistic constraints?"*, targeting the **Qwen3.5 small-model family released 2026-03-02** (0.8B, 2B, 4B, 9B; budget fits 0.8B + 2B); Phase-2 will **start with Qwen3.5-0.8B**. Proposed recipe: E2H + S-GRPO + MC-GRPO with a JustRL plain-GRPO control.
 
 ## Outcome of previous meeting

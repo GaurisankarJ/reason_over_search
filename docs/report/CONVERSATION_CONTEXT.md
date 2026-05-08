@@ -1,16 +1,16 @@
 ---
-title: CONVERSATION CONTEXT
-tags: []
+title: Conversation Context (thesis-writing snapshot)
+tags: [report, snapshot]
 source: internal
 created: 2026-05-04
-updated: 2026-05-07
+updated: 2026-05-08
 ---
 
 # Conversation Context
 
 > Living snapshot of project status, decisions, and pointers to the canonical docs. Update this when something material changes; keep historical sections frozen below.
 
-**Last updated**: 2026-05-07 (M3 closed; chapter wrap-up)
+**Last updated**: 2026-05-08 (M3 + M3.1 closed; chapter wrap-up)
 
 > **Doc reorganisation 2026-05-06**: The literature-review strand (`LITERATURE_REVIEW.md`, `SURVEY.md`, `SURVEY_FOCUSED.md`, `SURVEY_OVERFLOW.md`) moved to [`docs/research/`](../research/) so this folder is purely thesis-writing. See [`docs/research/CONVERSATION_CONTEXT.md`](../research/CONVERSATION_CONTEXT.md) for the research-strand snapshot. The supervisor-meeting brief is now date-suffixed: `SUPERVISOR_MEETING_2026-05-07.md`.
 
@@ -18,7 +18,7 @@ updated: 2026-05-07
 
 ## 1. Status (one paragraph)
 
-Phase-1 of the thesis (Qwen3-0.6B prompt + base-model ablations on 1× A100-40GB, ALICE; 29 runs across v0 + v1 blocks) is closed and documented in `RESULTS_v0.md` and `RESULTS_v1.md`. The Search-R1 evaluation baseline (M1, Qwen2.5-3B) is reproduced (`milestone_one/COMPARISON_PLAN_B_v1.md`, ±2.5 pp of paper). The Phase-2 (M2) NeMo-RL training pipeline was built around Qwen3.5-2B and is launch-ready (15 parity tests pass; smoke-tested on Vast.ai 1× A100-80GB at ~57 s/step); the Qwen3.5 small-model family (released 2026-03-02) is **0.8B / 2B / 4B / 9B**, and **Phase-2 will start with Qwen3.5-0.8B** for cheap iteration before extending to 2B if the recipe holds. **M3 (first eval of the v0 GRPO checkpoint, closed 2026-05-07)**: 1046-step `p1_basic_w_ex_z7kcxfof` (the only Phase-1 run that converged on heavy-tool 2-call/4-turn behaviour; 23h 47m 30s wall on A100-40GB) lifted average EM 0.102 → 0.155 (+52 % relative, +0.053 absolute) over the untrained Qwen3-0.6B hybrid across all 7 paper benchmarks at full Plan A (51,713 items / variant on ALICE A100-80GB); 6 / 7 datasets improved; held-out generalisation rules out memorisation. The eval pipeline is now pinned and reusable for Phase-2 NeMo-RL evaluation. Phase-2 wall-clock at our affordable 0.6-epoch budget (1005 steps × 102 prompts/step ≈ 0.604 epochs of the 169,615-row train corpus) is **11–17 days per run on 1× A100-80GB**; matching the paper's 3-epoch schedule at our batch shape would be ~5× → ~55–85 d / run, which kills both the original reward-function-ablation plan and any paper-faithful sweep. The thesis question is being reframed from "extending RLVR via tool-use" to "what is the optimised training recipe for a small LM under a single-A100 budget"; proposed recipe stacks E2H curriculum + S-GRPO + MC-GRPO on a Search-R1 GRPO baseline with a JustRL plain-GRPO control alongside. Net captured in `SUPERVISOR_MEETING_2026-05-07.md` (chapter-closing summary); detailed M3 numerical record in `RESULTS_v2.md`.
+Phase-1 of the thesis (Qwen3-0.6B prompt + base-model ablations on 1× A100-40GB, ALICE; 29 runs across v0 + v1 blocks) is closed and documented in `RESULTS_v0.md` and `RESULTS_v1.md`. The Search-R1 evaluation baseline (M1, Qwen2.5-3B) is reproduced (`milestone_one/COMPARISON_PLAN_B_v1.md`, ±2.5 pp of paper). The Phase-2 (M2) NeMo-RL training pipeline was built around Qwen3.5-2B and is launch-ready (15 parity tests pass; smoke-tested on Vast.ai 1× A100-80GB at ~57 s/step); the Qwen3.5 small-model family (released 2026-03-02) is **0.8B / 2B / 4B / 9B**, and **Phase-2 will start with Qwen3.5-0.8B** for cheap iteration before extending to 2B if the recipe holds. **M3 (first eval of the v0 GRPO checkpoint, closed 2026-05-07)**: 1046-step `p1_basic_w_ex_z7kcxfof` (the only Phase-1 run that converged on heavy-tool 2-call/4-turn behaviour; 23h 47m 30s wall on A100-40GB) lifted average EM 0.102 → 0.155 (+52 % relative, +0.053 absolute) over the untrained Qwen3-0.6B hybrid across all 7 paper benchmarks at full Plan A (51,713 items / variant on ALICE A100-80GB); 6 / 7 datasets improved; held-out generalisation rules out memorisation. **M3.1 (second eval, closed 2026-05-08)** evaluated the **highest-reward Phase-1 run** `p3_decide_no_ex_el6s2d2h` (no-example + decision-rules prompt; end reward 0.215, 2280 steps) on the same 7 benchmarks at full Plan A; simple-mean EM lifted further to **0.169** (+9 % rel over M3, +66 % over pre-GRPO); ACC/F1 widen the M3.1-vs-M3 gap to +12 %/+14 %, indicating the no-example variant produces higher-quality answers. **Conclusion**: the Phase-1 structural finding that decision-rule scaffolding can substitute for the few-shot example survives held-out evaluation — the no-example variant is a *pareto improvement* (lower compute + higher quality) and recipe transfer to Qwen3.5 is lower-risk. HF checkpoints: [`pantomiman/Qwen3-0.6B-v0`](https://huggingface.co/pantomiman/Qwen3-0.6B-v0) (M3) and [`pantomiman/Qwen3-0.6B-v0.1`](https://huggingface.co/pantomiman/Qwen3-0.6B-v0.1) (M3.1). The eval pipeline is now pinned and reusable for Phase-2 NeMo-RL evaluation. Phase-2 wall-clock at our affordable 0.6-epoch budget (1005 steps × 102 prompts/step ≈ 0.604 epochs of the 169,615-row train corpus) is **11–17 days per run on 1× A100-80GB**; matching the paper's 3-epoch schedule at our batch shape would be ~5× → ~55–85 d / run, which kills both the original reward-function-ablation plan and any paper-faithful sweep. The thesis question is being reframed from "extending RLVR via tool-use" to "what is the optimised training recipe for a small LM under a single-A100 budget"; proposed recipe stacks E2H curriculum + S-GRPO + MC-GRPO on a Search-R1 GRPO baseline with a JustRL plain-GRPO control alongside. Net captured in `SUPERVISOR_MEETING_2026-05-07.md` (chapter-closing summary); detailed M3 numerical record in `RESULTS_v2.md`.
 
 ## 2. Hard timeline
 
@@ -52,8 +52,8 @@ Phase-1 of the thesis (Qwen3-0.6B prompt + base-model ablations on 1× A100-40GB
 Things that are easy to lose track of:
 
 - **Two repos**: `reason_over_search` (thesis) and `research` (training infrastructure, Qwen3-0.6B port). Both reference each other.
-- **Two W&B projects**: `research` (v0, 26 runs) and `research_revamp` (v1, 15 runs). All Qwen3-0.6B; analysis frozen.
-- **CSVs of all 29 v0/v1 runs** are saved at `results_v0_assets/csv/` and `results_v1_assets/csv/` so the analysis can be regenerated without W&B access.
+- **Two W&B projects**: `research` (v0, 14 focus runs / 26 in W&B project; 12 noise/aborted excluded — see `RESULTS_v0.md` §1) and `research_revamp` (v1, 15 runs). All Qwen3-0.6B; analysis frozen.
+- **CSVs of the 29 focus runs (14 v0 + 15 v1)** are saved at `results_v0_assets/csv/` and `results_v1_assets/csv/` so the analysis can be regenerated without W&B access.
 - **Reward function gotcha**: Search-R1's GitHub ships `qa_em.py` (paper-faithful EM-only) and `qa_em_format.py` (shaped 6-tier with non-zero defaults). Earlier project docs conflated them; caught in `training/SMOKE_RESULTS_2026-05-06.md` (renamed from _V4). Phase-2 NeMo-RL port uses EM-only.
 - **`base_breakthrough` (v1, b8vv0qe2)** showing reward 0.7 is a reward-function-code change artifact, not learning. Configs are identical to `base_state_machine_a` which scored 0.0. Treat as instrumented, not earned.
 

@@ -1,9 +1,9 @@
 ---
-title: RESULTS v0
-tags: []
+title: Results v0 (Phase-1 verl training, 14 ALICE Qwen3-0.6B runs)
+tags: [report, training, phase1, v0]
 source: internal
 created: 2026-05-04
-updated: 2026-05-04
+updated: 2026-05-06
 ---
 
 # Results v0: First Ablation Block (W&B project `research`)
