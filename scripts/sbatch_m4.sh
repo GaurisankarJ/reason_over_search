@@ -30,10 +30,20 @@ REPO_ROOT="${SLURM_SUBMIT_DIR:-/zfsstore/user/s4374886/omega/reason_over_search}
 IVF_INDEX="$REPO_ROOT/indexes/wiki18_100w_e5_ivf4096_sq8.index"
 FLAT_INDEX="/zfsstore/user/s4374886/omega/re-search/assets/indexes/wiki18_100w_e5_flat_inner.index"
 
-# lmod isn't always auto-init'd inside SLURM batch shells (CODE_SETUP_v2 #3
-# flagged this for ssh sessions; observed under sbatch on `node870` 2026-05-08
-# job 2150669, exit 127). Source explicitly so `module` resolves.
-source /etc/profile.d/lmod.sh 2>/dev/null || true
+# Initialise lmod explicitly. Two reasons this matters under sbatch:
+#   1. /etc/profile.d/lmod.sh has an early `return` if $SLURM_NODELIST is set
+#      (it's "noop under known resource manager"), so it WON'T define `module`
+#      inside an sbatch shell.
+#   2. When sbatch is submitted from a non-interactive ssh ("ssh alice 'sbatch …'"),
+#      the submitter's environment doesn't have `module` defined either, so
+#      --export=ALL doesn't help. Submitting from an interactive ssh login
+#      session does work (lmod is initialised by the user's login shell), which
+#      is why scripts/sbatch_m3.sh works without this line — submission path
+#      matters.
+# Init the lmod runtime directly. Path is the standard OpenHPC location.
+if ! command -v module >/dev/null 2>&1; then
+  . /opt/ohpc/admin/lmod/lmod/init/bash >/dev/null 2>&1 || true
+fi
 module purge
 module load ALICE/default
 module load Miniconda3/24.7.1-0
