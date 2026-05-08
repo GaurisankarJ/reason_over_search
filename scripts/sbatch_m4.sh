@@ -119,6 +119,12 @@ if [[ ! -d "$MODEL_PATH" ]]; then
 fi
 
 SGLANG_LOG="logs/m4_${SLURM_JOB_ID:-local}_sglang.log"
+# Bypass SGLang's PyTorch 2.9.1 + CuDNN<9.15 nn.Conv3d bug check — we serve a
+# text LLM with no Conv3d ops, so the warned-against perf/memory regression
+# (https://github.com/pytorch/pytorch/issues/168167) doesn't apply. Without
+# this, SGLang refuses to launch on the conda env's CuDNN 9.10. Observed on
+# sbatch 2150757 (node870, 2026-05-08).
+export SGLANG_DISABLE_CUDNN_CHECK=1
 /home/s4374886/.conda/envs/evaluation_search_r1/bin/python -m sglang.launch_server \
   --model-path "$MODEL_PATH" \
   --host 127.0.0.1 --port 3000 \
