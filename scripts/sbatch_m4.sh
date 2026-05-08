@@ -41,7 +41,12 @@ FLAT_INDEX="/zfsstore/user/s4374886/omega/re-search/assets/indexes/wiki18_100w_e
 #      is why scripts/sbatch_m3.sh works without this line — submission path
 #      matters.
 # Init the lmod runtime directly. Path is the standard OpenHPC location.
+# /etc/profile.d/lmod.sh exports MODULEPATH=/trinity/shared/modulefiles AND
+# sources init/bash, but it early-returns under SLURM, so we replicate both
+# steps explicitly. Without MODULEPATH set, `module load ALICE/default` fails
+# with "MODULEPATH is undefined" / "unknown module" (observed on srun 2150751).
 if ! command -v module >/dev/null 2>&1; then
+  export MODULEPATH="${MODULEPATH:-/trinity/shared/modulefiles}"
   . /opt/ohpc/admin/lmod/lmod/init/bash >/dev/null 2>&1 || true
 fi
 module purge
