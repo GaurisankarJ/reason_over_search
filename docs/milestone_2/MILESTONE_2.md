@@ -9,7 +9,7 @@ updated: 2026-05-07
 # Milestone 2: Training [Search-R1](https://www.alphaxiv.org/abs/2503.09516)
 
 > **Phase 1 status (2026-05-01):** Steps 1–8 complete. Pipeline built end-to-end, smoke-tested on Vast.ai 1× A100-80GB (~57 s/step at smoke shape; full Search-R1 schedule extrapolates to 11–17 days/run, ~$300–490/run); 15 reward-parity tests pass.
-> **Phase 2 status (2026-05-07): plan pivoted.** The originally planned 6-run sweep (3 seeds × 2 variants) was superseded on 2026-05-04 by a recipe-focused ablation plan (E2H curriculum + S-GRPO + MC-GRPO + JustRL plain-GRPO control; 2–3 runs total) once Phase-2 wall-clock made paired sweeps unaffordable. See [`../report/SUPERVISOR_MEETING_2026-05-07.md`](../report/SUPERVISOR_MEETING_2026-05-07.md) § 5–6 and [`../TODO_2026-05-04.md`](../TODO_2026-05-04.md).
+> **Phase 2 status (2026-05-07): plan pivoted.** The originally planned 6-run sweep (3 seeds × 2 variants) was superseded on 2026-05-04 by a recipe-focused ablation plan (E2H curriculum + S-GRPO + MC-GRPO + JustRL plain-GRPO control; 2–3 runs total) once Phase-2 wall-clock made paired sweeps unaffordable. See [`../report/SUPERVISOR_MEETING_2026-05-07_m0_to_3.md`](../report/SUPERVISOR_MEETING_2026-05-07_m0_to_3.md) § 5–6 and [`../TODO_2026-05-04.md`](../TODO_2026-05-04.md).
 > **Phase 2 runbook:** [PHASE_2_RUNBOOK.md](PHASE_2_RUNBOOK.md) — concrete sequence to run training on Vast.ai.
 > **Audit landing page:** [docs/training/README.md](../training/README.md).
 

@@ -10,7 +10,7 @@ updated: 2026-05-02
 
 > **Owner:** Jose
 > **Why now:** Milestone 2 trains Qwen3.5-2B (both base and hybrid variants) with GRPO. To call training a "success" we need a baseline number for the *untrained* model on the same benchmarks — otherwise "improvement from training" is undefined. This sub-milestone fills that gap by running the M1 eval pipeline against the untrained Qwen3.5-2B checkpoints. Slots between M1 (eval-side reproduction of Search-R1's published Qwen2.5-3B checkpoints) and M2 Phase 2 (running our own training).
-> **Prereq for:** Milestone 2 Phase 2 first-run gate (see [`PHASE_2_RUNBOOK.md`](../milestone_two/PHASE_2_RUNBOOK.md)).
+> **Prereq for:** Milestone 2 Phase 2 first-run gate (see [`PHASE_2_RUNBOOK.md`](../milestone_2/PHASE_2_RUNBOOK.md)).
 
 ## Goal
 
@@ -153,10 +153,10 @@ Repeat for `qwen3.5-2b-hybrid` after `manage_sglang.sh switch qwen3.5-2b-hybrid 
 
 ```bash
 python scripts/aggregate.py --pattern 'evaluation_search_r1/results/*/qwen3.5-2b-*-seed*' \
-    > docs/milestone_one/RESULTS_QWEN3_BASELINE.md
+    > docs/milestone_1/RESULTS_QWEN3_BASELINE.md
 ```
 
-(Mirror the format of [`docs/milestone_one/RESULTS_PLAN_B.md`](RESULTS_PLAN_B.md) — per-benchmark mean ± std across seeds, side-by-side base vs hybrid.)
+(Mirror the format of [`docs/report/RESULTS_m1.md`](RESULTS_m1.md) — per-benchmark mean ± std across seeds, side-by-side base vs hybrid.)
 
 ## Compute estimate
 
@@ -172,7 +172,7 @@ Same fleet pattern Jose used for M1 Plan A. Recycle.
 ## Where to put the results
 
 1. **Raw run outputs**: `evaluation_search_r1/results/<benchmark>/<benchmark>_..._qwen3.5-2b-{base,hybrid}_seed{1..5}/metric_score.txt` (the existing path convention).
-2. **Aggregated table**: new file `docs/milestone_one/RESULTS_QWEN3_BASELINE.md` — same columns as `RESULTS_PLAN_B.md` (NQ / TriviaQA / PopQA / HotpotQA / 2Wiki / MuSiQue / Bamboogle / Avg), one row per variant × arm.
+2. **Aggregated table**: new file `docs/milestone_1/RESULTS_QWEN3_BASELINE.md` — same columns as `RESULTS_m1.md` (NQ / TriviaQA / PopQA / HotpotQA / 2Wiki / MuSiQue / Bamboogle / Avg), one row per variant × arm.
 3. **Cost summary**: append actual wall-clock + $ to the bottom of this doc once the sweep completes.
 
 ## Decision criteria
@@ -181,12 +181,12 @@ This sub-milestone is **done** when:
 
 - [ ] Eval pipeline gains a `qwen_native` arm (both base flat-text and hybrid chat-template paths) — code merged.
 - [ ] All 70 runs (2 variants × 7 benchmarks × 5 seeds) complete with EM > 0 (sanity — non-zero output reaches the scorer).
-- [ ] [`docs/milestone_one/RESULTS_QWEN3_BASELINE.md`](RESULTS_QWEN3_BASELINE.md) committed with per-benchmark mean ± std and an averages row.
+- [ ] [`docs/milestone_1/RESULTS_QWEN3_BASELINE.md`](RESULTS_QWEN3_BASELINE.md) committed with per-benchmark mean ± std and an averages row.
 - [ ] Format-validity (`</answer>` close-rate) and length-truncation surfaced per (variant, benchmark) in the same table — same metrics M1 reports.
 
 ## Why these numbers matter for M2
 
-The Phase 2 first-run gate ([`PHASE_2_RUNBOOK.md`](../milestone_two/PHASE_2_RUNBOOK.md#smoke-eval-on-bamboogle)) compares the trained checkpoint's Bamboogle EM against the **untrained** Qwen3.5-2B-Base. If our 1.1 baseline shows base at, say, 4% Bamboogle EM, then the trained model needs to land north of ~10% for us to call training "working". Without 1.1, that gate has no threshold.
+The Phase 2 first-run gate ([`PHASE_2_RUNBOOK.md`](../milestone_2/PHASE_2_RUNBOOK.md#smoke-eval-on-bamboogle)) compares the trained checkpoint's Bamboogle EM against the **untrained** Qwen3.5-2B-Base. If our 1.1 baseline shows base at, say, 4% Bamboogle EM, then the trained model needs to land north of ~10% for us to call training "working". Without 1.1, that gate has no threshold.
 
 These same numbers also feed [`docs/training/PAPER_VS_OURS_TRAINING.md §7`](../training/PAPER_VS_OURS_TRAINING.md) as the "untrained ours" comparison row.
 
@@ -199,7 +199,7 @@ These same numbers also feed [`docs/training/PAPER_VS_OURS_TRAINING.md §7`](../
 ## See also
 
 - [`MILESTONE_1.md`](MILESTONE_1.md) — original M1 (Search-R1 published checkpoints, Qwen2.5-3B)
-- [`FROZEN_CONFIG_v1.md`](FROZEN_CONFIG_v1.md) — single source of truth for the eval pipeline knobs (sampling, retrieval_topk, max_search_turns, etc.) — re-use for 1.1
+- [`CODE_SETUP_m1.md`](CODE_SETUP_m1.md) — single source of truth for the eval pipeline knobs (sampling, retrieval_topk, max_search_turns, etc.) — re-use for 1.1
 - [`docs/eval/REPRODUCIBILITY.md`](../eval/REPRODUCIBILITY.md) — the 10 paper-vs-ours divergences that were fixed in M1; same fixes apply here
 - [`docs/training/CHAT_TEMPLATE.md §7`](../training/CHAT_TEMPLATE.md#7-rendered-examples--what-the-model-actually-sees) — exact rendered prompts for both arms (copy-pasteable)
 - [`docs/setup/VAST_AI_PLAN_A.md`](../setup/VAST_AI_PLAN_A.md) — fleet config that Jose used for M1 Plan A; recycle

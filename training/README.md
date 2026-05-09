@@ -167,7 +167,7 @@ done
 **Under the hood:** the bash wrapper sources `training/.env`, picks the config at [`training/configs/grpo_qwen3.5_2b_{1,2}xa100.yaml`](configs/), assembles Hydra overrides (model name, seed, arm, W&B run name, checkpoint dir, plus hybrid `enable_thinking` and paper `prompt_file` when relevant), and execs [`training/scripts/run_grpo.py`](scripts/run_grpo.py) — a thin overlay launcher that imports [`training.src.registry`](src/registry.py) (populates DATASET / PROCESSOR / ENV registries) before calling NeMo-RL's `examples.run_grpo.main()`.
 
 **Hyperparameter rationale + verified mapping vs upstream verl:** [docs/training/README.md](../docs/training/README.md).
-**Vast.ai end-to-end sequence:** [docs/milestone_two/PHASE_2_RUNBOOK.md](../docs/milestone_two/PHASE_2_RUNBOOK.md).
+**Vast.ai end-to-end sequence:** [docs/milestone_2/PHASE_2_RUNBOOK.md](../docs/milestone_2/PHASE_2_RUNBOOK.md).
 
 ## Folder layout
 
@@ -204,4 +204,4 @@ Operational guide is here. The **why** lives in [docs/training/](../docs/trainin
 
 - [docs/training/README.md](../docs/training/README.md) — landing page, end-to-end view, step-5 audit summary, overlay architecture
 - Per-topic deep dives: [TRAINING_DATA.md](../docs/training/TRAINING_DATA.md), [CHAT_TEMPLATE.md](../docs/training/CHAT_TEMPLATE.md), [PAPER_VS_OURS_TRAINING.md](../docs/training/PAPER_VS_OURS_TRAINING.md), [VERL_REFERENCE.md](../docs/training/VERL_REFERENCE.md), [VALIDATION.md](../docs/training/VALIDATION.md), [NEMO_RL_KNOBS.md](../docs/training/NEMO_RL_KNOBS.md)
-- [docs/milestone_two/MILESTONE_2.md](../docs/milestone_two/MILESTONE_2.md) — overall milestone scope
+- [docs/milestone_2/MILESTONE_2.md](../docs/milestone_2/MILESTONE_2.md) — overall milestone scope

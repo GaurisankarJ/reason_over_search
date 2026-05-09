@@ -1,11 +1,11 @@
 """Side-by-side training-curve comparison: with-example (z7kcxfof) vs no-example (el6s2d2h).
 
 Inputs (already exported):
-  docs/report/results_v0_assets/csv/p1_basic_w_ex_z7kcxfof.csv  (M3   — heavy-tool 2/4)
-  docs/report/results_v0_assets/csv/p3_decide_no_ex_el6s2d2h.csv  (M3.1 — standard 1/3)
+  docs/report/archive/m0_a/csv/p1_basic_w_ex_z7kcxfof.csv  (M3   — heavy-tool 2/4)
+  docs/report/archive/m0_a/csv/p3_decide_no_ex_el6s2d2h.csv  (M3.1 — standard 1/3)
 
 Output:
-  docs/report/results_v0_assets/comparison_z7kcxfof_vs_el6s2d2h.png
+  docs/report/archive/m0_a/comparison_z7kcxfof_vs_el6s2d2h.png
 
 Four panels overlaid:
   reward (critic/rewards/mean)
@@ -23,8 +23,8 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
-CSV_DIR = REPO / "docs/report/results_v0_assets/csv"
-OUT = REPO / "docs/report/results_v0_assets/comparison_z7kcxfof_vs_el6s2d2h.png"
+CSV_DIR = REPO / "docs/report/archive/m0_a/csv"
+OUT = REPO / "docs/report/archive/m0_a/comparison_z7kcxfof_vs_el6s2d2h.png"
 
 RUNS = {
     "z7kcxfof (M3, with example) — heavy-tool 2/4, end reward 0.190 (+28 %), 1046 steps": {

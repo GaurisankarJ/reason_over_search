@@ -26,4 +26,4 @@ These are not load-bearing for running the pipeline. The runbook + configs are t
 
 - [`docs/training/README.md`](../training/README.md) — overlay architecture + step-5 audit summary
 - [`docs/training/PAPER_VS_OURS_TRAINING.md`](../training/PAPER_VS_OURS_TRAINING.md) — every paper hyperparameter cross-checked
-- [`docs/milestone_two/PHASE_2_RUNBOOK.md`](../milestone_two/PHASE_2_RUNBOOK.md) — concrete run sequence
+- [`docs/milestone_2/PHASE_2_RUNBOOK.md`](../milestone_2/PHASE_2_RUNBOOK.md) — concrete run sequence

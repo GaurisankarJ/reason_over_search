@@ -5,7 +5,7 @@
 #
 # Variants (each must use the prompt the model was trained with, byte-for-byte):
 #   qwen3_0.6b              untrained Qwen3-0.6B hybrid; baseline reference. prompt_mode=qwen3 (p1_basic_w_ex).
-#   qwen3_0.6b_v0           p1_basic_w_ex_z7kcxfof (M3, RESULTS_v2 §4-9): heavy-tool 2-call/4-turn, 1046 steps.
+#   qwen3_0.6b_v0           p1_basic_w_ex_z7kcxfof (M3, RESULTS_m3 §4-9): heavy-tool 2-call/4-turn, 1046 steps.
 #                           prompt_mode=qwen3.
 #   qwen3_0.6b_v0_no_ex     p3_decide_no_ex_el6s2d2h (M3.1): decision rules, no example, step 2000 (peak
 #                           reward 0.215). prompt_mode=qwen3_p3_decide_no_ex.

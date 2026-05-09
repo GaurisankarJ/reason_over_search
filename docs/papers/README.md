@@ -83,4 +83,4 @@ Arxiv papers are mutable. v1 and v3 of the same paper can have different numbers
 
 - [Search-R1](2503.09516_search-r1.md) - PPO/GRPO with outcome-only EM reward and retrieved-token loss masking on Qwen2.5-3B/7B/14B; the M1 reproduction target.
 - [R1-Searcher](2503.05592_r1-searcher.md) - 2-stage Reinforce++ with RAG-rollout and retrieve-mask loss; current focus reference.
-- [ReSearch](2503.19470_research.md) - GRPO with F1 + format-bonus reward on Qwen2.5; the recipe behind our [v0](../report/RESULTS_v0.md) and [v1](../report/RESULTS_v1.md) Phase-1 results.
+- [ReSearch](2503.19470_research.md) - GRPO with F1 + format-bonus reward on Qwen2.5; the recipe behind our [v0](../report/RESULTS_m0_a.md) and [v1](../report/RESULTS_m0_b.md) Phase-1 results.

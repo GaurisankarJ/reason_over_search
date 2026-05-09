@@ -1,12 +1,12 @@
 # ─── Qwen3 hybrid system-message templates (Phase-1 ALICE training) ──────────
 # Each constant is byte-for-byte the system-message used at training time;
 # evaluating with a different prompt than training produces off-distribution
-# behaviour (see CODE_SETUP_v2 §3 for the alignment audit).
+# behaviour (see CODE_SETUP_m3 §3 for the alignment audit).
 
 # `p1_basic_w_ex` (W&B id z7kcxfof): basic rules + 2-search Hamlet example.
 # Anchored the model on heavy-tool 2-call / 4-turn behaviour (response length
 # ~2050 tokens). End-of-run rollout reward 0.190 over 1046 steps. Evaluated in
-# M3 (RESULTS_v2 §4–§9).
+# M3 (RESULTS_m3 §4–§9).
 QWEN3_0_6B_TEMPLATE = (
     "You are a helpful assistant who can answer questions using multiple Wikipedia search tool calls.\n"
     "You can call the search tool by writing: <search> your query </search>\n"

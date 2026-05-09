@@ -25,7 +25,7 @@ set -euo pipefail
 VARIANT="${1:?Usage: sbatch scripts/sbatch_m4.sh <qwen3.5_0.8b|qwen3.5_0.8b_base> [test_sample_num]}"
 TEST_SAMPLE_NUM="${2:-}"
 
-# Use SLURM_SUBMIT_DIR (per CODE_SETUP_v2 #12) so the script resolves correctly under sbatch.
+# Use SLURM_SUBMIT_DIR (per CODE_SETUP_m3 #12) so the script resolves correctly under sbatch.
 REPO_ROOT="${SLURM_SUBMIT_DIR:-/zfsstore/user/s4374886/omega/reason_over_search}"
 IVF_INDEX="$REPO_ROOT/indexes/wiki18_100w_e5_ivf4096_sq8.index"
 FLAT_INDEX="/zfsstore/user/s4374886/omega/re-search/assets/indexes/wiki18_100w_e5_flat_inner.index"

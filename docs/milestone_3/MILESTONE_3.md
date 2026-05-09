@@ -10,7 +10,7 @@ updated: 2026-05-07
 
 ## Context
 
-During the Qwen3-0.6B GRPO ablation block (W&B project `research`, archived in [docs/report/RESULTS_v0.md](../report/RESULTS_v0.md)), all training runs used the **hybrid** checkpoint (`Qwen3-0.6B`, the post-trained soft-switch reasoning model). The best-documented run in that block is **`p1_basic_w_ex` (W&B id `z7kcxfof`)** — the one that uniquely converged on heavy-tool behaviour (2 search calls / 4 turns, ~2050 token responses, end-of-run reward 0.190 after 1046 steps).
+During the Qwen3-0.6B GRPO ablation block (W&B project `research`, archived in [docs/report/RESULTS_m0_a.md](../report/RESULTS_m0_a.md)), all training runs used the **hybrid** checkpoint (`Qwen3-0.6B`, the post-trained soft-switch reasoning model). The best-documented run in that block is **`p1_basic_w_ex` (W&B id `z7kcxfof`)** — the one that uniquely converged on heavy-tool behaviour (2 search calls / 4 turns, ~2050 token responses, end-of-run reward 0.190 after 1046 steps).
 
 Two model snapshots are available for evaluation:
 
@@ -52,9 +52,9 @@ Question: What is the nationality of the author of Hamlet?
 
 ## Plan B settings (carry-over from M1)
 
-> **⚠ Superseded by M3 actual run (2026-05-07)**: this section captures the *originally planned* Plan B settings carried over from M1. The actual M3 run diverged on several knobs to match the verl-legacy training rollout byte-for-byte (see [`../report/CODE_SETUP_v2.md`](../report/CODE_SETUP_v2.md) §3 for the 14-fix audit), and ran on **full Plan A test/dev sets** (51,713 items / variant) rather than 1k subsamples because `sample_num` is not respected by the FlashRAG `search_r1` pipeline path. Authoritative actual configuration: [`../report/RESULTS_v2.md`](../report/RESULTS_v2.md) § 4. Kept here for plan-vs-execution traceability.
+> **⚠ Superseded by M3 actual run (2026-05-07)**: this section captures the *originally planned* Plan B settings carried over from M1. The actual M3 run diverged on several knobs to match the verl-legacy training rollout byte-for-byte (see [`../report/CODE_SETUP_m3.md`](../report/CODE_SETUP_m3.md) §3 for the 14-fix audit), and ran on **full Plan A test/dev sets** (51,713 items / variant) rather than 1k subsamples because `sample_num` is not respected by the FlashRAG `search_r1` pipeline path. Authoritative actual configuration: [`../report/RESULTS_m3.md`](../report/RESULTS_m3.md) § 4. Kept here for plan-vs-execution traceability.
 
-All settings from [docs/milestone_one/FROZEN_CONFIG_v1.md](../milestone_one/FROZEN_CONFIG_v1.md) applied unchanged, except:
+All settings from [docs/report/CODE_SETUP_m1.md](../report/CODE_SETUP_m1.md) applied unchanged, except:
 
 | Setting | M1 value | M3 planned | M3 actual (2026-05-07) | Reason |
 |---|---|---|---|---|
@@ -71,11 +71,11 @@ All settings from [docs/milestone_one/FROZEN_CONFIG_v1.md](../milestone_one/FROZ
 | `retrieval_topk` | 3 | 3 | **5** | Match training `top_n=5` |
 | `enable_thinking` | n/a | n/a | **True** | Otherwise Qwen3 hybrid auto-injects empty `<think></think>` |
 | `generator_max_input_len` | 1024 | 1024 | **4096** | Match training `response_length=4096` |
-| Subsampling | 1k stratified for the 5 large datasets | 1k stratified for the 5 large datasets | **none — full test/dev sets** (51,713 items / variant; happy-accident upgrade: `sample_num` not respected by FlashRAG `search_r1` path) | See `RESULTS_v2.md` §10.4 |
+| Subsampling | 1k stratified for the 5 large datasets | 1k stratified for the 5 large datasets | **none — full test/dev sets** (51,713 items / variant; happy-accident upgrade: `sample_num` not respected by FlashRAG `search_r1` path) | See `RESULTS_m3.md` §10.4 |
 
 ## Statistical justification
 
-> **⚠ Superseded (2026-05-07)**: this section justifies the originally planned **1 × Plan B** scope. The actual run executed **full Plan A** (51,713 items / variant; population EMs, not subsample estimates), making the SE / McNemar analysis below moot. Kept for reference. See `RESULTS_v2.md` § 10.4 for the actual scope.
+> **⚠ Superseded (2026-05-07)**: this section justifies the originally planned **1 × Plan B** scope. The actual run executed **full Plan A** (51,713 items / variant; population EMs, not subsample estimates), making the SE / McNemar analysis below moot. Kept for reference. See `RESULTS_m3.md` § 10.4 for the actual scope.
 
 M3 was originally planned as **1 seed × Plan B** (subsampled: 1k each for nq/triviaqa/popqa/hotpotqa/2wiki; full for bamboogle=125 and musique=2417). This section justifies that against the alternative — Plan A (full test sets) with multiple seeds — and quantifies the residual uncertainty.
 
@@ -307,7 +307,7 @@ Time limit: `--time=04:00:00`. If the estimate proves too tight after validation
 
 ```bash
 /home/s4374886/.conda/envs/evaluation_search_r1/bin/python scripts/aggregate.py \
-  --output docs/milestone_three/RESULTS_M3.md
+  --output docs/milestone_3/RESULTS_M3.md
 ```
 
 ## Expected results and success criteria
@@ -335,8 +335,8 @@ No prior EM numbers exist for Qwen3-0.6B on these benchmarks. Use M1 instruct re
 5. [x] `scripts/run_m3.sh` and `scripts/sbatch_m3.sh` created. ✓ (done 2026-05-06)
 6. [x] Short-partition validation: bamboogle (qwen3_0.6b) passes; wall-clock table superseded by §Status 2026-05-07 entry.
 7. [x] Both variants evaluated on all 7 benchmarks (full Plan A test/dev sets, 51,713 items / variant; happy-accident upgrade from 1k subsamples — `sample_num` not respected by the FlashRAG `search_r1` pipeline path).
-8. [x] ~~Results aggregated to `docs/milestone_three/RESULTS_M3.md`~~ — **superseded by [`docs/report/RESULTS_v2.md`](../report/RESULTS_v2.md)** (full numerical record) and [`docs/report/SUPERVISOR_MEETING_2026-05-07.md`](../report/SUPERVISOR_MEETING_2026-05-07.md) §4 (consolidated brief).
-9. [x] Summary and findings: see [`../report/RESULTS_v2.md`](../report/RESULTS_v2.md) and [`../report/SUPERVISOR_MEETING_2026-05-07.md`](../report/SUPERVISOR_MEETING_2026-05-07.md) §4; this milestone's narrative continues in §Status below.
+8. [x] ~~Results aggregated to `docs/milestone_3/RESULTS_M3.md`~~ — **superseded by [`docs/report/RESULTS_m3.md`](../report/RESULTS_m3.md)** (full numerical record) and [`docs/report/SUPERVISOR_MEETING_2026-05-07_m0_to_3.md`](../report/SUPERVISOR_MEETING_2026-05-07_m0_to_3.md) §4 (consolidated brief).
+9. [x] Summary and findings: see [`../report/RESULTS_m3.md`](../report/RESULTS_m3.md) and [`../report/SUPERVISOR_MEETING_2026-05-07_m0_to_3.md`](../report/SUPERVISOR_MEETING_2026-05-07_m0_to_3.md) §4; this milestone's narrative continues in §Status below.
 
 ## Setup gotchas (lessons from the slot 1 attempt, 2026-05-06)
 
@@ -412,4 +412,4 @@ Without `setsid`, the child remains in the ssh session's process group and dies 
 
 Next: when 2120423 transitions RUNNING, retry the slot 1 plan with the gotchas already fixed.
 
-**2026-05-07 (COMPLETED)**: Both variants ran on **full Plan A** (no `sample_num` applied — happy-accident upgrade from the planned 1k subsamples; the FlashRAG `search_r1` pipeline path does not respect `sample_num`, so the comparison is statistically Plan A and the per-dataset EMs are population-true). 14 alignment fixes between clone-and-run and the first clean comparison (full audit: [`../report/CODE_SETUP_v2.md`](../report/CODE_SETUP_v2.md) §3). Pre-GRPO interactive ~115 min (job 2120423, node870; mixed `INFERENCE_MAX_WORKERS=16` for NQ/TriviaQA/PopQA → 32 for HotpotQA/2Wiki/MuSiQue). Post-GRPO sbatch **2h 26m 33s** (job 2125009, node875; 32 workers throughout). Headline: average EM 0.102 → 0.155 (+52 % relative, +0.053 absolute) across 51,713 items / variant; 6 / 7 datasets improved; held-out generalisation rules out memorisation. Job 2121164 (the spare slot) was cancelled — both variants fit in slots 2120423 + 2125009. Full numerical record: [`../report/RESULTS_v2.md`](../report/RESULTS_v2.md). Supervisor write-up: [`../report/SUPERVISOR_MEETING_2026-05-07.md`](../report/SUPERVISOR_MEETING_2026-05-07.md) §4. **M3 closed; the eval pipeline is now pinned and reusable for Phase-2.**
+**2026-05-07 (COMPLETED)**: Both variants ran on **full Plan A** (no `sample_num` applied — happy-accident upgrade from the planned 1k subsamples; the FlashRAG `search_r1` pipeline path does not respect `sample_num`, so the comparison is statistically Plan A and the per-dataset EMs are population-true). 14 alignment fixes between clone-and-run and the first clean comparison (full audit: [`../report/CODE_SETUP_m3.md`](../report/CODE_SETUP_m3.md) §3). Pre-GRPO interactive ~115 min (job 2120423, node870; mixed `INFERENCE_MAX_WORKERS=16` for NQ/TriviaQA/PopQA → 32 for HotpotQA/2Wiki/MuSiQue). Post-GRPO sbatch **2h 26m 33s** (job 2125009, node875; 32 workers throughout). Headline: average EM 0.102 → 0.155 (+52 % relative, +0.053 absolute) across 51,713 items / variant; 6 / 7 datasets improved; held-out generalisation rules out memorisation. Job 2121164 (the spare slot) was cancelled — both variants fit in slots 2120423 + 2125009. Full numerical record: [`../report/RESULTS_m3.md`](../report/RESULTS_m3.md). Supervisor write-up: [`../report/SUPERVISOR_MEETING_2026-05-07_m0_to_3.md`](../report/SUPERVISOR_MEETING_2026-05-07_m0_to_3.md) §4. **M3 closed; the eval pipeline is now pinned and reusable for Phase-2.**

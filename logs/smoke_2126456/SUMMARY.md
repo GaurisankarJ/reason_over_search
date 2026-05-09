@@ -25,7 +25,7 @@ After these fixes:
 
 ## Phase 3 — eval pipeline — SKIPPED
 
-The Search-R1 GRPO checkpoint (`PeterJinGo/SearchR1-...-grpo`) is **not on disk** anywhere under `/zfsstore/user/s4374886`; only `Qwen3.5-2B` and `Qwen3.5-2B-Base` are in `hf_cache/hub/`. Downloading the ~6 GB checkpoint plus standing up SGLang would have used the rest of the walltime, with no headroom left for training. Eval pipeline is not validated here; it was reproduced offline before (`docs/milestone_one/COMPARISON_PLAN_B_v1.md`).
+The Search-R1 GRPO checkpoint (`PeterJinGo/SearchR1-...-grpo`) is **not on disk** anywhere under `/zfsstore/user/s4374886`; only `Qwen3.5-2B` and `Qwen3.5-2B-Base` are in `hf_cache/hub/`. Downloading the ~6 GB checkpoint plus standing up SGLang would have used the rest of the walltime, with no headroom left for training. Eval pipeline is not validated here; it was reproduced offline before (`docs/report/RESULTS_m1.md`).
 
 ## Phase 4 — training smoke — PARTIAL (init validated; step 1 hit a config bug, mine)
 

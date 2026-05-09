@@ -297,7 +297,7 @@ The first-pass training run is **mechanics verification only** — checkpointing
 1. **Confirm `train/reward_mean` climbed** above 0 over the run, and the loss/KL/grad-norm curves are sane. That's the first-pass success criterion.
 2. **Update §7 of [PAPER_VS_OURS_TRAINING.md](../training/PAPER_VS_OURS_TRAINING.md#7-compute) "Ours — observed"** with measured wall-clock, GPU-hours, $/run from the W&B run summary. Replaces the linear/sub-linear smoke extrapolation with a real anchor.
 3. **Re-enable validation + checkpointing** — flip the `[DISABLED for first-pass training]` blocks in both YAMLs back to `enabled: true` / `val_period: 100` / `val_at_start: true` / restore `data.validation`. See [`VALIDATION.md §7`](../training/VALIDATION.md#7-re-enabling-validation-planned-not-active) for the planned re-enable.
-4. **Run the recipe-ablation plan** ([`docs/TODO_2026-05-04.md`](../TODO_2026-05-04.md)): JustRL plain-GRPO control + the optimised stack (E2H curriculum + S-GRPO + MC-GRPO). 2 to 3 runs total — the original 6-run plan is superseded by smoke-anchored wall-clock making it unaffordable. Smoke-eval each finished checkpoint on Bamboogle through the M1 eval pipeline ([`MILESTONE_1.1_QWEN_BASELINES.md`](../milestone_one/MILESTONE_1.1_QWEN_BASELINES.md) gives you the untrained baseline to beat).
+4. **Run the recipe-ablation plan** ([`docs/TODO_2026-05-04.md`](../TODO_2026-05-04.md)): JustRL plain-GRPO control + the optimised stack (E2H curriculum + S-GRPO + MC-GRPO). 2 to 3 runs total — the original 6-run plan is superseded by smoke-anchored wall-clock making it unaffordable. Smoke-eval each finished checkpoint on Bamboogle through the M1 eval pipeline ([`MILESTONE_1.1_QWEN_BASELINES.md`](../milestone_1/MILESTONE_1.1_QWEN_BASELINES.md) gives you the untrained baseline to beat).
 5. **Aggregate** across runs, side-by-side vs. paper Table 3 + the JustRL control, write up.
 
 ---
@@ -313,4 +313,4 @@ The first-pass training run is **mechanics verification only** — checkpointing
 | Tuning knobs | [`docs/training/NEMO_RL_KNOBS.md`](../training/NEMO_RL_KNOBS.md) |
 | Overlay architecture | [`docs/training/README.md`](../training/README.md#trainingsrc-overlay-architecture) |
 | Retriever setup | [`local_retriever/README.md`](../../local_retriever/README.md) |
-| M1 eval pipeline | [`docs/milestone_one/FROZEN_CONFIG_v1.md`](../milestone_one/FROZEN_CONFIG_v1.md) |
+| M1 eval pipeline | [`docs/report/CODE_SETUP_m1.md`](../report/CODE_SETUP_m1.md) |

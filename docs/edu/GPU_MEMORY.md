@@ -99,7 +99,7 @@ Tight. That's why our config bumped `train_micro_batch_size` from upstream's 4 (
 
 ## OOM recovery ladder
 
-If we hit OOM, the recovery sequence — in order of preference, since each later step costs more wall-clock — is documented in [`docs/milestone_two/PHASE_2_RUNBOOK.md`](../milestone_two/PHASE_2_RUNBOOK.md):
+If we hit OOM, the recovery sequence — in order of preference, since each later step costs more wall-clock — is documented in [`docs/milestone_2/PHASE_2_RUNBOOK.md`](../milestone_2/PHASE_2_RUNBOOK.md):
 
 1. `policy.train_micro_batch_size=2` → halves activation memory in step (most common fix).
 2. `policy.generation.vllm_cfg.gpu_memory_utilization=0.55` → reduce vLLM's reserve, more for training.

@@ -13,7 +13,7 @@ Three papers, three recipes for "RL-train an LLM to interleave reasoning with re
 | | [Search-R1](../papers/2503.09516_search-r1.md) | [R1-Searcher](../papers/2503.05592_r1-searcher.md) | [ReSearch](../papers/2503.19470_research.md) |
 |---|---|---|---|
 | **arXiv id (version)** | 2503.09516v5 (2025-08-05) | 2503.05592v2 (2025-03-18) | 2503.19470v3 (2025-09-23, NeurIPS 2025) |
-| **In our project as** | M1 reproduction target | Current-focus reference | Recipe behind [v0](../report/RESULTS_v0.md) / [v1](../report/RESULTS_v1.md) Phase-1 results |
+| **In our project as** | M1 reproduction target | Current-focus reference | Recipe behind [v0](../report/RESULTS_m0_a.md) / [v1](../report/RESULTS_m0_b.md) Phase-1 results |
 | **Algorithm** | PPO (default), GRPO compared | Reinforce++ | GRPO |
 | **Tag schema** | `<search>` / `<information>` / `<answer>` | `<begin_of_query>` / `<begin_of_documents>` | `<think>` / `<search>` / `<result>` + `\boxed{}` |
 | **Reward shape** | Outcome-only EM | Stage 1: retrieval=0.5, format=0.5; Stage 2: F1 + format `+0/-2` | F1 if F1>0; 0.1 if F1=0 and format ok; else 0 |
@@ -81,7 +81,7 @@ ReSearch reports EM and LJ for both 7B and 32B sizes; the row above is the 32B-I
   - Search-R1: pure outcome EM. No format reward.
   - ReSearch: F1 + 0.1 partial-credit floor when format is correct but answer is wrong.
   - R1-Searcher: 2-stage; Stage-2 has asymmetric `+0 / -2` format penalty.
-  - Implication: ReSearch's 0.1 floor lifts every trajectory's reward and may mask tool-use signal (we measured a 3-6 pp gap at our 0.6B scale; see [`../report/RESULTS_v1.md`](../report/RESULTS_v1.md)). Search-R1 avoids this. R1-Searcher penalises format-collapse late.
+  - Implication: ReSearch's 0.1 floor lifts every trajectory's reward and may mask tool-use signal (we measured a 3-6 pp gap at our 0.6B scale; see [`../report/RESULTS_m0_b.md`](../report/RESULTS_m0_b.md)). Search-R1 avoids this. R1-Searcher penalises format-collapse late.
 - **Algorithm is a smaller disagreement than scale.**
   - All three are policy-gradient with retrieved-token masking; the differences (PPO vs GRPO vs Reinforce++) are smaller in effect than the scale and reward differences. Search-R1's §5.1 directly compares PPO and GRPO and reports both work.
 - **Curriculum.**
@@ -115,8 +115,8 @@ ReSearch reports EM and LJ for both 7B and 32B sizes; the row above is the 32B-I
 
 ## Mapping to our work
 
-- **M1 (eval reproduction)** is against [Search-R1](../papers/2503.09516_search-r1.md) v5; the published GRPO 3B Base/Instruct checkpoints. Plan B v1 reproduction is within ±2.5 pp paper average ([`../milestone_one/COMPARISON_PLAN_B_v1.md`](../milestone_one/COMPARISON_PLAN_B_v1.md)).
-- **Phase-1 (Qwen3-0.6B, ALICE, sibling `research` repo)** ports the [ReSearch](../papers/2503.19470_research.md) recipe: GRPO with the F1 + 0.1 partial-credit reward. 29 runs total ([`../report/RESULTS_v0.md`](../report/RESULTS_v0.md), [`../report/RESULTS_v1.md`](../report/RESULTS_v1.md)). Findings: recipe transfers but rewards cluster at 0.18-0.22; base model fails cold-start (5/5).
+- **M1 (eval reproduction)** is against [Search-R1](../papers/2503.09516_search-r1.md) v5; the published GRPO 3B Base/Instruct checkpoints. Plan B v1 reproduction is within ±2.5 pp paper average ([`../report/RESULTS_m1.md`](../report/RESULTS_m1.md)).
+- **Phase-1 (Qwen3-0.6B, ALICE, sibling `research` repo)** ports the [ReSearch](../papers/2503.19470_research.md) recipe: GRPO with the F1 + 0.1 partial-credit reward. 29 runs total ([`../report/RESULTS_m0_a.md`](../report/RESULTS_m0_a.md), [`../report/RESULTS_m0_b.md`](../report/RESULTS_m0_b.md)). Findings: recipe transfers but rewards cluster at 0.18-0.22; base model fails cold-start (5/5).
 - **Phase-2 (Qwen3.5-2B, NeMo-RL, 1× A100)** is being designed against the [Search-R1](../papers/2503.09516_search-r1.md) shape (b=512 prompts, mb=256, mu=64, len=4096, 500 steps). The published training pipeline ([`../training/PAPER_VS_OURS_TRAINING.md`](../training/PAPER_VS_OURS_TRAINING.md)) is a direct port. Wall-clock extrapolation (smoke-anchored) is 11-17 days / run on 1× A100; that constraint is what drives the [recipe-search ablation plan](../TODO_2026-05-04.md).
 - **Tricks worth borrowing** (in priority order, given our 1× A100 budget):
   1. **R1-Searcher's 2-stage curriculum** to bypass the cold-start failure we hit on 0.6B base. Drop-in.

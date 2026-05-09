@@ -16,14 +16,14 @@ updated: 2026-05-06
 
 ## What this directory is
 
-`docs/training/` documents the **Phase-2 (M2) NeMo-RL port** of Search-R1's GRPO training loop, targeting Qwen3.5-2B on 1x A100 80GB. It is the *why* behind the code under [`training/`](../../training/) (the *what / how-to-run*). Owned by [Milestone 2](../milestone_two/MILESTONE_2.md).
+`docs/training/` documents the **Phase-2 (M2) NeMo-RL port** of Search-R1's GRPO training loop, targeting Qwen3.5-2B on 1x A100 80GB. It is the *why* behind the code under [`training/`](../../training/) (the *what / how-to-run*). Owned by [Milestone 2](../milestone_2/MILESTONE_2.md).
 
 Two parallel concerns:
 
 1. **Faithful reproduction** of Search-R1's GRPO training (paper-vs-ours audit, hyperparameter parity, EM reward, retrieval HTTP contract).
 2. **Engineering for our hardware** (1x A100 80GB SXM via Vast.ai; ~\$1000 budget; thesis deadline 2026-06-15). Forces departures from the paper: smaller batch (102 prompts/step vs paper's 512), `sequence_packing: false` (Qwen3.5 GatedDeltaNet kernel crashes with packing), `train_micro_batch_size: 2` (without packing), IVF-SQ8 FAISS index (flat IP times out under rollout HTTP load).
 
-The active question (the supervisor-facing reframe of the thesis, see [`docs/report/SUPERVISOR_MEETING_2026-05-07.md`](../report/SUPERVISOR_MEETING_2026-05-07.md) § 5): *"Is it feasible to post-train a small LM to Search-R1-level results under realistic resource constraints, and what is the optimised training recipe?"*. Candidate answer ([`SUPERVISOR_MEETING_2026-05-07.md`](../report/SUPERVISOR_MEETING_2026-05-07.md) § 6): a stack of E2H curriculum + S-GRPO + MC-GRPO on a Search-R1 GRPO baseline, with a JustRL plain-GRPO control alongside.
+The active question (the supervisor-facing reframe of the thesis, see [`docs/report/SUPERVISOR_MEETING_2026-05-07_m0_to_3.md`](../report/SUPERVISOR_MEETING_2026-05-07_m0_to_3.md) § 5): *"Is it feasible to post-train a small LM to Search-R1-level results under realistic resource constraints, and what is the optimised training recipe?"*. Candidate answer ([`SUPERVISOR_MEETING_2026-05-07_m0_to_3.md`](../report/SUPERVISOR_MEETING_2026-05-07_m0_to_3.md) § 6): a stack of E2H curriculum + S-GRPO + MC-GRPO on a Search-R1 GRPO baseline, with a JustRL plain-GRPO control alongside.
 
 ---
 
@@ -53,7 +53,7 @@ Order matters. Each file has a clear job; cross-references between them resolve 
 | 7 | [`NEMO_RL_KNOBS.md`](NEMO_RL_KNOBS.md) | every NeMo-RL config knob that matters with our shipped values; §7 is the authoritative diff-vs-upstream table |
 | 8 | [`VERL_REFERENCE.md`](VERL_REFERENCE.md) | verl-side reference settings (HTTP retriever contract, KL/GRPO mappings, FSDP-to-DTensor translations); useful when reading verl scripts |
 | 9 | [`SETUP_CLAUDE.md`](SETUP_CLAUDE.md) | runbook for *the agent* on a freshly-booted Vast.ai instance: bootstrap.sh, ask-the-user combo, launch command |
-| op | [`docs/milestone_two/PHASE_2_RUNBOOK.md`](../milestone_two/PHASE_2_RUNBOOK.md) | the *human* operational runbook (Vast.ai boot, retriever setup, launch, monitoring, recovery); pairs with SETUP_CLAUDE.md |
+| op | [`docs/milestone_2/PHASE_2_RUNBOOK.md`](../milestone_2/PHASE_2_RUNBOOK.md) | the *human* operational runbook (Vast.ai boot, retriever setup, launch, monitoring, recovery); pairs with SETUP_CLAUDE.md |
 
 ---
 
@@ -155,8 +155,8 @@ The overlay's wiring contract: at launch, [`run_grpo.py`](../../training/scripts
 ## Active task pointers (2026-05-06)
 
 - **Active recipe-ablation plan**: [`docs/TODO_2026-05-04.md`](../TODO_2026-05-04.md). Stack candidate: E2H + S-GRPO + MC-GRPO; control: JustRL plain-GRPO. Budget: 2 to 3 runs.
-- **Thesis story so far**: [`docs/report/SUPERVISOR_MEETING_2026-05-07.md`](../report/SUPERVISOR_MEETING_2026-05-07.md) (two-page brief).
-- **Phase-1 (Qwen3-0.6B on ALICE) findings the recipe choices are reacting to**: [`docs/report/RESULTS_v0.md`](../report/RESULTS_v0.md), [`docs/report/RESULTS_v1.md`](../report/RESULTS_v1.md). Most actionable lever surfaced: paper's partial-credit reward creates a 0.1 floor that masks the tool-use signal.
+- **Thesis story so far**: [`docs/report/SUPERVISOR_MEETING_2026-05-07_m0_to_3.md`](../report/SUPERVISOR_MEETING_2026-05-07_m0_to_3.md) (two-page brief).
+- **Phase-1 (Qwen3-0.6B on ALICE) findings the recipe choices are reacting to**: [`docs/report/RESULTS_m0_a.md`](../report/RESULTS_m0_a.md), [`docs/report/RESULTS_m0_b.md`](../report/RESULTS_m0_b.md). Most actionable lever surfaced: paper's partial-credit reward creates a 0.1 floor that masks the tool-use signal.
 - **Re-enable validation + checkpointing**: [`VALIDATION.md §7`](VALIDATION.md#7-re-enabling-validation-planned-not-active). Single config flip, no code changes; do this before kicking off long ablations.
 
 ---

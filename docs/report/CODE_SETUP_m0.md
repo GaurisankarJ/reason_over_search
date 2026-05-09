@@ -282,7 +282,7 @@ Qwen3-specific floors (Qwen docs): `transformers>=4.51.0`, `sglang>=0.4.6.post1`
 
 - Paper repo (upstream): `Agent-RL/ReSearch` — the original `README-OLD.md` in this repo is its README, kept for reference.
 - Paper-vs-port code-level audit: `research/docs/reports/legacy_vs_verl_latest_research.md` (Apr 3, 2026).
-- Baseline reproduction (different repo, evaluation-side only): `reason_over_search/docs/milestone_1/RESULTS_m1.md`.
+- Baseline reproduction (different repo, evaluation-side only): `reason_over_search/docs/report/RESULTS_m1.md`.
 
 ---
 

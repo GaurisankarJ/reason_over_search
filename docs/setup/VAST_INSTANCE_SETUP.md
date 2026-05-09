@@ -10,7 +10,7 @@ updated: 2026-05-02
 
 End-to-end walkthrough to bring up a new Vast.ai instance with the corpus, indexes, encoder, GRPO checkpoints, and eval datasets all staged. After this, the box can serve the retriever, run SGLang, and execute `scripts/run_one.sh` for any (variant, dataset, seed) combo.
 
-For *which* Vast configuration to pick for cost-optimal Plan A see [VAST_AI_PLAN_A.md](VAST_AI_PLAN_A.md). For *what* the eval pipeline does see [../milestone_one/MILESTONE_1.md](../milestone_one/MILESTONE_1.md). For ops once it's running see [../eval/EVAL_OPS.md](../eval/EVAL_OPS.md).
+For *which* Vast configuration to pick for cost-optimal Plan A see [VAST_AI_PLAN_A.md](VAST_AI_PLAN_A.md). For *what* the eval pipeline does see [../milestone_1/MILESTONE_1.md](../milestone_1/MILESTONE_1.md). For ops once it's running see [../eval/EVAL_OPS.md](../eval/EVAL_OPS.md).
 
 ## 1. Pick the instance
 
@@ -221,7 +221,7 @@ conda activate evaluation_search_r1
 scripts/run_one.sh instruct bamboogle 1
 ```
 
-Expected EM around **0.36** for instruct/bamboogle ([../milestone_one/RESULTS_PLAN_B.md](../milestone_one/RESULTS_PLAN_B.md)). If it's wildly off, the GRPO checkpoint is the wrong file or the prompt template drifted — re-check sha256s and `apply_chat=True`.
+Expected EM around **0.36** for instruct/bamboogle ([../report/RESULTS_m1.md](../report/RESULTS_m1.md)). If it's wildly off, the GRPO checkpoint is the wrong file or the prompt template drifted — re-check sha256s and `apply_chat=True`.
 
 ## 6. Disk usage check after staging
 
