@@ -1,29 +1,43 @@
 ---
-title: VAST INSTANCE SETUP
-tags: []
+title: VAST INSTANCE SETUP (v0, archived)
+tags: [archive, setup, vast, m1]
 source: internal
 created: 2026-05-01
 updated: 2026-05-02
+archived: 2026-05-09
 ---
 
-# Vast.ai Instance Setup — From Zero to Running Eval
+> **ARCHIVED 2026-05-09.** This is the original M1-era manual-download walkthrough.
+> Successor: [`docs/vast/SETUP_VAST.md`](../vast/SETUP_VAST.md) — bootstrap-script-based
+> total setup (retrieval + M2 training + M4 Qwen3.5-0.8B eval) using
+> [`training/scripts/bootstrap.sh`](../../training/scripts/bootstrap.sh).
+>
+> What changed:
+> - Manual `huggingface-cli download` steps replaced by one-shot `bootstrap.sh` (idempotent).
+> - Default retriever index switched from flat IP (~65 GB, paper-fidelity) to IVF-SQ8 (~16 GB); flat IP is no longer used.
+> - Scope expanded from M1 eval-only to also cover M2 training + M4 eval-models setup.
+> - Search-R1 GRPO checkpoint downloads (Qwen2.5-3B, M1) dropped; replaced by Qwen3.5-0.8B (M4).
+>
+> Kept here for historical reference (Plan A reproduction record); not maintained.
+
+# Vast.ai Instance Setup — From Zero to Running Eval (v0, archived)
 
 End-to-end walkthrough to bring up a new Vast.ai instance with the corpus, indexes, encoder, GRPO checkpoints, and eval datasets all staged. After this, the box can serve the retriever, run SGLang, and execute `scripts/run_one.sh` for any (variant, dataset, seed) combo.
 
-For *which* Vast configuration to pick for cost-optimal Plan A see [VAST_AI_PLAN_A.md](VAST_AI_PLAN_A.md). For *what* the eval pipeline does see [../milestone_1/MILESTONE_1.md](../milestone_1/MILESTONE_1.md). For ops once it's running see [../eval/EVAL_OPS.md](../eval/EVAL_OPS.md).
+For *which* Vast configuration to pick for cost-optimal Plan A see [VAST_AI_PLAN_A.md](../setup/VAST_AI_PLAN_A.md). For *what* the eval pipeline does see [../milestone_1/MILESTONE_1.md](../milestone_1/MILESTONE_1.md). For ops once it's running see [../eval/EVAL_OPS.md](../eval/EVAL_OPS.md).
 
 ## 1. Pick the instance
 
 | Resource | Minimum | Recommended | Why |
 |---|---|---|---|
 | GPU VRAM | 24 GB | 24–80 GB | SGLang 3B bf16 = ~22 GB |
-| GPU model | RTX 4090 / 5090 / A100 / H100 | H100 PCIe for Plan A speed | See [HARDWARE.md](HARDWARE.md) |
+| GPU model | RTX 4090 / 5090 / A100 / H100 | H100 PCIe for Plan A speed | See [HARDWARE.md](../setup/HARDWARE.md) |
 | Disk | 120 GB | **150 GB** | corpus 14 + indexes 76 + 2 GRPOs 27 + eval data ~1 + headroom |
 | Host RAM | 80 GB | 128 GB+ | Flat IP index alone needs ~65 GB resident; corpus mmap adds ~14 GB |
 | CPU | any modern x86_64 | 16+ vCPUs | Multi-worker FAISS scaling |
 
 **For Plan B reproduction or benchmarking**: any 24 GB GPU + 80 GB RAM is fine.
-**For Plan A on this single box**: see [VAST_AI_PLAN_A.md Option 2](VAST_AI_PLAN_A.md) — single H100 PCIe per instance, 3 instances total.
+**For Plan A on this single box**: see [VAST_AI_PLAN_A.md Option 2](../setup/VAST_AI_PLAN_A.md) — single H100 PCIe per instance, 3 instances total.
 
 ## 2. Launch from the image
 
