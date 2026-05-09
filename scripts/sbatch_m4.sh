@@ -125,6 +125,14 @@ SGLANG_LOG="logs/m4_${SLURM_JOB_ID:-local}_sglang.log"
 # this, SGLang refuses to launch on the conda env's CuDNN 9.10. Observed on
 # sbatch 2150757 (node870, 2026-05-08).
 export SGLANG_DISABLE_CUDNN_CHECK=1
+
+# Prepend the conda env's bin to PATH so flashinfer's JIT compile subprocess
+# can find `ninja`. Same issue as CODE_SETUP_v2 #2 / "setsid + nohup + PATH"
+# wrapper note. Triggered for the first time on L4 (sm_89) sbatch 2151009
+# because that GPU has no cached flashinfer binaries; A100 (sm_80) had them
+# cached so the JIT never ran. We invoke Python by absolute path elsewhere,
+# but flashinfer's child shell inherits the system PATH unless we widen it.
+export PATH="/home/s4374886/.conda/envs/evaluation_search_r1/bin:$PATH"
 /home/s4374886/.conda/envs/evaluation_search_r1/bin/python -m sglang.launch_server \
   --model-path "$MODEL_PATH" \
   --host 127.0.0.1 --port 3000 \
