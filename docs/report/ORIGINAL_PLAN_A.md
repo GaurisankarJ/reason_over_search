@@ -1,10 +1,12 @@
 ---
 title: ORIGINAL PLAN A
-tags: []
+tags: [historical]
 source: internal
 created: 2026-05-04
-updated: 2026-05-04
+updated: 2026-05-07
 ---
+
+> **HISTORICAL (frozen Feb 2026, archived 2026-05-07).** This is the original Plan A draft (three threads: reward model design, meta-reasoning tags, curriculum + transfer learning). It was superseded on 2026-05-04 by a single reframed research question after Phase-2 wall-clock reality (11–17 days/run on 1× A100-80GB) made paired sweeps unaffordable. Active question and proposed recipe (E2H + S-GRPO + MC-GRPO + JustRL plain-GRPO control): see [`SUPERVISOR_MEETING_2026-05-07_m0_to_3.md`](SUPERVISOR_MEETING_2026-05-07_m0_to_3.md) § 5–6.
 
 ## Abstract
 

@@ -130,22 +130,7 @@ sha256sum search_r1_instruct_model/model-00001-of-00003.safetensors
 
 The full identity table (sizes + eos_token_id) is in [../eval/REPRODUCIBILITY.md#models—confirmed-grpo](../eval/REPRODUCIBILITY.md).
 
-## Step 5 (optional) — rebuild the IVF-SQ8 index locally
-
-You already downloaded the IVF index in Step 4. Use this section only if you don't trust the upload and want to recompute it from your local flat index (~1 hour):
-
-```bash
-cd /workspace/index_creation
-/venv/retriever/bin/python build_ivf_sq8.py \
-  --flat-index ../reason_over_search/local_retriever/indexes/wiki18_100w_e5_flat_inner.index \
-  --output wiki18_100w_e5_ivf4096_sq8.index
-ln -sf /workspace/index_creation/wiki18_100w_e5_ivf4096_sq8.index \
-  /workspace/reason_over_search/local_retriever/indexes/
-```
-
-See [../retriever/RETRIEVER_INDEXING.md](../retriever/RETRIEVER_INDEXING.md) for the recall/speed tradeoff.
-
-## Step 6 (optional) — set up the GPU FAISS venv
+## Step 5 (optional) — set up the GPU FAISS venv
 
 Only useful on hosts where SGLang doesn't need the same GPU (e.g. multi-GPU boxes; or single H100 80 GB where 16 GB index + 22 GB SGLang fit).
 
@@ -155,7 +140,7 @@ bash local_retriever/setup_gpu_venv.sh
 # Creates local_retriever/.venv with faiss-gpu-cu12 + torch+cu130 (~6 GB)
 ```
 
-## Step 7 — start the retriever
+## Step 6 — start the retriever
 
 CPU + IVF-SQ8 (the default — fast, ~16 GB RAM):
 
@@ -196,7 +181,7 @@ curl -sS -X POST http://127.0.0.1:3005/search \
   -d '{"query": "Who wrote The Lord of the Rings?", "top_n": 3, "return_score": false}'
 ```
 
-## Step 8 — start SGLang
+## Step 7 — start SGLang
 
 ```bash
 cd /workspace/reason_over_search
@@ -210,7 +195,7 @@ curl -sS http://127.0.0.1:3000/get_model_info | python -c \
 
 The script kills any existing SGLang, launches the requested variant on `127.0.0.1:3000` with the canonical flags (`--context-length 8192 --dtype bfloat16 --tp 1 --trust-remote-code`), and waits for `/get_model_info` to come up (≤10 min).
 
-## Step 9 — single-run smoke test
+## Step 8 — single-run smoke test
 
 ```bash
 cd /workspace/reason_over_search
@@ -223,7 +208,7 @@ Expected on Bamboogle/instruct (n=125, greedy): EM ≈ 0.36, F1 ≈ 0.45 — see
 
 If EM drops to 0.05–0.10 territory the eval is broken — check the `apply_chat`/template/parser surface listed in [../eval/PAPER_VS_OURS_AUDIT.md](../eval/PAPER_VS_OURS_AUDIT.md) before touching anything else.
 
-## Step 10 (optional) — restore prior results
+## Step 9 (optional) — restore prior results
 
 The Plan B v0 + v1 result archives (`evaluation_search_r1/results/_archive_v0/`, `_archive_v1/`) are tracked in git and present after a normal clone — no separate restore step needed. If you bring a tarball of additional results from another box, untar into `evaluation_search_r1/results/`:
 

@@ -10,7 +10,7 @@ updated: 2026-05-02
 
 End-to-end walkthrough to bring up a new Vast.ai instance with the corpus, indexes, encoder, GRPO checkpoints, and eval datasets all staged. After this, the box can serve the retriever, run SGLang, and execute `scripts/run_one.sh` for any (variant, dataset, seed) combo.
 
-For *which* Vast configuration to pick for cost-optimal Plan A see [VAST_AI_PLAN_A.md](VAST_AI_PLAN_A.md). For *what* the eval pipeline does see [../milestone_one/MILESTONE_1.md](../milestone_one/MILESTONE_1.md). For ops once it's running see [../eval/EVAL_OPS.md](../eval/EVAL_OPS.md).
+For *which* Vast configuration to pick for cost-optimal Plan A see [VAST_AI_PLAN_A.md](VAST_AI_PLAN_A.md). For *what* the eval pipeline does see [../milestone_1/MILESTONE_1.md](../milestone_1/MILESTONE_1.md). For ops once it's running see [../eval/EVAL_OPS.md](../eval/EVAL_OPS.md).
 
 ## 1. Pick the instance
 
@@ -99,15 +99,15 @@ gunzip -f indexes/wiki18_100w_e5_flat_inner.index.gz
 rm -f indexes/part_aa indexes/part_ab
 ```
 
-**Optional: IVF-SQ8 index** (faster, lower RAM — see [../retriever/RETRIEVER_INDEXING.md](../retriever/RETRIEVER_INDEXING.md)). Either build it from the flat index in ~10 min:
+**Optional: IVF-SQ8 index** (faster, lower RAM — see [../retriever/RETRIEVER_INDEXING.md](../retriever/RETRIEVER_INDEXING.md)). Download the pre-built one from HF:
 
 ```bash
-cd /workspace
-git clone https://github.com/<your-org>/index_creation.git   # or copy from this repo
-# follow /workspace/index_creation/README.md
+cd /workspace/reason_over_search
+hf download pantomiman/reason-over-search retriever/wiki18_100w_e5_ivf4096_sq8.index \
+  --repo-type dataset --local-dir local_retriever/indexes
+mv local_retriever/indexes/retriever/wiki18_100w_e5_ivf4096_sq8.index local_retriever/indexes/
+rmdir local_retriever/indexes/retriever
 ```
-
-Or copy a pre-built one from your own R2/S3 bucket if you have it staged.
 
 ### 4b. E5-base-v2 encoder (~0.5 GB)
 
@@ -221,7 +221,7 @@ conda activate evaluation_search_r1
 scripts/run_one.sh instruct bamboogle 1
 ```
 
-Expected EM around **0.36** for instruct/bamboogle ([../milestone_one/RESULTS_PLAN_B.md](../milestone_one/RESULTS_PLAN_B.md)). If it's wildly off, the GRPO checkpoint is the wrong file or the prompt template drifted — re-check sha256s and `apply_chat=True`.
+Expected EM around **0.36** for instruct/bamboogle ([../report/RESULTS_m1.md](../report/RESULTS_m1.md)). If it's wildly off, the GRPO checkpoint is the wrong file or the prompt template drifted — re-check sha256s and `apply_chat=True`.
 
 ## 6. Disk usage check after staging
 

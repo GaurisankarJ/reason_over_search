@@ -13,7 +13,7 @@ Goal: run **Plan A** (5 seeds × 7 datasets × 2 variants = 70 runs, ~517 K exam
 Source docs:
 - [../eval/EVAL_OPS.md](../eval/EVAL_OPS.md) — wall-clock budgets, where time goes, speedup ranking
 - [HARDWARE.md](HARDWARE.md) — accelerator comparison
-- [../milestone_one/COMPARISON_PLAN_B.md](../milestone_one/COMPARISON_PLAN_B.md) — current state of the reproduction; gap-closing work that **must finish before launching Plan A**.
+- [../milestone_1/../archive/COMPARISON_PLAN_B_v0.md](../milestone_1/../archive/COMPARISON_PLAN_B_v0.md) — current state of the reproduction; gap-closing work that **must finish before launching Plan A**.
 
 Snapshot: 2026-04-28. Vast.ai is a marketplace; prices float — re-check before booking.
 
@@ -80,7 +80,7 @@ For Option 1 (8 machines): collapse to 8 shards of 8–9 runs each. For Option 2
 
 ## Open questions (gates before launching)
 
-1. **Is the base-variant gap closed?** Plan A on the current config buys tighter error bars on a wrong base number. The [`apply_chat=True` fix on base](../milestone_one/COMPARISON_PLAN_B.md#recommended-next-steps-before-plan-a) — the load-bearing miss per [../eval/PAPER_VS_OURS_AUDIT.md D1](../eval/PAPER_VS_OURS_AUDIT.md#d1-in-detail-the-load-bearing-one) — must close the gap to ~3 pp on at least NQ-1k first. **Hard gate.** *(Do not change `temperature`/`top_p`; paper eval is greedy.)*
+1. **Is the base-variant gap closed?** Plan A on the current config buys tighter error bars on a wrong base number. The [`apply_chat=True` fix on base](../milestone_1/../archive/COMPARISON_PLAN_B_v0.md#recommended-next-steps-before-plan-a) — the load-bearing miss per [../eval/PAPER_VS_OURS_AUDIT.md D1](../eval/PAPER_VS_OURS_AUDIT.md#d1-in-detail-the-load-bearing-one) — must close the gap to ~3 pp on at least NQ-1k first. **Hard gate.** *(Do not change `temperature`/`top_p`; paper eval is greedy.)*
 2. **Are the 4090 optimizations actually wired up?** Re-enabling radix-cache + overlap is a 1.5–2× lift. If still off in [docker/reason-over-search-v1/](../../docker/reason-over-search-v1/), the 240 h estimate slides to ~410 h and the 4090/H100-PCIe economics swap (H100 PCIe wins).
 3. **Does the docker image (`pantomiman/reason-over-search-v1`) bake in wiki18 + FAISS?** If not, each instance has to pull ~80 GB on init. Stage on a fast bucket (R2/B2) and download from there — typically 5–10 min on a 1 Gbps Vast host.
 4. **Resume behaviour across instance restarts** — `run_one.sh` skips on existing `metric_score.txt`, but only if results dir is persisted. For interruptible 4090s, mount a persistent volume or sync results out after each run.

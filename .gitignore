@@ -3,14 +3,36 @@ __pycache__/
 *.egg-info/
 **/.DS_Store
 
-# Local Retriever
-local_retriever/corpus/
-local_retriever/indexes/
-local_retriever/models/
+# Local Retriever — these are symlinks to /corpus, /indexes, /models at repo root
+# (set up in BOOTSTRAP_NEW_INSTANCE.md). No trailing slash so the rules match
+# symlinks (which git treats as files), not just real directories.
+local_retriever/corpus
+local_retriever/indexes
+local_retriever/models
+
+# M3 evaluation runtime data (corpus + 16 GB IVF index + encoder model;
+# sourced from /zfsstore/user/s4374886/omega/flash-rag/{corpus,models} via symlinks
+# and a local 16 GB IVF-SQ8 index file — too large for git)
+/corpus/
+/indexes/
+/models/
 
 # Evaluation
 evaluation_search_r1/search_r1_base_model/
 evaluation_search_r1/search_r1_instruct_model/
+
+# M3 evaluation: Qwen3-0.6B model checkpoints (HF safetensors, ~1.5 GB each)
+eval/qwen_3_0.6b/
+eval/qwen_3_0.6b_v0/
+eval/qwen_3_0.6b_v0_no_ex/
+
+# M4 evaluation: Qwen3.5-0.8B model checkpoints (HF safetensors, ~1.7 GB each)
+eval/qwen3.5_0.8b/
+eval/qwen3.5_0.8b_base/
+
+# evaluation_research/ + evaluation_qwen35/: results dirs (per-run artifacts; aggregated reports live in docs/)
+evaluation_research/results/
+evaluation_qwen35/results/
 
 # Environment
 /.venv
@@ -28,6 +50,15 @@ evaluation_search_r1/results/
 
 # Run logs
 *.log
+*.pid
+*.pid_text
+
+# M3 / M4 sbatch / interactive job logs (per-job stdout/stderr; large retriever + sglang traces)
+logs/m3_*.out
+logs/m3_*.err
+logs/m4_*.out
+logs/m4_*.err
+logs/m4_*.log
 
 # Training run artifacts (commit smoke trace jsonls explicitly; ignore W&B dirs and checkpoints)
 logs/**/wandb/
@@ -44,9 +75,6 @@ docs/zeta_alpha/
 
 # Sankar (private)
 docs/sankar/
-
-# ALICE cluster reference (machine-specific, local-only)
-docs/alice/
 
 # Local tooling: Obsidian vault config and Claude Code workspace state
 .obsidian/

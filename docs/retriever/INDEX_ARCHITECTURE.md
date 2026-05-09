@@ -111,7 +111,7 @@ curl -L -o local_retriever/indexes/wiki18_100w_e5_ivf4096_sq8.index \
   https://huggingface.co/datasets/pantomiman/reason-over-search/resolve/main/retriever/wiki18_100w_e5_ivf4096_sq8.index
 ```
 
-If you want to rebuild it locally instead (~1 hour): the build script reconstructs vectors from the flat index rather than re-embedding 21 M passages — re-embedding takes 6–10 hours on a single 4090, while reading them back via `faiss.reconstruct_n()` is fast and deterministic. See [/workspace/index_creation/README.md](../../../index_creation/README.md) for the build script and [build_ivf_sq8.py](../../../index_creation/build_ivf_sq8.py) for the implementation.
+If you want to rebuild it locally instead (~1 hour), the recipe is to reconstruct vectors from the flat index via `faiss.reconstruct_n()` and train + add to a fresh `IndexIVFScalarQuantizer(QT_8bit)` with `nlist=4096`, then write to disk. This avoids re-embedding the 21 M passages (6 to 10 hours on a single 4090). The HF download above is the supported path; the standalone `index_creation/` workspace that previously held a build script has been retired.
 
 `nlist=4096` is constrained by FAISS's `min_points_per_centroid=39` floor: with 1 M training samples, 4096 cells gives ~244 points per centroid. Going to 65 536 cells would need ≥ 2.55 M training samples to clear the floor, so `4096` is the largest viable choice with the current sample size.
 
@@ -179,4 +179,3 @@ Each worker is a thread-isolated `DenseRetriever` instance. FAISS index reads ar
 | [`local_retriever/indexes/wiki18_100w_e5_ivf4096_sq8.index`](../../local_retriever/indexes/) | 16 GB IVF-SQ8 index (default; download from HF: [`pantomiman/reason-over-search`](https://huggingface.co/datasets/pantomiman/reason-over-search/blob/main/retriever/wiki18_100w_e5_ivf4096_sq8.index)) |
 | [`local_retriever/indexes/wiki18_100w_e5_flat_inner.index`](../../local_retriever/indexes/) | 65 GB Flat IP index (optional, exact recall) |
 | [`local_retriever/corpus/wiki18_100w.jsonl`](../../local_retriever/corpus/) | Raw passages, mmap'd |
-| [`/workspace/index_creation/build_ivf_sq8.py`](../../../index_creation/build_ivf_sq8.py) | IVF-SQ8 build pipeline (alternative to HF download) |

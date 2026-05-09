@@ -8,7 +8,7 @@ updated: 2026-05-01
 
 # Retriever Benchmark Plan — pre/post concurrency fixes
 
-> **Status (2026-05-01): plan only, not executed.** Written while the Plan B v1 instruct sweep was in flight (now finished — see [../milestone_one/COMPARISON_PLAN_B_v1.md](../milestone_one/COMPARISON_PLAN_B_v1.md)). The "don't disturb the in-flight sweep" constraint below is no longer active. Re-read before kicking this off so the plan doesn't reference stale runtime state.
+> **Status (2026-05-01): plan only, not executed.** Written while the Plan B v1 instruct sweep was in flight (now finished — see [../report/RESULTS_m1.md](../report/RESULTS_m1.md)). The "don't disturb the in-flight sweep" constraint below is no longer active. Re-read before kicking this off so the plan doesn't reference stale runtime state.
 
 Plan to measure the throughput impact of the [RETRIEVER_CONCURRENCY.md](RETRIEVER_CONCURRENCY.md) fixes (`asyncio.to_thread` wrap + `IO_FLAG_MMAP`). Two runs: one against the current (unfixed) code, one against the fixed code. Same workload, same machine, side-by-side comparison.
 

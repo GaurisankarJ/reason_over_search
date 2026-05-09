@@ -1,10 +1,12 @@
 ---
 title: ORIGINAL PLAN B
-tags: []
+tags: [historical]
 source: internal
 created: 2026-05-04
-updated: 2026-05-04
+updated: 2026-05-07
 ---
+
+> **HISTORICAL (frozen Feb 2026, archived 2026-05-07).** RQ1–RQ4 (domain expansion, reward modeling, meta-reasoning, curriculum) were consolidated 2026-05-04 into a single reframed question — *"Is it feasible to post-train a small LM (Qwen3.5-2B) to Search-R1-level results under realistic resource constraints, and what is the optimised training recipe?"* — after Phase-2 wall-clock made the original sweep infeasible (11–17 days/run on 1× A100-80GB). Proposed recipe (E2H + S-GRPO + MC-GRPO + JustRL plain-GRPO control): see [`SUPERVISOR_MEETING_2026-05-07_m0_to_3.md`](SUPERVISOR_MEETING_2026-05-07_m0_to_3.md) § 5–6.
 
 # Tool-use to bridge verifiable and non-verifiable domains
 

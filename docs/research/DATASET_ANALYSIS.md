@@ -10,7 +10,7 @@ updated: 2026-05-06
 
 > Two purposes. (1) Describe each of the 7 QA benchmarks Search-R1 evaluates on (hops, sizes, structure, real example, our v1 EM). (2) Map difficulty for the E2H curriculum (NQ → HotpotQA → MuSiQue) and record how the E2H paper schedules training.
 >
-> See also: [SURVEY_FOCUSED.md §5.4 + §6.1 to §6.8](SURVEY_FOCUSED.md), [PARADIGM_REVIEW.md §17](PARADIGM_REVIEW.md), [docs/papers/2506.06632_e2h.md](../papers/2506.06632_e2h.md), [docs/report/SUPERVISOR_MEETING_2026-05-07.md §2](../report/SUPERVISOR_MEETING_2026-05-07.md).
+> See also: [SURVEY_FOCUSED.md §5.4 + §6.1 to §6.8](SURVEY_FOCUSED.md), [PARADIGM_REVIEW.md §17](PARADIGM_REVIEW.md), [docs/papers/2506.06632_e2h.md](../papers/2506.06632_e2h.md), [docs/report/SUPERVISOR_MEETING_2026-05-07_m0_to_3.md § 6](../report/SUPERVISOR_MEETING_2026-05-07_m0_to_3.md).
 
 **Last updated**: 2026-05-06
 
@@ -18,7 +18,7 @@ updated: 2026-05-06
 
 ## Summary table
 
-The 7 datasets used by Search-R1. The first 6 columns are dataset properties; the last two are **our v1 reproduced EM** (Plan B v1, 1k stratified subsample for the large datasets, full set for Bamboogle/MuSiQue, single seed, greedy decode; from [COMPARISON_PLAN_B_v1.md](../milestone_one/COMPARISON_PLAN_B_v1.md)).
+The 7 datasets used by Search-R1. The first 6 columns are dataset properties; the last two are **our v1 reproduced EM** (Plan B v1, 1k stratified subsample for the large datasets, full set for Bamboogle/MuSiQue, single seed, greedy decode; from [RESULTS_m1.md](../report/RESULTS_m1.md)).
 
 | Dataset | Hops | Train | Dev | Test (in our eval) | Format | Ours v1 base EM | Paper EM |
 |---|---|---:|---:|---:|---|---:|---:|
@@ -30,7 +30,7 @@ The 7 datasets used by Search-R1. The first 6 columns are dataset properties; th
 | **MuSiQue** | 2 to 4 (connected, causal) | 19,938 | 2,417 | 2,417 full | multi-paragraph Wikipedia, short span | 0.055 | 0.066 |
 | **Bamboogle** | 2 (adversarial) | (test-only) | (test-only) | 125 full | hard 2-hop Google can't easily answer | 0.088 | 0.128 |
 
-All 7 datasets use Wikipedia as the underlying corpus (or a snapshot thereof). The reproduction is within ±2.5 pp of paper average; per-dataset deltas in [COMPARISON_PLAN_B_v1.md](../milestone_one/COMPARISON_PLAN_B_v1.md). Training partitions are reported only for the three sources that ship a public train split; PopQA / Bamboogle are evaluation-only datasets.
+All 7 datasets use Wikipedia as the underlying corpus (or a snapshot thereof). The reproduction is within ±2.5 pp of paper average; per-dataset deltas in [RESULTS_m1.md](../report/RESULTS_m1.md). Training partitions are reported only for the three sources that ship a public train split; PopQA / Bamboogle are evaluation-only datasets.
 
 **Curriculum coverage.** Of the 7, only NQ, HotpotQA, MuSiQue have a public training split with hops 1, 2, and 2 to 4 respectively; that is the natural E2H ladder. The other four (TriviaQA, PopQA, 2Wiki, Bamboogle) stay as held-out evaluation, so the recipe never sees them during training and their EM is the OOD signal.
 
@@ -462,6 +462,6 @@ Largest gains on Blocksworld (planning) and Countdown (arithmetic); both tasks w
 - [SURVEY_FOCUSED.md](SURVEY_FOCUSED.md): paper cards for datasets and retrieval methods (E2H card at §5.4).
 - [PARADIGM_REVIEW.md](PARADIGM_REVIEW.md) §17: full Variant C stack with E2H included.
 - [INTEGRATION_GUIDE.md](INTEGRATION_GUIDE.md): decision tree for recipe runs.
-- [docs/report/SUPERVISOR_MEETING_2026-05-07.md §2](../report/SUPERVISOR_MEETING_2026-05-07.md): supervisor-facing recipe proposal.
+- [docs/report/SUPERVISOR_MEETING_2026-05-07_m0_to_3.md § 6](../report/SUPERVISOR_MEETING_2026-05-07_m0_to_3.md): supervisor-facing recipe proposal.
 - [docs/training/CONVERSATION_CONTEXT.md](../training/CONVERSATION_CONTEXT.md): Phase-2 training pipeline status.
-- [docs/milestone_one/COMPARISON_PLAN_B_v1.md](../milestone_one/COMPARISON_PLAN_B_v1.md): per-dataset v1 EM vs paper.
+- [docs/report/RESULTS_m1.md](../report/RESULTS_m1.md): per-dataset v1 EM vs paper.

@@ -13,7 +13,7 @@ updated: 2026-05-01
 
 ## What I claimed
 
-In [COMPARISON_PLAN_B.md](../milestone_one/COMPARISON_PLAN_B.md) (since corrected) and [CLAUDE.md](../../claude/CLAUDE.md) (since corrected), the suspect ranking briefly listed:
+In [../archive/COMPARISON_PLAN_B_v0.md](../milestone_1/../archive/COMPARISON_PLAN_B_v0.md) (since corrected) and [CLAUDE.md](../../claude/CLAUDE.md) (since corrected), the suspect ranking briefly listed:
 
 > **Sampling temperature: 0.0 vs paper/upstream.** […] Paper Appendix B.2 specifies *"temperature of 1.0 and a top-p value of 1.0"*; upstream `verl/trainer/config/ppo_trainer.yaml` `actor_rollout_ref.rollout` uses `temperature=1.0, top_p=0.95, top_k=-1, do_sample=True`, with **no separate `val_kwargs`** so the paper's eval ran at these same values.
 

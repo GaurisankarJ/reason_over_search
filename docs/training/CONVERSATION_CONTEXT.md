@@ -16,22 +16,22 @@ updated: 2026-05-06
 
 ## What this directory is
 
-`docs/training/` documents the **Phase-2 (M2) NeMo-RL port** of Search-R1's GRPO training loop, targeting Qwen3.5-2B on 1x A100 80GB. It is the *why* behind the code under [`training/`](../../training/) (the *what / how-to-run*). Owned by [Milestone 2](../milestone_two/MILESTONE_2.md).
+`docs/training/` documents the **Phase-2 (M2) NeMo-RL port** of Search-R1's GRPO training loop, targeting Qwen3.5-2B on 1x A100 80GB. It is the *why* behind the code under [`training/`](../../training/) (the *what / how-to-run*). Owned by [Milestone 2](../milestone_2/MILESTONE_2.md).
 
 Two parallel concerns:
 
 1. **Faithful reproduction** of Search-R1's GRPO training (paper-vs-ours audit, hyperparameter parity, EM reward, retrieval HTTP contract).
-2. **Engineering for our hardware** (1x A100 80GB SXM via Vast.ai; ~$1000 budget; thesis deadline 2026-06-15). Forces departures from the paper: smaller batch (102 prompts/step vs paper's 512), `sequence_packing: false` (Qwen3.5 GatedDeltaNet kernel crashes with packing), `train_micro_batch_size: 2` (without packing), IVF-SQ8 FAISS index (flat IP times out under rollout HTTP load).
+2. **Engineering for our hardware** (1x A100 80GB SXM via Vast.ai; ~\$1000 budget; thesis deadline 2026-06-15). Forces departures from the paper: smaller batch (102 prompts/step vs paper's 512), `sequence_packing: false` (Qwen3.5 GatedDeltaNet kernel crashes with packing), `train_micro_batch_size: 2` (without packing), IVF-SQ8 FAISS index (flat IP times out under rollout HTTP load).
 
-The active question (the supervisor-facing reframe of the thesis, see [`docs/report/SUPERVISOR_MEETING_2026-05-07.md`](../report/SUPERVISOR_MEETING_2026-05-07.md) §2): *"Is it feasible to post-train a small LM to Search-R1-level results under realistic resource constraints, and what is the optimised training recipe?"*. Candidate answer: a stack of E2H curriculum + S-GRPO + MC-GRPO on a Search-R1 GRPO baseline, with a JustRL plain-GRPO control alongside.
+The active question (the supervisor-facing reframe of the thesis, see [`docs/report/SUPERVISOR_MEETING_2026-05-07_m0_to_3.md`](../report/SUPERVISOR_MEETING_2026-05-07_m0_to_3.md) § 5): *"Is it feasible to post-train a small LM to Search-R1-level results under realistic resource constraints, and what is the optimised training recipe?"*. Candidate answer ([`SUPERVISOR_MEETING_2026-05-07_m0_to_3.md`](../report/SUPERVISOR_MEETING_2026-05-07_m0_to_3.md) § 6): a stack of E2H curriculum + S-GRPO + MC-GRPO on a Search-R1 GRPO baseline, with a JustRL plain-GRPO control alongside.
 
 ---
 
 ## State of the world (2026-05-06)
 
-**Pipeline status: built end-to-end and smoke-tested.** Four smoke combos (`{base, hybrid} × {qwen_native, paper}`) ran successfully on Vast.ai 1x A100 80GB. ~57 s / step at smoke shape (20 traj/step). Extrapolates linearly to ~24 min / step at the real config (510 traj/step) -> 1005 steps in **11 to 17 days** on 1x A100 (5 to 8.5 d on 1x H100). Cost: **$300 to $490 / run** at $1.20/GPU-h on 1x A100. **Smoke-anchored, with cited math; full derivation in [`SMOKE_RESULTS_2026-05-06.md` "Full-training wall-clock + cost"](SMOKE_RESULTS_2026-05-06.md#full-training-wall-clock--cost-phase-2-real-config) and [`PAPER_VS_OURS_TRAINING.md §7`](PAPER_VS_OURS_TRAINING.md#7-compute).**
+**Pipeline status: built end-to-end and smoke-tested.** Four smoke combos (`{base, hybrid} × {qwen_native, paper}`) ran successfully on Vast.ai 1x A100 80GB. ~57 s / step at smoke shape (20 traj/step). Extrapolates linearly to ~24 min / step at the real config (510 traj/step) -> 1005 steps in **11 to 17 days** on 1x A100 (5 to 8.5 d on 1x H100). Cost: **\$300 to \$490 / run** at \$1.20/GPU-h on 1x A100 (this is for the affordable 0.6-epoch budget = 1005 steps × 102 prompts ≈ 102k prompts of the 169k-row corpus; matching paper's 3-epoch schedule at our batch shape would be ~5× → ~55–85 d, ~\$1,600–2,400 / run). **Smoke-anchored, with cited math; full derivation in [`SMOKE_RESULTS_2026-05-06.md` "Full-training wall-clock + cost"](SMOKE_RESULTS_2026-05-06.md#full-training-wall-clock--cost-phase-2-real-config) and [`PAPER_VS_OURS_TRAINING.md §7`](PAPER_VS_OURS_TRAINING.md#7-compute).**
 
-**Plan reframe.** The original 6-run plan (3 seeds x 2 variants) is **superseded** by the recipe-ablation plan in [`docs/TODO_2026-05-04.md`](../TODO_2026-05-04.md). With ~$1000 USD budget and 11 to 17 d / run on 1x A100, that supports ~2 to 3 runs total: the JustRL plain-GRPO control + the optimised stack. Reward-ablation sweeps are off the table.
+**Plan reframe.** The original 6-run plan (3 seeds x 2 variants) is **superseded** by the recipe-ablation plan in [`docs/TODO_2026-05-04.md`](../TODO_2026-05-04.md). With ~\$1000 USD budget and 11 to 17 d / run on 1x A100 at the affordable 0.6-epoch budget, that supports ~2 to 3 runs total: the JustRL plain-GRPO control + the optimised stack. Phase-2 will **start with Qwen3.5-0.8B** (cheaper smoke + iteration; the architecture is shared with 2B so the pipeline ports trivially) before extending to 2B if the recipe holds. Reward-ablation sweeps are off the table.
 
 **First-pass training config currently disables both validation and checkpointing** (see [`VALIDATION.md`](VALIDATION.md)). The first long run is mechanics verification only; flip the `[DISABLED for first-pass training]` blocks back on per [`VALIDATION.md §7`](VALIDATION.md#7-re-enabling-validation-planned-not-active) before kicking off ablations.
 
@@ -52,8 +52,8 @@ Order matters. Each file has a clear job; cross-references between them resolve 
 | 6 | [`VALIDATION.md`](VALIDATION.md) | in-loop validation plan (NQ + HotpotQA test sets); current first-pass disables it; §7 has the re-enable steps |
 | 7 | [`NEMO_RL_KNOBS.md`](NEMO_RL_KNOBS.md) | every NeMo-RL config knob that matters with our shipped values; §7 is the authoritative diff-vs-upstream table |
 | 8 | [`VERL_REFERENCE.md`](VERL_REFERENCE.md) | verl-side reference settings (HTTP retriever contract, KL/GRPO mappings, FSDP-to-DTensor translations); useful when reading verl scripts |
-| 9 | [`SETUP_CLAUDE.md`](SETUP_CLAUDE.md) | runbook for *the agent* on a freshly-booted Vast.ai instance: bootstrap.sh, ask-the-user combo, launch command |
-| op | [`docs/milestone_two/PHASE_2_RUNBOOK.md`](../milestone_two/PHASE_2_RUNBOOK.md) | the *human* operational runbook (Vast.ai boot, retriever setup, launch, monitoring, recovery); pairs with SETUP_CLAUDE.md |
+| 9 | [`docs/vast/SETUP_VAST.md`](../vast/SETUP_VAST.md) | total Vast.ai setup guide (human or agent): bootstrap, retriever, eval, training; replaces the older agent-only `SETUP_CLAUDE.md` |
+| op | [`docs/milestone_2/PHASE_2_RUNBOOK.md`](../milestone_2/PHASE_2_RUNBOOK.md) | operational runbook for Phase-2 training (boot, retriever setup, launch, monitoring, recovery); pairs with `SETUP_VAST.md` |
 
 ---
 
@@ -83,8 +83,9 @@ Order matters. Each file has a clear job; cross-references between them resolve 
 | Wall-clock 1x A100 SXM | **11 to 17 d** (264 to 408 h) | 1005 x {15, 24} min |
 | Wall-clock 1x H100 SXM | 5 to 8.5 d (120 to 204 h) | smoke table; H100 ≈ 2x A100 bf16 |
 | Wall-clock 2x A100 SXM | 6.5 to 9.5 d (156 to 228 h) | smoke table; 1.7x speedup once decolocated |
-| $/run 1x A100 (Vast median) | **$300 to $490** at $1.20/h (264 x $1.20 = $317; 408 x $1.20 = $490) | [`SMOKE_RESULTS_2026-05-06.md` "Full-training wall-clock"](SMOKE_RESULTS_2026-05-06.md#full-training-wall-clock--cost-phase-2-real-config) |
-| $/run 1x H100 (recommended) | $240 to $410 at $2.00/h | same |
+| \$/run 1x A100 (Vast median, 0.6-epoch budget) | **\$300 to \$490** at \$1.20/h (264 x \$1.20 = \$317; 408 x \$1.20 = \$490) | [`SMOKE_RESULTS_2026-05-06.md` "Full-training wall-clock"](SMOKE_RESULTS_2026-05-06.md#full-training-wall-clock--cost-phase-2-real-config) |
+| \$/run 1x H100 (recommended, 0.6-epoch budget) | \$240 to \$410 at \$2.00/h | same |
+| \$/run 1x A100 (paper-equivalent 3-epoch) | ~\$1,600 to \$2,400 (~5× the 0.6-epoch numbers) | derived; infeasible on \$1000 thesis budget |
 | Retriever index | **IVF4096-SQ8** (~16 GB on disk) | [`local_retriever/retriever_config.yaml`](../../local_retriever/retriever_config.yaml); flat IP times out under training rollout HTTP load |
 | Retriever workers (training) | **8** | [`bootstrap.sh`](../../training/scripts/bootstrap.sh); each `flashrag.utils.get_retriever()` loads its own copy of the index |
 | Host RAM | **≥150 GB** (8 workers x ~16 GB index ≈ 128 GB resident) | [`bootstrap.sh`](../../training/scripts/bootstrap.sh) sanity check; PHASE_2_RUNBOOK |
@@ -154,8 +155,8 @@ The overlay's wiring contract: at launch, [`run_grpo.py`](../../training/scripts
 ## Active task pointers (2026-05-06)
 
 - **Active recipe-ablation plan**: [`docs/TODO_2026-05-04.md`](../TODO_2026-05-04.md). Stack candidate: E2H + S-GRPO + MC-GRPO; control: JustRL plain-GRPO. Budget: 2 to 3 runs.
-- **Thesis story so far**: [`docs/report/SUPERVISOR_MEETING_2026-05-07.md`](../report/SUPERVISOR_MEETING_2026-05-07.md) (two-page brief).
-- **Phase-1 (Qwen3-0.6B on ALICE) findings the recipe choices are reacting to**: [`docs/report/RESULTS_v0.md`](../report/RESULTS_v0.md), [`docs/report/RESULTS_v1.md`](../report/RESULTS_v1.md). Most actionable lever surfaced: paper's partial-credit reward creates a 0.1 floor that masks the tool-use signal.
+- **Thesis story so far**: [`docs/report/SUPERVISOR_MEETING_2026-05-07_m0_to_3.md`](../report/SUPERVISOR_MEETING_2026-05-07_m0_to_3.md) (two-page brief).
+- **Phase-1 (Qwen3-0.6B on ALICE) findings the recipe choices are reacting to**: [`docs/report/RESULTS_m0_a.md`](../report/RESULTS_m0_a.md), [`docs/report/RESULTS_m0_b.md`](../report/RESULTS_m0_b.md). Most actionable lever surfaced: paper's partial-credit reward creates a 0.1 floor that masks the tool-use signal.
 - **Re-enable validation + checkpointing**: [`VALIDATION.md §7`](VALIDATION.md#7-re-enabling-validation-planned-not-active). Single config flip, no code changes; do this before kicking off long ablations.
 
 ---
@@ -165,7 +166,7 @@ The overlay's wiring contract: at launch, [`run_grpo.py`](../../training/scripts
 - **Numbers cite their source.** When you write a wall-clock or $/run figure, link to the table or paragraph that derives it (smoke step time, scaling factor, $/h rate, multiplication). PAPER_VS_OURS_TRAINING.md §7 and SMOKE_RESULTS_2026-05-06.md "Full-training wall-clock + cost" are the two canonical sources for compute math.
 - **Paper-vs-ours framing is consistent**: the paper-side row uses `512` prompts/step (`n_agent=5` → 2560 trajectories); our row uses `102` prompts/step (`n_agent=5` → 510 trajectories). Don't conflate "trajectories" and "prompts"; that bug surfaced in May 2026 and the §7 table fix is the lesson.
 - **Validation/checkpointing are documented as DISABLED first-pass everywhere they appear** (configs, README, NEMO_RL_KNOBS, VALIDATION). When you re-enable, keep all four files in sync.
-- **No em-dashes** in any prose written for the user (project-wide style rule, see [`.claude/CLAUDE.md`](../../.claude/CLAUDE.md)).
+- **No em-dashes** in any prose written for the user (project-wide style rule, see [`claude/CLAUDE.md`](../../claude/CLAUDE.md)).
 
 ---
 

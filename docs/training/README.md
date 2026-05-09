@@ -8,7 +8,7 @@ updated: 2026-05-06
 
 # Training docs
 
-This directory documents the training-side reproduction of [Search-R1](https://www.alphaxiv.org/abs/2503.09516) on **Qwen3.5-2B** via [NeMo-RL](https://github.com/NVIDIA-NeMo/RL). Owned by [Milestone 2](../milestone_two/MILESTONE_2.md).
+This directory documents the training-side reproduction of [Search-R1](https://www.alphaxiv.org/abs/2503.09516) on **Qwen3.5-2B** via [NeMo-RL](https://github.com/NVIDIA-NeMo/RL). Owned by [Milestone 2](../milestone_2/MILESTONE_2.md).
 
 > Code lives at [`training/`](../../training/); these docs explain the *why*.
 
@@ -146,8 +146,8 @@ Retriever: separate process on `127.0.0.1:3005`. **IVF4096-SQ8 index** (`wiki18_
 ## Running training
 
 - **What to run** (commands, args, env vars): [`training/README.md`](../../training/README.md)
-- **Vast.ai sequence** (boot, retriever setup, smoke run, monitoring, eval gate): [`../milestone_two/PHASE_2_RUNBOOK.md`](../milestone_two/PHASE_2_RUNBOOK.md)
-- **Milestone scope + status**: [`../milestone_two/MILESTONE_2.md`](../milestone_two/MILESTONE_2.md)
+- **Vast.ai sequence** (boot, retriever setup, smoke run, monitoring, eval gate): [`../milestone_2/PHASE_2_RUNBOOK.md`](../milestone_2/PHASE_2_RUNBOOK.md)
+- **Milestone scope + status**: [`../milestone_2/MILESTONE_2.md`](../milestone_2/MILESTONE_2.md)
 
 ## Going deeper (educational)
 

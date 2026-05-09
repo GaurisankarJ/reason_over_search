@@ -114,6 +114,6 @@ Lint never auto-fixes. It surfaces; the LLM (or human) resolves.
 
 ## Pointers
 
-- Project schema for code + wiki: [`../.claude/CLAUDE.md`](../.claude/CLAUDE.md).
+- Project schema for code + wiki: [`../claude/CLAUDE.md`](../claude/CLAUDE.md).
 - Daily catch-up entry point: [`TODO_2026-05-04.md`](TODO_2026-05-04.md).
 - Per-strand state snapshots: `report/CONVERSATION_CONTEXT.md`, `training/CONVERSATION_CONTEXT.md`, `research/CONVERSATION_CONTEXT.md`, `internship/CONVERSATION_CONTEXT.md`, `sankar/00_CONVERSATION_CONTEXT.md`.
