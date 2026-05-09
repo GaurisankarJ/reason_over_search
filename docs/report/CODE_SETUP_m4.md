@@ -1,15 +1,15 @@
 ---
-title: Code Setup v3 (M4 Qwen3.5-0.8B baseline evaluation pipeline)
-tags: [report, eval, m4]
+title: Code Setup M4 — Qwen3.5-0.8B baseline evaluation pipeline (M4 + M4.1)
+tags: [report, eval, m4, m4.1]
 source: internal
 created: 2026-05-08
 updated: 2026-05-08
 ---
 
-# Code Setup v3 — M4 Qwen3.5-0.8B Evaluation Pipeline: What Changed vs the M3 Pipeline
+# Code Setup M4: Qwen3.5-0.8B Evaluation Pipeline (M4 + M4.1)
 
-**Date**: 2026-05-08
-**Scope**: Documents what changed from the M3 evaluation pipeline ([`evaluation_research/`](../../evaluation_research/), Qwen3-0.6B with Search-R1 invented `<search>` / `<result>` tags, audited in [`CODE_SETUP_v2.md`](CODE_SETUP_v2.md)) to the M4 pipeline ([`evaluation_qwen35/`](../../evaluation_qwen35/)) for the **Qwen3.5-0.8B base + hybrid baselines** with the family-native `<tool_call>` / `<tool_response>` tag scheme.
+**Date**: 2026-05-08 (M4 + M4.1 prompt redesign same-day)
+**Scope**: Documents what changed from the M3 evaluation pipeline ([`evaluation_research/`](../../evaluation_research/), Qwen3-0.6B with Search-R1 invented `<search>` / `<result>` tags, audited in [`CODE_SETUP_m3.md`](CODE_SETUP_m3.md)) to the M4 / M4.1 pipeline ([`evaluation_qwen35/`](../../evaluation_qwen35/)) for the **Qwen3.5-0.8B base + hybrid baselines** with the family-native `<tool_call>` / `<tool_response>` tag scheme. **M4.1 (2026-05-08)** swapped the placeholder flat-form `<tool_call>X</tool_call>` for the canonical Qwen3.5 nested-XML form (auto-injected by `apply_chat_template(..., tools=[QWEN35_SEARCH_TOOL])`); the rest of M4 is unchanged. This doc reflects the M4.1 state.
 **Cluster (M4 eval)**: ALICE 1× A100-80GB (`gpu-short` + `gpu-a100-80g`).
 **Source paths**: [`evaluation_qwen35/`](../../evaluation_qwen35/) (overlay copy of `evaluation_research/` with the M4 deltas), [`scripts/run_m4.sh`](../../scripts/run_m4.sh), [`scripts/sbatch_m4.sh`](../../scripts/sbatch_m4.sh), [`scripts/m4_download_models.sh`](../../scripts/m4_download_models.sh).
 
@@ -21,32 +21,34 @@ updated: 2026-05-08
 |---|---|---|
 | **Model family** | Qwen3-0.6B (hybrid) | **Qwen3.5-0.8B** (base + hybrid; both untrained) |
 | **HF repos** | `Qwen/Qwen3-0.6B`, `pantomiman/Qwen3-0.6B-v0`, `pantomiman/Qwen3-0.6B-v0.1` | **`Qwen/Qwen3.5-0.8B`** + **`Qwen/Qwen3.5-0.8B-Base`** |
-| **Action tag** | `<search>` / `</search>` (Search-R1 invention; not in pre-training) | **`<tool_call>` / `</tool_call>`** (Qwen3.5-native vocab tokens 248058 / 248059; in distribution from post-training) |
-| **Observation tag** | `<result>` / `</result>` (M3 verl-legacy training rollout convention) | **`<tool_response>` / `</tool_response>`** (Qwen3.5-native vocab tokens 248066 / 248067) |
-| **Prompt template (M3 `p1_basic_w_ex` ↔ M4 verbatim with renamed tags)** | `QWEN3_0_6B_TEMPLATE` | **`QWEN35_0_8B_TEMPLATE`** (same prose; only `<search>` ↔ `<tool_call>`, `<result>` ↔ `<tool_response>`) |
-| **prompt_mode** | `qwen3` / `qwen3_p1_basic_w_ex` / `qwen3_p3_decide_no_ex` | **`qwen35`** / **`qwen35_p1_basic_w_ex`** |
+| **Action tag** | `<search>` / `</search>` (Search-R1 invention; not in pre-training) | **canonical Qwen3.5 nested-XML** `<tool_call><function=search><parameter=query>X</parameter></function></tool_call>` (CHAT_TEMPLATE.md §2; auto-injected by `apply_chat_template(..., tools=[QWEN35_SEARCH_TOOL])`) |
+| **Observation tag** | `<result>` / `</result>` (M3 verl-legacy training rollout convention) | **`<tool_response>` / `</tool_response>`** (Qwen3.5-native vocab tokens 248066 / 248067), turn-bounded |
+| **Prompt template** | `QWEN3_0_6B_TEMPLATE` (full protocol in system) | **`QWEN35_NATIVE_TEMPLATE`** (3-line role + 3-step protocol; tools schema auto-injected) + `QWEN35_SEARCH_TOOL` (OpenAI-style schema mirror of training-side `chat_template/tools.py:SEARCH_TOOL`) |
+| **prompt_mode** | `qwen3` / `qwen3_p1_basic_w_ex` / `qwen3_p3_decide_no_ex` | **`qwen35`** / **`qwen35_native`** (alias) |
+| **User message** | bare `{question}` | `Question: {question}` |
+| **Final-answer wrap** | `<answer>The final answer is \[ \boxed{X} \]</answer>` (M3 reproducibility) | plain `<answer>X</answer>` |
 | **Action stop tokens** | `[</search>, </answer>, <\|im_end\|>, <\|endoftext\|>]` | `[</tool_call>, </answer>, <\|im_end\|>, <\|endoftext\|>]` |
-| **Result wrapper** | `" <result>\n{X}\n</result>"` (leading space) | `" <tool_response>\n{X}\n</tool_response>"` (leading space, parallel form) |
+| **Result wrapper** | `" <result>\n{X}\n</result>"` (leading space; in-stream continuation) | `<\|im_end\|>\n<\|im_start\|>user\n<tool_response>\n{X}\n</tool_response><\|im_end\|>\n<\|im_start\|>assistant\n` (turn-bounded; mirrors training-side `format_docs_qwen_native`) |
 | **`enable_thinking`** | True (Qwen3 hybrid) | True for hybrid; False for base (chat template's auto-injected `<think>\n\n</think>` is harmless on a base model) |
 | **Per-mode budgets** | `max_search_turns=5`, `step_limit=8192`, `max_obs_length=256`, `retrieval_topk=5`, `generator_max_input_len=4096` | identical (M3 and M4 share the same budget shape for cross-family comparability) |
 | **Retrieval text format** | raw `{contents}\n\n` joined and stripped | identical |
 | **Retriever** | IVF-SQ8 × 8 workers (default); flat IP × 2 (paper-fidelity opt-in) | identical (project-root `corpus/`, `indexes/`, `models/`) |
 | **SGLang launch flags** | `--context-length 8192 --dtype bfloat16 --trust-remote-code` | identical |
 | **Eval venv** | `/home/s4374886/.conda/envs/evaluation_search_r1` (with `evaluation_research/` editable-installed) | **same conda env**; `evaluation_qwen35/flashrag/` resolves via cwd-precedence (script-dir is sys.path[0] when run via `cd evaluation_qwen35 && python run_eval.py`); no editable install needed |
-| **Quick-eval (100 items)** | Not wired (see CODE_SETUP_v2 §10: `sample_num` was unused) | **`--test_sample_num 100 --random_sample True --seed 1`** plumbed through `run_eval.py` to FlashRAG's `Dataset.sample_num` (subsample at load time); `random.seed(config["seed"])` set in `run_eval.py` for determinism |
+| **Quick-eval (100 items)** | Not wired (see CODE_SETUP_m3 §10: `sample_num` was unused) | **`--test_sample_num 100 --random_sample True --seed 1`** plumbed through `run_eval.py` to FlashRAG's `Dataset.sample_num` (subsample at load time); `random.seed(config["seed"])` set in `run_eval.py` for determinism |
 
 ---
 
 ## 2. What's Unchanged (M3 14-fix audit holds verbatim)
 
-The 14 alignment fixes catalogued in [`CODE_SETUP_v2.md`](CODE_SETUP_v2.md) §3 transfer to M4 unchanged:
+The 14 alignment fixes catalogued in [`CODE_SETUP_m3.md`](CODE_SETUP_m3.md) §3 transfer to M4 unchanged:
 
 - Project-root `corpus/`, `indexes/`, `models/` symlinks (#1)
 - `pip install ninja` in the conda env (#2)
 - `module load CUDA/12.4.0` + `source /etc/profile.d/lmod.sh` (#3)
-- Single-brace template in `QWEN35_0_8B_TEMPLATE` (#4 carries forward)
-- `extract_solution` unwraps `\boxed{X}` from `<answer>...</answer>` content (#5; reused unchanged)
-- Leading-space `" <tool_response>\n{X}\n</tool_response>"` (#6; same intent as M3's leading-space `<result>`)
+- Single-brace template in `QWEN35_NATIVE_TEMPLATE` (#4 carries forward)
+- `extract_solution` unwraps `\boxed{X}` from `<answer>...</answer>` content (#5; reused unchanged — still works on plain `<answer>X</answer>` since `\boxed{}` matching is optional in the regex)
+- Turn-bounded `<\|im_end\|><\|im_start\|>user<tool_response>...</tool_response><\|im_end\|><\|im_start\|>assistant` envelope (#6 superseded by M4.1 — replaces the leading-space form with the canonical Qwen3.5 multi-turn shape)
 - Raw `{contents}\n\n` retrieval text (#7; same)
 - top-5 retrieval (#8; same)
 - per-mode budgets (#9; same shape)
@@ -78,19 +80,39 @@ if config["framework"] == "sgl_remote":
 
 Caught while inspecting the freshly-downloaded `Qwen/Qwen3.5-0.8B/config.json` on ALICE (commit `2be8e0a`).
 
-### 3.2 `<tool_call>` flat-form parser + family-based dispatch in `active_pipeline.py`
+### 3.2 Canonical Qwen3.5 nested-XML tool use + family-based dispatch in `active_pipeline.py`
 
-The flat form (`<tool_call>X</tool_call>`) is a deliberate choice over Qwen3.5's nested XML form (`<tool_call><function=name><parameter=arg>X</parameter></function></tool_call>`; see [`docs/training/CHAT_TEMPLATE.md`](../training/CHAT_TEMPLATE.md) §2). The flat form keeps the prompt prose literal-identical to M3's `p1_basic_w_ex` (one-line query, one-line response), and avoids the auto-injected tools schema preamble that would otherwise prepend ~600 tokens of tool description on every prompt.
+**M4.1 design (replaces the M4-placeholder flat form).** Qwen3.5 was post-trained on the nested-XML tool-call form documented in [`docs/training/CHAT_TEMPLATE.md`](../training/CHAT_TEMPLATE.md) §2:
 
-New parser ([`evaluation_qwen35/flashrag/search_r1/parser.py`](../../evaluation_qwen35/flashrag/search_r1/parser.py)):
+```
+<tool_call>
+<function=search>
+<parameter=query>
+QUERY TEXT
+</parameter>
+</function>
+</tool_call>
+```
+
+The format spec is **auto-injected** by `apply_chat_template(..., tools=[QWEN35_SEARCH_TOOL])` — the chat template walks the tools schema and emits a `# Tools` block (function signature) + a verbatim format example + an `<IMPORTANT>` reminder, all before our system content. So our system prompt only needs the role intro + minimal protocol; the format spec is free.
+
+The earlier M4 draft used a flat `<tool_call>X</tool_call>` form to keep the prose literal-identical to M3's `p1_basic_w_ex` and to avoid the ~270-token tools-schema preamble. That trade was incorrect: the flat form is **off-distribution** for Qwen3.5 (it asks the model to ignore its strongest tool-use prior), and the schema preamble is an in-distribution token cost the model was trained to handle. M4.1 swaps to the canonical form.
+
+New parser ([`evaluation_qwen35/flashrag/search_r1/parser.py`](../../evaluation_qwen35/flashrag/search_r1/parser.py); mirror of training-side [`parsers.py:_RE_QWEN_QUERY`](../../training/src/environments/parsers.py)):
 
 ```python
 def extract_tool_call_query(text):
-    match = re.search(r"<tool_call>(.*?)</tool_call>", text, re.DOTALL)
+    pattern = re.compile(
+        r"<tool_call>.*?<parameter=query>\s*(.*?)\s*</parameter>.*?</tool_call>",
+        re.DOTALL,
+    )
+    match = pattern.search(text)
     if not match: return "", "no_tool_call_tag"
     query = match.group(1).strip()
     return (query, "valid_tool_call_tag") if query else ("", "empty_tool_call_query")
 ```
+
+Permissive: only the `<parameter=query>` body matters; the function name is not enforced (the registered schema only declares `search`, so any other name would fall to the corrective branch).
 
 Family-based dispatch ([`evaluation_qwen35/flashrag/pipeline/active_pipeline.py`](../../evaluation_qwen35/flashrag/pipeline/active_pipeline.py)):
 
@@ -100,11 +122,16 @@ def _is_qwen35(mode): return mode == 'qwen35' or mode.startswith('qwen35_')
 def _is_qwen_family(mode): return _is_qwen3(mode) or _is_qwen35(mode)
 ```
 
-The pipeline picks `action_stop`, the parser, and the result-wrapper template by family (qwen3 / qwen35 / search_r1) — single switch swaps the four behaviours atomically. Same per-mode budgets / retrieval format / `enable_thinking` apply to qwen3 + qwen35 (the families share the 4096-budget / top-5 / 256-obs / 5-turn shape so cross-family comparison is apples-to-apples).
+The qwen35 branch additionally:
+- Passes `tools=[QWEN35_SEARCH_TOOL]` to `apply_chat_template`.
+- Builds the user message as `Question: {question}` (vs bare `{question}` for qwen3).
+- Wraps the tool response in turn-bounded `<\|im_end\|><\|im_start\|>user<tool_response>...</tool_response><\|im_end\|><\|im_start\|>assistant\n` (vs leading-space continuation for qwen3).
+
+Same per-mode budgets / retrieval text format / `enable_thinking` apply to qwen3 + qwen35 (the families share the 4096-budget / top-5 / 256-obs / 5-turn shape so cross-family comparison is apples-to-apples).
 
 ### 3.3 Quick-eval plumbing (`--test_sample_num` / `--random_sample` / `--seed`)
 
-CODE_SETUP_v2 §10 noted that `sample_num` was *not respected* by the M3 search_r1 path. M4 wires the FlashRAG `test_sample_num` / `random_sample` / `seed` config keys through CLI flags so the smoke run can hit 100 random items per dataset deterministically:
+CODE_SETUP_m3 §10 noted that `sample_num` was *not respected* by the M3 search_r1 path. M4 wires the FlashRAG `test_sample_num` / `random_sample` / `seed` config keys through CLI flags so the smoke run can hit 100 random items per dataset deterministically:
 
 ```bash
 --test_sample_num 100 --random_sample True --seed 1
@@ -180,8 +207,8 @@ Same 8-worker IVF-SQ8 retriever (~134 GB RAM peak) + SGLang on 1× A100-80GB. CP
 
 ## 7. Pointers
 
-- M3 alignment audit (the 14 fixes M4 inherits unchanged): [`CODE_SETUP_v2.md`](CODE_SETUP_v2.md) §3
-- M4 milestone narrative: [`../milestone_four/MILESTONE_4.md`](../milestone_four/MILESTONE_4.md)
-- M4 results table (when populated): `RESULTS_v3.md` (planned)
+- M3 alignment audit (the 14 fixes M4 inherits unchanged): [`CODE_SETUP_m3.md`](CODE_SETUP_m3.md) §3
+- M4 milestone narrative: [`../milestone_4/MILESTONE_4.md`](../milestone_4/MILESTONE_4.md)
+- M4 results table (when populated): `RESULTS_m4.md` (planned)
 - Qwen3.5 chat template (verbatim): [`../training/CHAT_TEMPLATE.md`](../training/CHAT_TEMPLATE.md) §2
 - Active recipe-ablation plan: [`../TODO_2026-05-04.md`](../TODO_2026-05-04.md)

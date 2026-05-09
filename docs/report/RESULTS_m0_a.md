@@ -1,17 +1,18 @@
 ---
-title: Results v0 (Phase-1 verl training, 14 ALICE Qwen3-0.6B runs)
-tags: [report, training, phase1, v0]
-source: internal
+title: Results M0_a — Phase-1 verl training, 14 ALICE Qwen3-0.6B runs (W&B `research`)
+tags: [report, training, m0, phase1]
+source: W&B `gaurisankarj1996-leiden-university/research`
 created: 2026-05-04
-updated: 2026-05-06
+updated: 2026-05-08
 ---
 
-# Results v0: First Ablation Block (W&B project `research`)
+# Results M0_a: First Ablation Block (W&B project `research`)
 
-**Date compiled**: 2026-05-03  
-**Source**: W&B project [`gaurisankarj1996-leiden-university/research`](https://wandb.ai/gaurisankarj1996-leiden-university/research)  
-**Hardware (all runs)**: ALICE cluster, 1× A100 (mostly the `gpu_1_40gb` `x_min` profile).  
-**Reward**: paper-faithful F1 + 0.1 partial-credit + 0 (no reward ablation in this block).  
+**Date compiled**: 2026-05-03 (renamed from `RESULTS_m0_a.md` 2026-05-08).  
+**Source**: W&B project [`gaurisankarj1996-leiden-university/research`](https://wandb.ai/gaurisankarj1996-leiden-university/research). Per-run CSVs preserved at [`archive/m0_a/csv/`](archive/m0_a/csv/).  
+**Hardware (all runs)**: ALICE cluster, 1× A100-40GB (mostly the `gpu_1_40gb` `x_min` profile).  
+**Reward**: paper-faithful **ReSearch reward (format + EM partial credit)**, three-tier: F1 if F1>0; 0.1 if format-OK but wrong; 0 otherwise. (No reward ablation in this block.)  
+**Paper attribution**: Phase-1 builds on the **ReSearch paper** (alphaxiv 2503.19470); the `<search>` / `<result>` action tags are ReSearch's, not Search-R1's.  
 **Note**: Qwen3-0.6B was retired after this block; subsequent work moved to Qwen3.5. This document is a closed record of what the Qwen3-0.6B block produced.
 
 > **Bottom line up front**: the model does learn: rewards rise across all 9 prompt-ablation runs (`run_1_4b` tag). Final reward levels stay around 0.16 to 0.22. The single biggest behavioral lever in this block is **whether the prompt includes a few-shot example**: stripping the example from a weak rule-set (`p1_basic`, `p2_basic2`) causes the model to abandon the search tool entirely. A stronger rule-set (`p3_decide`) survives example removal and produces the best reward of the block (`p3_decide_no_ex` at 0.215).

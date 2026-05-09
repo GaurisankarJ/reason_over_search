@@ -1,16 +1,16 @@
 ---
-title: Code Setup v1 (M2 NeMo-RL pipeline)
+title: Code Setup M2 — NeMo-RL Qwen3.5-2B training pipeline
 tags: [report, training, m2]
 source: internal
 created: 2026-05-06
-updated: 2026-05-06
+updated: 2026-05-08
 ---
 
-# Code Setup v1 — M2 NeMo-RL Training Pipeline: What Changed vs v0
+# Code Setup M2: NeMo-RL Training Pipeline (Phase-2 setup)
 
-**Date**: 2026-05-06
-**Scope**: Documents what changed from the v0 ALICE / Qwen3-0.6B / verl port (`docs/report/CODE_SETUP_v0.md`) to the current M2 pipeline in this repo (`reason_over_search`, branch `research_v1`).
-**Cluster**: All M2 training on **Vast.ai 1x A100-80GB** (ALICE retired).
+**Date**: 2026-05-06 (updated 2026-05-08).  
+**Scope**: What changed from the M0 ALICE / Qwen3-0.6B / verl port ([`CODE_SETUP_m0.md`](CODE_SETUP_m0.md)) to the M2 NeMo-RL training pipeline in this repo. Phase-2 (Qwen3.5-2B-Base + Qwen3.5-2B) targets the same ReSearch-style multi-turn search-tool RL recipe, ported to a framework that supports the model.  
+**Cluster**: Vast.ai 1× A100-80GB.  
 **Source path in this repo**: `training/` (src, configs, scripts, nemo_rl vendor, tests).
 
 ---
@@ -188,4 +188,4 @@ These are intentionally gated for first-pass training; each is a one-line flip o
 - NeMo-RL knob guide: `docs/training/NEMO_RL_KNOBS.md`
 - verl → NeMo-RL translation table (KL types, batch math): `docs/training/VERL_REFERENCE.md`
 - Smoke results with reward curves: `docs/training/SMOKE_RESULTS_2026-05-06.md`
-- v0 baseline this document extends: `docs/report/CODE_SETUP_v0.md`
+- v0 baseline this document extends: `docs/report/CODE_SETUP_m0.md`

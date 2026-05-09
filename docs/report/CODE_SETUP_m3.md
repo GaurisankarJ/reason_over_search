@@ -1,17 +1,17 @@
 ---
-title: Code Setup v2 (M3 + M3.1 Qwen3-0.6B evaluation pipeline)
+title: Code Setup M3 — Qwen3-0.6B evaluation pipeline (M3 + M3.1)
 tags: [report, eval, m3, m3.1]
 source: internal
 created: 2026-05-07
 updated: 2026-05-08
 ---
 
-# Code Setup v2 — M3 Qwen3-0.6B Evaluation Pipeline: What Changed vs the Search-R1 Eval Port
+# Code Setup M3: Qwen3-0.6B Evaluation Pipeline (M3 + M3.1)
 
-**Date**: 2026-05-07
-**Scope**: Documents what changed from the Search-R1-style eval port (`evaluation_search_r1/`, used for the M1 paper-baseline reproduction) to the M3 evaluation pipeline (`evaluation_research/`) that aligns the eval to the **`p1_basic_w_ex_z7kcxfof`** training rollout (Phase-1 v0 block, the only run that converged on heavy-tool 2-call / 4-turn behavior).
-**Cluster (training, original)**: ALICE 1× A100-40GB (Phase-1 GRPO, 2026-04-06).
-**Cluster (M3 eval)**: ALICE 1× A100-80GB (`gpu-short` + `gpu-a100-80g`).
+**Date**: 2026-05-07 (M3); extended 2026-05-08 (M3.1, see §13.5).  
+**Scope**: What changed from the Search-R1-style eval port (`evaluation_search_r1/`, used for the M1 paper-baseline reproduction) to the M3 evaluation pipeline (`evaluation_research/`) that aligns the eval to the **`p1_basic_w_ex_z7kcxfof`** training rollout (Phase-1 v0 block, the only run that converged on heavy-tool 2-call / 4-turn behaviour). M3.1 extends the same pipeline to the highest-reward Phase-1 run, `p3_decide_no_ex_el6s2d2h`.  
+**Cluster (training, original)**: ALICE 1× A100-40GB (Phase-1 GRPO, 2026-04-06 / 2026-04-09).  
+**Cluster (M3 eval)**: ALICE 1× A100-80GB (`gpu-short` + `gpu-a100-80g`).  
 **Source path in this repo**: `evaluation_research/` (overlay copy of `evaluation_search_r1/` with M3 code changes), `local_retriever/`, `scripts/run_m3.sh`, `scripts/sbatch_m3.sh`.
 
 ---
@@ -114,7 +114,7 @@ The four files touched (`templates.py`, `reward.py`, `active_pipeline.py`, `para
 
 ## 5. Prompt — `p1_basic_w_ex` verbatim (system message)
 
-The `QWEN3_0_6B_TEMPLATE` in `evaluation_research/flashrag/search_r1/templates.py` is the byte-for-byte system message used in the `p1_basic_w_ex_z7kcxfof` training run (verified against `docs/report/RESULTS_v0.md:175-189`):
+The `QWEN3_0_6B_TEMPLATE` in `evaluation_research/flashrag/search_r1/templates.py` is the byte-for-byte system message used in the `p1_basic_w_ex_z7kcxfof` training run (verified against `docs/report/RESULTS_m0_a.md:175-189`):
 
 ```text
 You are a helpful assistant who can answer questions using multiple Wikipedia search tool calls.
@@ -180,7 +180,7 @@ The `\boxed{+ … }+` pattern tolerates the (now-fixed) double-brace bug from §
 
 ## 8. Key Qwen3-0.6B Hybrid Constraints Surfaced During Eval
 
-1. **`enable_thinking=True` is required** (same finding as M2 NeMo-RL training, `CODE_SETUP_v1.md` §7.2). With `False`, Qwen3 hybrid's chat-template Jinja inserts `<think>\n\n</think>\n\n` before the assistant turn — a *closed* empty think block. The model has no open block to fill and emits short shallow answers. With `True`, no auto-injection; the training rollouts show the post-GRPO model emits `<think>...</think>` before each `<search>` (verified against `re-search/examples/rollout_20260407_104124_top5_whole_datapoint.jsonl:1`).
+1. **`enable_thinking=True` is required** (same finding as M2 NeMo-RL training, `CODE_SETUP_m2.md` §7.2). With `False`, Qwen3 hybrid's chat-template Jinja inserts `<think>\n\n</think>\n\n` before the assistant turn — a *closed* empty think block. The model has no open block to fill and emits short shallow answers. With `True`, no auto-injection; the training rollouts show the post-GRPO model emits `<think>...</think>` before each `<search>` (verified against `re-search/examples/rollout_20260407_104124_top5_whole_datapoint.jsonl:1`).
 
 2. **flashinfer attention backend is the right choice on A100 + CUDA 12.4** (mid-debug we briefly tried `--attention-backend triton --disable-cuda-graph` to bypass missing nvcc; once `module load CUDA/12.4.0` was sourced, default flashinfer with cuda-graph for decode worked). SGLang's per-batch log shows `cuda graph: True` for `Decode batch` lines (the `cuda graph: False` on `Prefill batch` lines is normal — prefill never uses cuda graphs).
 
@@ -290,7 +290,7 @@ The +0.032 EM lift on bamboogle survives end-to-end and matches the user's prior
 
 After M3 closed, we evaluate `p3_decide_no_ex_el6s2d2h` — the Phase-1 v0 run with the **highest end-of-run rollout reward (0.215)** but a **different prompt** than z7kcxfof. This required no new alignment fixes; the M3 14-fix audit holds. Two purely additive changes to the pipeline:
 
-1. **New prompt template constant**: `P3_DECIDE_NO_EX_TEMPLATE` in `evaluation_research/flashrag/search_r1/templates.py`, byte-for-byte identical to the system message used at training time (recovered from [`docs/report/RESULTS_v0.md`](RESULTS_v0.md) §`p3_decide_no_ex (el6s2d2h)`). Difference vs `QWEN3_0_6B_TEMPLATE` (= `p1_basic_w_ex`):
+1. **New prompt template constant**: `P3_DECIDE_NO_EX_TEMPLATE` in `evaluation_research/flashrag/search_r1/templates.py`, byte-for-byte identical to the system message used at training time (recovered from [`docs/report/RESULTS_m0_a.md`](RESULTS_m0_a.md) §`p3_decide_no_ex (el6s2d2h)`). Difference vs `QWEN3_0_6B_TEMPLATE` (= `p1_basic_w_ex`):
    - "Use the search tool **multiple** Wikipedia search tool calls" → "Use the search tool" (the "multiple" was the heavy-tool anchor in M3)
    - "Answers should be based on the search results" → "Use the information in the search results to determine the final answer" + two extra decision-rule sentences
    - **No Hamlet 2-search example** at the bottom (the headline structural difference)
@@ -332,16 +332,16 @@ The repo also ships a model card (`README.md` in the same directory) that docume
 
 In all three cases the retriever + checkpoint + pipeline were healthy at failure time; only the wait windows were too tight for cold-cache imports. Both fixes are pure-margin (the loops break the moment `/health` returns 200, so warm-cache wall-clock is unaffected). The two budgets are now symmetric at 1200 s for retriever / 600 s for SGLang.
 
-For results see [`RESULTS_v2.md`](RESULTS_v2.md) §14 (sbatch job 2150167 after the two prior timeouts).
+For results see [`RESULTS_m3.md`](RESULTS_m3.md) §14 (sbatch job 2150167 after the two prior timeouts).
 
 ---
 
 ## 14. Pointers
 
-- Training run that produced `qwen_3_0.6b_v0`: `docs/report/RESULTS_v0.md` §`p1_basic_w_ex (z7kcxfof)`
-- M3 milestone narrative: `docs/milestone_three/MILESTONE_3.md`
-- M3 evaluation results table: `docs/report/RESULTS_v2.md`
-- Phase-1 ALICE training synthesis (29 runs): `docs/report/RESULTS_v0.md` (14) + `docs/report/RESULTS_v1.md` (15)
-- M2 NeMo-RL training pipeline (Phase-2 forward): `docs/report/CODE_SETUP_v1.md`
+- Training run that produced `qwen_3_0.6b_v0`: `docs/report/RESULTS_m0_a.md` §`p1_basic_w_ex (z7kcxfof)`
+- M3 milestone narrative: `docs/milestone_3/MILESTONE_3.md`
+- M3 evaluation results table: `docs/report/RESULTS_m3.md`
+- Phase-1 ALICE training synthesis (29 runs): `docs/report/RESULTS_m0_a.md` (14) + `docs/report/RESULTS_m0_b.md` (15)
+- M2 NeMo-RL training pipeline (Phase-2 forward): `docs/report/CODE_SETUP_m2.md`
 - Original Search-R1 eval port (M1 paper-fidelity baseline): `evaluation_search_r1/` (preserved unchanged)
 - ReSearch reference implementation cross-checked against: `/home/s4374886/omega/re-search/src/flashrag/pipeline/active_pipeline.py` (ReSearchPipeline) and `/home/s4374886/omega/re-search/src/verl_legacy/workers/rollout/vllm_rollout/vllm_rollout.py` (the verl_legacy rollout that produced the v0 checkpoint)

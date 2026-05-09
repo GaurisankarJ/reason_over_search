@@ -1,17 +1,19 @@
 ---
-title: Results v1 (Phase-1 verl training, 15 ALICE Qwen3-0.6B `<tool_call>` runs)
-tags: [report, training, phase1, v1]
-source: internal
+title: Results M0_b — Phase-1 verl training, 15 ALICE Qwen3-0.6B `<tool_call>` runs (W&B `research_revamp`)
+tags: [report, training, m0, phase1]
+source: W&B `gaurisankarj1996-leiden-university/research_revamp`
 created: 2026-05-04
-updated: 2026-05-06
+updated: 2026-05-08
 ---
 
-# Results v1: Second Block (W&B project `research_revamp`)
+# Results M0_b: Second Block (W&B project `research_revamp`)
 
-**Date compiled**: 2026-05-03  
-**Source**: W&B project [`gaurisankarj1996-leiden-university/research_revamp`](https://wandb.ai/gaurisankarj1996-leiden-university/research_revamp)  
-**Hardware**: ALICE cluster, 1× A100 (mostly `gpu_1_40gb`; three short smoke runs on `gpu_1_80gb`).  
-**Model**: still `Qwen3-0.6B` (10 instruct runs) + `Qwen3-0.6B-Base` (5 base runs). Qwen3-0.6B was retired after this block.
+**Date compiled**: 2026-05-03 (renamed from `RESULTS_m0_b.md` 2026-05-08).  
+**Source**: W&B project [`gaurisankarj1996-leiden-university/research_revamp`](https://wandb.ai/gaurisankarj1996-leiden-university/research_revamp). Per-run CSVs preserved at [`archive/m0_b/csv/`](archive/m0_b/csv/).  
+**Hardware**: ALICE cluster, 1× A100-40GB (10 instruct + 5 base runs; three short smoke runs on the 80GB profile).  
+**Model**: `Qwen3-0.6B` (10 instruct runs) + `Qwen3-0.6B-Base` (5 base runs). Qwen3-0.6B was retired after this block.  
+**Reward**: paper-faithful **ReSearch reward (format + EM partial credit)** for most runs; reward function was edited mid-block (between Apr 17 and Apr 18); see Finding 3 / §10.3 below.  
+**Paper attribution**: Phase-1 builds on the **ReSearch paper**; the v1 block introduced an in-distribution `<tool_call>` / `<tool_response>` JSON tag format as an ablation (the published ReSearch paper itself uses `<search>` / `<result>`).
 
 > **Bottom line up front**:
 > 1. v1 introduced the new tool-call format (`<tool_call>{...JSON...}</tool_call>` + `<tool_response>`) and the JSON `{"query": "..."}` arguments contract. Three instruct prompts (`r0_strict_contract`, `r1_query_object`, `r2_concise`) all converged to the standard 1-tool / 3-turn / ~1000-1100 token regime, with rewards in the 0.14 to 0.18 band (slightly lower than v0's 0.18 to 0.22).

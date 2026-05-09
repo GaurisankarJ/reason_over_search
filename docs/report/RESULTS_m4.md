@@ -1,12 +1,12 @@
 ---
-title: RESULTS v3 — Qwen3.5-0.8B M4 baseline (untrained, base + hybrid)
+title: Results M4 — Qwen3.5-0.8B baseline (untrained, base + hybrid)
 tags: [report, eval, m4, qwen3.5]
 source: internal
 created: 2026-05-08
 updated: 2026-05-08
 ---
 
-# RESULTS v3 — Qwen3.5-0.8B (M4) Baseline
+# Results M4: Qwen3.5-0.8B Untrained Baseline
 
 **Status (as of 2026-05-08):** smoke runs in flight; full sweep pending. This file is the live record; numbers populate as jobs finish.
 
@@ -17,11 +17,11 @@ updated: 2026-05-08
 | `qwen3.5_0.8b` (hybrid) | [`Qwen/Qwen3.5-0.8B`](https://huggingface.co/Qwen/Qwen3.5-0.8B) | `eval/qwen3.5_0.8b/` | `qwen35` | True |
 | `qwen3.5_0.8b_base` | [`Qwen/Qwen3.5-0.8B-Base`](https://huggingface.co/Qwen/Qwen3.5-0.8B-Base) | `eval/qwen3.5_0.8b_base/` | `qwen35` | False |
 
-Pipeline: [`evaluation_qwen35/`](../../evaluation_qwen35/), [`scripts/run_m4.sh`](../../scripts/run_m4.sh), [`scripts/sbatch_m4.sh`](../../scripts/sbatch_m4.sh). Code-setup audit: [`CODE_SETUP_v3.md`](CODE_SETUP_v3.md). Milestone narrative: [`../milestone_four/MILESTONE_4.md`](../milestone_four/MILESTONE_4.md).
+Pipeline: [`evaluation_qwen35/`](../../evaluation_qwen35/), [`scripts/run_m4.sh`](../../scripts/run_m4.sh), [`scripts/sbatch_m4.sh`](../../scripts/sbatch_m4.sh). Code-setup audit: [`CODE_SETUP_m4.md`](CODE_SETUP_m4.md). Milestone narrative: [`../milestone_4/MILESTONE_4.md`](../milestone_4/MILESTONE_4.md).
 
 ## 2. Eval configuration (M4)
 
-Same shape as M3 (per CODE_SETUP_v3 §1):
+Same shape as M3 (per CODE_SETUP_m4 §1):
 
 | Knob | Value | Note |
 |---|---|---|
@@ -92,7 +92,7 @@ Expected wall-clock: ~150 min / variant on 1× A100-80GB (M3 reference).
 
 ## 5. Cross-family comparison (M3 vs M4)
 
-Untrained-floor comparison once full sweeps are in. M3 reference is the pre-GRPO Qwen3-0.6B hybrid (`qwen3_0.6b`, [`RESULTS_v2.md`](RESULTS_v2.md) §6).
+Untrained-floor comparison once full sweeps are in. M3 reference is the pre-GRPO Qwen3-0.6B hybrid (`qwen3_0.6b`, [`RESULTS_m3.md`](RESULTS_m3.md) §6).
 
 | Dataset | M3 (Qwen3-0.6B hybrid) | M4 (Qwen3.5-0.8B hybrid) | M4 (Qwen3.5-0.8B base) | Δ M4-hybrid vs M3 |
 |---|---:|---:|---:|---:|
@@ -105,7 +105,7 @@ Untrained-floor comparison once full sweeps are in. M3 reference is the pre-GRPO
 | musique | 0.061 | TBD | TBD | TBD |
 | **mean** | **0.102** | **TBD** | **TBD** | **TBD** |
 
-(M3 mean from RESULTS_v2 §5; per-dataset values are illustrative — confirm against `RESULTS_v2.md` §6 EM table when populating.)
+(M3 mean from RESULTS_m3 §5; per-dataset values are illustrative — confirm against `RESULTS_m3.md` §6 EM table when populating.)
 
 ## 6. Findings
 
@@ -113,7 +113,7 @@ Untrained-floor comparison once full sweeps are in. M3 reference is the pre-GRPO
 
 ## 7. Pointers
 
-- M4 milestone narrative: [`../milestone_four/MILESTONE_4.md`](../milestone_four/MILESTONE_4.md)
-- M4 code-setup deltas vs M3: [`CODE_SETUP_v3.md`](CODE_SETUP_v3.md)
-- M3 results (the within-family floor): [`RESULTS_v2.md`](RESULTS_v2.md)
+- M4 milestone narrative: [`../milestone_4/MILESTONE_4.md`](../milestone_4/MILESTONE_4.md)
+- M4 code-setup deltas vs M3: [`CODE_SETUP_m4.md`](CODE_SETUP_m4.md)
+- M3 results (the within-family floor): [`RESULTS_m3.md`](RESULTS_m3.md)
 - Active recipe-ablation plan (drives any future M5+ Qwen3.5 GRPO training): [`../TODO_2026-05-04.md`](../TODO_2026-05-04.md)

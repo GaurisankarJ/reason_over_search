@@ -1,12 +1,12 @@
 ---
-title: Results v2 (M3 + M3.1 evaluation)
+title: Results M3 — Qwen3-0.6B v0 + v0.1 GRPO checkpoints vs untrained baseline (M3 + M3.1)
 tags: [report, eval, m3, m3.1]
 source: internal
 created: 2026-05-07
 updated: 2026-05-08
 ---
 
-# Results v2: M3 — First evaluation of the Phase-1 v0 GRPO checkpoint vs the untrained Qwen3-0.6B hybrid
+# Results M3: Qwen3-0.6B GRPO Checkpoints vs Untrained Baseline (M3 + M3.1)
 
 **Date compiled**: 2026-05-07
 **Source**:
@@ -34,7 +34,7 @@ updated: 2026-05-08
 > 2. **The largest lifts are on single-hop QA**: NQ +0.078 EM (+69%), TriviaQA +0.124 EM (+70%), PopQA +0.094 EM (+71%). MuSiQue (3-hop) doubled from 0.010 to 0.023, but at small absolute numbers.
 > 3. **Multi-hop saturates at 0.6B**: HotpotQA +0.033 EM (+40%) lifts modestly; 2WikiMultiHopQA −0.003 EM (essentially tied). Multi-hop reasoning at 600 M parameters appears to be capacity-bound, not training-bound.
 > 4. **The eval was Plan A (full test/dev sets), not Plan B (1k subsamples)** as MILESTONE_3.md originally planned — `sample_num` is not respected by the `search_r1` pipeline path. This makes the comparison statistically more rigorous than planned, with no subsampling noise.
-> 5. **Setup cost**: 14 fixes between clone-and-run and the first clean comparison. All recorded in `docs/report/CODE_SETUP_v2.md` §3. The two highest-impact fixes were (a) the `<result>` leading-space + raw retrieval format (matches training tokenization) and (b) `enable_thinking=True` (lets Qwen3 hybrid actually reason instead of getting an empty `<think></think>` injected by the chat template).
+> 5. **Setup cost**: 14 fixes between clone-and-run and the first clean comparison. All recorded in `docs/report/CODE_SETUP_m3.md` §3. The two highest-impact fixes were (a) the `<result>` leading-space + raw retrieval format (matches training tokenization) and (b) `enable_thinking=True` (lets Qwen3 hybrid actually reason instead of getting an empty `<think></think>` injected by the chat template).
 
 ---
 
@@ -46,7 +46,7 @@ updated: 2026-05-08
 | `z7kcxfof` | `p1_basic_w_ex` | 2026-04-06 | v0 (Phase-1 ALICE, paper `<search>`/`<result>` tags) | **1046 / 9968**         | Qwen3-0.6B hybrid | basic rules + Hamlet 2-search example; **the only Phase-1 run that converged on heavy-tool 2-call / 4-turn behavior**; mean rollout reward 0.148 → 0.190 |
 
 
-Phase-1 context: across the v0 ALICE block (Apr 3 – 9, 14 runs total) + v1 ALICE block (Apr 12 – 19, 15 runs) → **29 ALICE training runs total**. Of those, only `z7kcxfof` produced the heavy-tool behavioral signature (2 search calls / 4 turns / ~2050-token responses) that this evaluation captures. All other Phase-1 prompts converged to the standard 1-tool / 3-turn regime. See `docs/report/RESULTS_v0.md` §10 (`p1_basic_w_ex`) and `docs/report/RESULTS_v0.md` §11.2 ("Prompt drives behavior more than reward").
+Phase-1 context: across the v0 ALICE block (Apr 3 – 9, 14 runs total) + v1 ALICE block (Apr 12 – 19, 15 runs) → **29 ALICE training runs total**. Of those, only `z7kcxfof` produced the heavy-tool behavioral signature (2 search calls / 4 turns / ~2050-token responses) that this evaluation captures. All other Phase-1 prompts converged to the standard 1-tool / 3-turn regime. See `docs/report/RESULTS_m0_a.md` §10 (`p1_basic_w_ex`) and `docs/report/RESULTS_m0_a.md` §11.2 ("Prompt drives behavior more than reward").
 
 ---
 
@@ -72,7 +72,7 @@ Phase-1 context: across the v0 ALICE block (Apr 3 – 9, 14 runs total) + v1 ALI
 | Wall-clock observed | **23 h 47 m 30 s for 1046 / 9968 steps** (W&B run wall-clock; effective ~82 s/step on 1× A100-40GB including end-of-run async checkpoint save + validation rollouts); full 9968-step horizon ≈ **~9.5 days per run** at the observed rate for this rollout shape. Across the 9 v0 hybrid prompt-ablation runs, full-horizon projections cluster at **~5–10 days** depending on rollout length distribution. None of the 29 Phase-1 runs reached the full horizon (longest hybrid: `p4_think_w_ex`, 2280 / 9968 steps in 31.7 h). |
 
 
-**Training behavior at end of run** (per `RESULTS_v0.md` §11):
+**Training behavior at end of run** (per `RESULTS_m0_a.md` §11):
 
 
 | Metric                                       | First-decile mean | Last-decile mean |
@@ -112,7 +112,7 @@ This is rendered into the chat template as `[{role: 'system', content: <above>},
 
 ## 4. Evaluation configuration (M3, this report)
 
-The eval pipeline (`evaluation_research/`, an editable-install overlay of `evaluation_search_r1/`) is byte-aligned to the training rollout (verl-legacy `vllm_rollout.py`); see `CODE_SETUP_v2.md` §3 for all 14 fixes that produced the alignment.
+The eval pipeline (`evaluation_research/`, an editable-install overlay of `evaluation_search_r1/`) is byte-aligned to the training rollout (verl-legacy `vllm_rollout.py`); see `CODE_SETUP_m3.md` §3 for all 14 fixes that produced the alignment.
 
 
 | Setting                   | Value                                                          | Aligned with                                  |
@@ -243,7 +243,7 @@ No new plots are produced for the eval (single greedy seed → deterministic out
 
 ### 10.1. GRPO meaningfully improved Qwen3-0.6B on this task
 
-A clean +0.053 EM (+52 % relative) lift across 51,713 items per variant on full Plan A test/dev sets is well outside any plausible noise band for greedy single-seed eval. **GRPO with the paper-faithful Search-R1 EM reward and the `p1_basic_w_ex` prompt does teach a 0.6 B Qwen3 hybrid useful tool-use behavior.** Heavy-tool mode (2 calls / 4 turns / ~2050 tokens) emerges from the 2-search Hamlet example anchor — this is the same behavioral signature documented at training time in `RESULTS_v0.md` §10.
+A clean +0.053 EM (+52 % relative) lift across 51,713 items per variant on full Plan A test/dev sets is well outside any plausible noise band for greedy single-seed eval. **GRPO with the paper-faithful Search-R1 EM reward and the `p1_basic_w_ex` prompt does teach a 0.6 B Qwen3 hybrid useful tool-use behavior.** Heavy-tool mode (2 calls / 4 turns / ~2050 tokens) emerges from the 2-search Hamlet example anchor — this is the same behavioral signature documented at training time in `RESULTS_m0_a.md` §10.
 
 ### 10.2. Lift is concentrated on single-hop QA
 
@@ -259,7 +259,7 @@ Originally MILESTONE_3.md planned 1k stratified subsamples for the five large da
 
 ### 10.5. Setup cost was non-trivial but mostly one-shot
 
-14 fixes (`CODE_SETUP_v2.md` §3) between clone-and-run and the first clean comparison. The most consequential were:
+14 fixes (`CODE_SETUP_m3.md` §3) between clone-and-run and the first clean comparison. The most consequential were:
 
 - **Single braces in `\boxed{answer here}`** (template was using Python format-escape `{{}}` but read as raw string)
 - **Leading space before `<result>`** (matches training tokenization byte-for-byte)
@@ -286,7 +286,7 @@ The `<search>` / `<result>` action format used here matches the **published** Re
 1. Does the lift hold on a larger model? Qwen3.5-2B (Phase-2 NeMo-RL target) is 3.3× the parameter count and adds dynamic batching + `<tool_call>` JSON tags. Expectation: lift on multi-hop should expand once the capacity floor is lifted. Testable once the first Qwen3.5-2B GRPO checkpoint exists.
 2. The `p1_basic_w_ex` prompt anchors heavy-tool mode (2 calls / 4 turns) via its 2-search Hamlet example. **Single-hop datasets (NQ, TriviaQA, PopQA) get +69-71 % relative lift, which is high.** Is the 2-search anchor over-applied (the model also does 2 searches on questions where 1 suffices, which mostly works because the second search is wasted but not harmful)? Examining `output['final_response']` distributions for `tool_call_counts/mean` per-dataset would settle this.
 3. **2WikiMultiHopQA tied** while HotpotQA gained — both are 2-hop. The 2Wiki questions tend to require multi-fact composition over the same passage; HotpotQA tends to require span-stitching across passages. Why did GRPO help HotpotQA but not 2Wiki? Inspecting the `final_response` for items where pre-GRPO succeeded but v0 failed (and vice versa) on 2Wiki vs HotpotQA would identify whether the training prompt distribution mismatched 2Wiki's question shape.
-4. The training rollout reward function (`re_search.py` EM-only) returns 1.0 / 0.0; the **Search-R1 partial-credit reward** (0.1 floor for any well-formatted but wrong answer) was not used here (`p1_basic_w_ex` is in the v0 block where verl-legacy `qa_em.py` was active; partial credit was a v1 artifact). Whether re-training with the partial-credit reward would close the 2Wiki gap — or whether it would create the floor-masking issue documented in `RESULTS_v0.md` §11 — is an open question for Phase-2.
+4. The training rollout reward function (`re_search.py` EM-only) returns 1.0 / 0.0; the **Search-R1 partial-credit reward** (0.1 floor for any well-formatted but wrong answer) was not used here (`p1_basic_w_ex` is in the v0 block where verl-legacy `qa_em.py` was active; partial credit was a v1 artifact). Whether re-training with the partial-credit reward would close the 2Wiki gap — or whether it would create the floor-masking issue documented in `RESULTS_m0_a.md` §11 — is an open question for Phase-2.
 5. **All 7 datasets at full Plan A and a single seed take ~2.5 hours per variant on 1× A100-80GB**. Multi-seed × full Plan A is ~2.5 h × k seeds per variant; under the JustRL paper's mean-of-3-seeds convention this is ~7.5 h / variant. For Phase-2 multi-recipe evaluation, this is the rate-limiting cost to budget for.
 
 ---
@@ -327,9 +327,9 @@ To swap to a different checkpoint, drop it under `eval/<name>/` and add the case
 - v0 sbatch logs: `logs/m3_2125009_m3_eval.out`, `logs/m3_2125009_m3_eval.err`, `logs/m3_2125009_retriever.log`, `logs/m3_2125009_sglang.log`
 - Pre-GRPO interactive transcript: ssh-driven on node870 within job 2120423; foreground bash output preserved in the conversation log.
 - Training run archive: external (verl-FSDP `actor/model_world_size_1_rank_0.pt` + training.log + W&B export; not retained in this repo). HF safetensors mirror: [`pantomiman/Qwen3-0.6B-v0`](https://huggingface.co/pantomiman/Qwen3-0.6B-v0)
-- M3 milestone: `docs/milestone_three/MILESTONE_3.md`
-- M3 code-setup diff: `docs/report/CODE_SETUP_v2.md`
-- Training-time per-run synthesis (29 ALICE runs): `docs/report/RESULTS_v0.md` (14 v0) + `docs/report/RESULTS_v1.md` (15 v1)
+- M3 milestone: `docs/milestone_3/MILESTONE_3.md`
+- M3 code-setup diff: `docs/report/CODE_SETUP_m3.md`
+- Training-time per-run synthesis (29 ALICE runs): `docs/report/RESULTS_m0_a.md` (14 v0) + `docs/report/RESULTS_m0_b.md` (15 v1)
 
 ---
 
@@ -346,7 +346,7 @@ After M3 closed, a second eval was launched against `p3_decide_no_ex_el6s2d2h` �
 | `z7kcxfof` (M3) | `p1_basic_w_ex` | heavy-tool 2-call / 4-turn / ~2050 tok | 1046 | 0.148 | **0.190** | +28 % |
 | `el6s2d2h` (M3.1) | `p3_decide_no_ex` | standard 1-call / 3-turn / ~1117 tok | 2280 | 0.151 | **0.215** | **+43 %** |
 
-(Source: [`RESULTS_v0.md`](RESULTS_v0.md) §11 cross-run summary table.)
+(Source: [`RESULTS_m0_a.md`](RESULTS_m0_a.md) §11 cross-run summary table.)
 
 ### 14.2 Eval setup (deltas vs M3 only)
 
@@ -360,7 +360,7 @@ Identical to M3 except for the prompt template and the checkpoint:
 | Hardware | ALICE 1× A100-80GB | same |
 | Decoding / seed / datasets | greedy / 1 / 7 paper benchmarks (full Plan A, 51,713 items) | same |
 
-Pipeline change is additive (no fixes; the M3 14-fix audit holds). Detail: [`CODE_SETUP_v2.md`](CODE_SETUP_v2.md) §13.5 and [`../milestone_three/MILESTONE_3.1.md`](../milestone_three/MILESTONE_3.1.md).
+Pipeline change is additive (no fixes; the M3 14-fix audit holds). Detail: [`CODE_SETUP_m3.md`](CODE_SETUP_m3.md) §13.5 and [`../milestone_3/MILESTONE_3.1.md`](../milestone_3/MILESTONE_3.1.md).
 
 ### 14.3 Job
 
@@ -388,7 +388,7 @@ Simple per-dataset means across all 7 paper QA benchmarks (full Plan A, 51,713 i
 | ACC (avg)     | 0.123     | 0.189                       | **0.212**                       | +0.023 (+12 %)      | +0.089 (+72 %) |
 | F1 (avg)      | 0.140     | 0.223                       | **0.255**                       | +0.032 (+14 %)      | +0.115 (+82 %) |
 
-The +0.025 rollout-reward gap (0.215 vs 0.190) translates into a real but modest held-out EM gap (+0.014). A non-trivial chunk of the rollout-reward gap is the partial-credit-floor artifact ([`RESULTS_v0.md`](RESULTS_v0.md) Finding 4) — but **not all of it**: ACC and F1 widen the gap to +12 % and +14 %, suggesting el6s2d2h's no-example + decision-rules combination genuinely produces higher-quality answers, just not always within EM's strict-match window.
+The +0.025 rollout-reward gap (0.215 vs 0.190) translates into a real but modest held-out EM gap (+0.014). A non-trivial chunk of the rollout-reward gap is the partial-credit-floor artifact ([`RESULTS_m0_a.md`](RESULTS_m0_a.md) Finding 4) — but **not all of it**: ACC and F1 widen the gap to +12 % and +14 %, suggesting el6s2d2h's no-example + decision-rules combination genuinely produces higher-quality answers, just not always within EM's strict-match window.
 
 ### 14.5 Per-dataset breakdown
 

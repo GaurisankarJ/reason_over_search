@@ -1,20 +1,19 @@
 ---
-title: Code Setup v0 (verl-legacy Qwen3-0.6B port)
-tags: [report, training, phase1, v0]
+title: Code Setup M0 — verl-legacy Qwen3-0.6B port (Phase-1 training)
+tags: [report, training, m0, phase1]
 source: internal
 created: 2026-05-04
 updated: 2026-05-08
 ---
 
-# Code Setup v0 — ReSearch Port: What Changed vs the Paper
+# Code Setup M0: ReSearch Port (Phase-1 verl-legacy Qwen3-0.6B)
 
-**Date**: 2026-05-03
-**Updated**: 2026-05-08 (see §12 for reward/script changes; §13 for items not previously documented at all)
+**Date**: 2026-05-03 (updated 2026-05-08).  
+**Scope**: Experimental changes layered over the original ReSearch paper code (Agent-RL/ReSearch, alphaxiv 2503.19470) to fit a single-A100 / single-GPU regime with reward and prompt ablations. Phase-1 builds on the **ReSearch paper only** (not Search-R1); the `<search>` / `<result>` action-tag scheme is ReSearch's. The reward used in the 14 v0 ablation runs is the **paper-faithful ReSearch reward (format + EM partial credit)**.  
+**Cluster**: ALICE HPC (Leiden University), 1× A100-40GB. ALICE retired going forward.  
+**Source repo**: sibling `re-search/` (path: `/home/s4374886/omega/re-search/` on ALICE; not in this repo).
 
-> **Before retiring this repo:** Rotate the WANDB_API_KEY in `/home/s4374886/omega/re-search/.env` and `/home/s4374886/omega/re-search/verl_latest/.env` (the live key string was previously inlined here and has been REDACTED on 2026-05-08; if you have not already rotated it, do so now — git history retains the leaked value, so rotation is the only durable mitigation). Entity: `gaurisankarj1996-leiden-university`.
-**Scope**: Documents the experimental changes I made over the original ReSearch paper code (Agent-RL/ReSearch, alphaxiv 2503.19470) to fit a single-A100 / single-GPU regime with reward and prompt ablations.  
-**Cluster**: All experiments below were run on the **ALICE** HPC cluster (Leiden University). ALICE will not be used for further experiments.  
-**Source repo**: `/home/s4374886/omega/re-search/` (current local path; originally Mac path in this doc)
+> **Before retiring this repo:** rotate the WANDB_API_KEY in `re-search/.env` and `re-search/verl_latest/.env` (the live key string was previously inlined here and has been REDACTED on 2026-05-08; if you have not already rotated it, do so now; git history retains the leaked value, so rotation is the only durable mitigation). Entity: `gaurisankarj1996-leiden-university`.
 
 ---
 
@@ -283,7 +282,7 @@ Qwen3-specific floors (Qwen docs): `transformers>=4.51.0`, `sglang>=0.4.6.post1`
 
 - Paper repo (upstream): `Agent-RL/ReSearch` — the original `README-OLD.md` in this repo is its README, kept for reference.
 - Paper-vs-port code-level audit: `research/docs/reports/legacy_vs_verl_latest_research.md` (Apr 3, 2026).
-- Baseline reproduction (different repo, evaluation-side only): `reason_over_search/docs/milestone_one/COMPARISON_PLAN_B_v1.md`.
+- Baseline reproduction (different repo, evaluation-side only): `reason_over_search/docs/milestone_1/RESULTS_m1.md`.
 
 ---
 
@@ -329,12 +328,12 @@ The "format reward separated from answer reward" and "pure EM" items from §10 a
 
 ### 12.3 New base model training script
 
-`verl_latest/x_base_min_run_qwen3_0.6b_grpo_vllm_gpu_1_a100_40gb.sh` — a smoke/iteration script for the **base model** specifically (vs the instruct/hybrid scripts in §3). This corresponds to the 5/5 failed base-model cold-start attempts documented in `RESULTS_v1.md` (run id family `base_state_machine_a`).
+`verl_latest/x_base_min_run_qwen3_0.6b_grpo_vllm_gpu_1_a100_40gb.sh` — a smoke/iteration script for the **base model** specifically (vs the instruct/hybrid scripts in §3). This corresponds to the 5/5 failed base-model cold-start attempts documented in `RESULTS_m0_b.md` (run id family `base_state_machine_a`).
 
 ### 12.4 What §10 items remain open
 
-- **Hybrid thinking on/off**: flag was exercised in v1 runs; results frozen in `RESULTS_v1.md`.
-- **Full vs minimal prompt template**: comparative numbers are in `RESULTS_v0.md`/`RESULTS_v1.md`.
+- **Hybrid thinking on/off**: flag was exercised in v1 runs; results frozen in `RESULTS_m0_b.md`.
+- **Full vs minimal prompt template**: comparative numbers are in `RESULTS_m0_a.md`/`RESULTS_m0_b.md`.
 - **Reward EOS strict vs relaxed**: still not explicitly ablated as a standalone experiment.
 
 ---
