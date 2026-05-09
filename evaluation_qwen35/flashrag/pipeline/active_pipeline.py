@@ -258,8 +258,12 @@ class SearchR1Pipeline(BasicPipeline):
                             "<answer> and </answer>. Let me try again.\n"
                         )
             elif stop_reason == 'stop' and (
-                stop_matched == 151643
-                or stop_matched == 151645
+                # Qwen3 (M3) token ids
+                stop_matched == 151643  # <|endoftext|>
+                or stop_matched == 151645  # <|im_end|>
+                # Qwen3.5 (M4) token ids; new vocab so different ids
+                or stop_matched == 248044  # <|endoftext|>
+                or stop_matched == 248046  # <|im_end|>
                 or (isinstance(stop_matched, str) and stop_matched in {'<|im_end|>', '<|endoftext|>', '</answer>'})
             ):
                 output_str = response['text']

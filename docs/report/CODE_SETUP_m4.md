@@ -60,7 +60,7 @@ The 14 alignment fixes catalogued in [`CODE_SETUP_m3.md`](CODE_SETUP_m3.md) §3 
 
 ---
 
-## 3. New M4-Specific Fixes (3 net-new deltas)
+## 3. New M4-Specific Fixes (4 net-new deltas; §3.4 added on first Vast smoke)
 
 ### 3.1 `get_generator` short-circuits on `framework=sgl_remote` before VL detection
 
@@ -147,6 +147,30 @@ Full sweep recovers the original behaviour by simply omitting all three flags.
 
 ---
 
+### 3.4 Qwen3.5 stop-token IDs in `active_pipeline.py` (Vast smoke discovery)
+
+**Symptom:** First Vast smoke (M4.1, 2026-05-09) failed all 100 bamboogle items with `ValueError: stop_reason: stop, stop_matched: 248046`.
+
+**Root cause:** SGLang reports the matched stop token as an integer id; the M3 pipeline only matched the Qwen3 ids `151643` (`<|endoftext|>`) and `151645` (`<|im_end|>`). Qwen3.5 has a new vocabulary: `<|endoftext|>` is `248044` and `<|im_end|>` is `248046`. Any natural turn-end (the model emits `<|im_end|>` after a final `<answer>...</answer>` block) hit the `else` branch and aborted the run.
+
+**Fix:** added the Qwen3.5 ids to the stop-match branch in [`active_pipeline.py`](../../evaluation_qwen35/flashrag/pipeline/active_pipeline.py); the existing string-token check on `<|im_end|>` / `<|endoftext|>` / `</answer>` is retained for environments where SGLang emits the matched-token string instead of the id:
+
+```python
+elif stop_reason == 'stop' and (
+    # Qwen3 (M3) token ids
+    stop_matched == 151643  # <|endoftext|>
+    or stop_matched == 151645  # <|im_end|>
+    # Qwen3.5 (M4) token ids; new vocab so different ids
+    or stop_matched == 248044  # <|endoftext|>
+    or stop_matched == 248046  # <|im_end|>
+    or (isinstance(stop_matched, str) and stop_matched in {'<|im_end|>', '<|endoftext|>', '</answer>'})
+):
+```
+
+Tokens verified via `AutoTokenizer.from_pretrained(eval/qwen3.5_0.8b).decode([id])`. The Qwen3.5 EOS is `<|im_end|>` (= 248046), distinct from `<|endoftext|>` (= 248044) which is the pad token.
+
+---
+
 ## 4. Worktree-on-ALICE workflow (operational note, not a code fix)
 
 ALICE's main checkout (`/zfsstore/user/s4374886/omega/reason_over_search/`) carries an active session for the M3.1 closure work on branch `research_v1`. To run the M4 smoke without disturbing that session, we created a **second git worktree** for `research_v2`:
@@ -173,6 +197,77 @@ sbatch --time=01:00:00 scripts/sbatch_m4.sh qwen3.5_0.8b_base 100
 ```
 
 The worktree shares `.git/objects/` with the main checkout (no extra disk for the git history). Branches are isolated (the main checkout stays on `research_v1`; the worktree stays on `research_v2`). When the M3.1 session is done and merges, we can `git worktree remove $WT` and run M4 from the main checkout.
+
+---
+
+## 4-bis. Vast.ai runtime (no SLURM, direct bash loop)
+
+ALICE runs M4 via SLURM (`sbatch_m4.sh`); Vast doesn't have SLURM. We run the same eval loop directly under a `nohup`-wrapped bash. **No code in the pipeline changes**; only the venv paths, retriever-launch path, and SGLang-launch path are different.
+
+**Vast venv layout** (from the `pantomiman/reason-over-search-v1:v1` image):
+
+| Component | Path |
+|---|---|
+| Eval (FlashRAG + SGLang server + transformers) | `/venv/evaluation_search_r1` |
+| Retriever (faiss-cpu + FastAPI) | `/venv/retriever` |
+| Bootstrap helper (uv, etc.) | `/venv/main` |
+
+(ALICE uses `/home/s4374886/.conda/envs/{evaluation_search_r1,retriever}` instead. Both `run_m4.sh` and `m4_download_models.sh` accept a `PY=...` env-var override; the auto-discovery path in `m4_download_models.sh` walks both Vast and ALICE candidates, so the same scripts run in both environments.)
+
+### 4-bis.1 transformers upgrade for `qwen3_5` architecture support
+
+**Symptom:** First smoke attempt failed at `flashrag/prompt/base_prompt.py:21` with `ValueError: The checkpoint you are trying to load has model type 'qwen3_5' but Transformers does not recognize this architecture`. The image-baked transformers was 4.57.1.
+
+**Root cause:** `Qwen3_5ForConditionalGeneration` is a brand-new architecture (multi-modal-co-trained Qwen3.5; `model_type: qwen3_5` in `config.json`). Transformers 4.57.1 doesn't have it; the `CONFIG_MAPPING` lookup raises `KeyError('qwen3_5')`.
+
+**Fix on Vast:**
+
+```bash
+/venv/evaluation_search_r1/bin/pip install 'transformers==5.7.0'
+```
+
+Verified the `/venv/retriever` env already shipped with transformers 5.7.0 (which loaded the config fine), so 5.7.0 is the floor that supports `qwen3_5`. The image's hard pin (`evaluation-search-r1` package requires `transformers<5,>=4.51.0`; SGLang 0.5.9 pins `transformers==4.57.1`) is reported as a dependency-resolver warning at install time; SGLang remains operational because the upgrade happens *after* SGLang has already loaded its weights into a separate process; runtime imports inside `flashrag` then succeed.
+
+**Verified on Vast:**
+
+```python
+from transformers import AutoConfig
+c = AutoConfig.from_pretrained("/workspace/reason_over_search/eval/qwen3.5_0.8b", trust_remote_code=True)
+# OK: c.model_type == "qwen3_5"
+```
+
+**Forward note (image rebuild):** the image should bake `transformers==5.7.0` (or whatever floor supports `qwen3_5` at the time) and unpin SGLang's strict `==` requirement (or rebuild SGLang against the newer transformers). Tracked as a TODO in the docker README.
+
+### 4-bis.2 Direct bash run loop (replacement for `sbatch_m4.sh`)
+
+```bash
+cd /workspace/reason_over_search
+# Retriever already up on 3005 from the bootstrap; verify:
+curl -sf http://127.0.0.1:3005/health
+
+# Start SGLang for one variant (nohup'd):
+export SGLANG_DISABLE_CUDNN_CHECK=1
+nohup /venv/evaluation_search_r1/bin/python -m sglang.launch_server \
+  --model-path /workspace/reason_over_search/eval/qwen3.5_0.8b \
+  --host 127.0.0.1 --port 3000 \
+  --tp 1 --context-length 8192 --dtype bfloat16 --trust-remote-code \
+  > logs/m4_sglang_hybrid.log 2>&1 &
+
+# Wait until SGLang is ready (~10 s for 0.8B on A100):
+until curl -sf http://127.0.0.1:3000/health > /dev/null 2>&1; do sleep 5; done
+
+# Run the smoke loop. PY must be passed via env for nohup'd subshells:
+# just exporting in the parent doesn't propagate through nohup-bash-c
+# the way --export=ALL does for sbatch.
+nohup env PY=/venv/evaluation_search_r1/bin/python bash -c \
+  'for DS in bamboogle nq triviaqa popqa hotpotqa 2wikimultihopqa musique; do
+     bash scripts/run_m4.sh qwen3.5_0.8b $DS 1 /workspace/reason_over_search/data 100
+   done' > logs/m4_smoke_hybrid.log 2>&1 &
+```
+
+When done, swap the `--model-path` to `eval/qwen3.5_0.8b_base` and rerun. **Kill the old SGLang first** (`pkill -f sglang.launch_server`); otherwise the new one fails to bind to port 3000 and the eval loop just talks to the previous variant.
+
+The retriever is left running across both variants (single 8-worker IVF-SQ8 process; ~134 GB peak host RAM, fits comfortably in any A100/H100/H200 instance).
 
 ---
 
