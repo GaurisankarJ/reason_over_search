@@ -10,14 +10,22 @@ updated: 2026-05-09
 
 > **Audience**: a human operator OR a Claude agent given SSH access to a freshly
 > booted Vast.ai instance running `pantomiman/reason-over-search-v1:v1`. Follow
-> this end-to-end and you (or the agent) will be able to run **eval** (M1
-> reproduction) and **training** (M2 GRPO + recipe-ablation runs) without
-> needing any other doc.
+> this end-to-end and the box ends up with retrieval, eval (M4 Qwen3.5-0.8B),
+> and training (M2 GRPO) all set up and ready to run. After bootstrap finishes
+> you don't run anything in this doc; you launch your actual experiments per
+> the milestone runbooks.
 >
 > Sister doc for the ALICE HPC cluster: [`training/scripts/bootstrap_alice.sh`](../../training/scripts/bootstrap_alice.sh)
 > (Apptainer-based, same image, ZFS-aware paths). Use this one for Vast.
 
-The fastest path is **prebuilt docker image + bootstrap script**. Total cold-to-running time is ~10 min on the HF fast path, ~35 min on the compile fallback.
+What this guide provisions, in order:
+1. Conda envs for **retrieval** + **eval** + **training** (baked into the image).
+2. **Retriever assets**: wiki-18 corpus (~14 GB), IVF-SQ8 index (~16 GB), e5-base-v2 encoder (~0.5 GB) → `local_retriever/`.
+3. **Training weights**: Qwen3.5-2B + Qwen3.5-2B-Base → `$HF_HOME`; NeMo-RL `.venv` + v2/automodel worker venv.
+4. **M4 eval models**: Qwen3.5-0.8B hybrid + base → `eval/`.
+5. Live retriever on port 3005 ready for both eval and training rollouts.
+
+Total cold-to-ready: ~25 min on the HF fast path (dominated by the ~30 GB retriever-asset pull); ~50 min on the compile fallback. The flat IP retriever index (~65 GB, paper-fidelity exact recall) is **not used anymore**; we run IVF-SQ8 only.
 
 ---
 
@@ -27,8 +35,20 @@ The fastest path is **prebuilt docker image + bootstrap script**. Total cold-to-
 |---|---|---|---|
 | GPU | 1× 24 GB (4090) | 1× 80 GB (A100 / H100 / H200) | Training needs ≥40 GB; eval is fine on 24 GB |
 | Host RAM | 32 GB (IVF-SQ8 only, 1 worker) | 150 GB (IVF-SQ8, 8 workers for training) | 8 retriever workers each load ~16 GB index; flat IP needs ~65 GB |
-| Disk | 60 GB (eval-only) | 150 GB (training + eval) | Image ~30 GB, corpus 14 GB, IVF-SQ8 16 GB, models ~40 GB, headroom |
+| Disk | 60 GB (eval-only, 0.8B) | 150 GB (M1 reproduction or 2B training) | See per-scenario table below |
 | Public ports | none required | 3000, 3005 | Optional for external SGLang / retriever; default workflow is local-only |
+
+### Disk budget by scenario
+
+Pick the row that matches your run; the headline 150 GB is conservative for the M1-reproduction path and **not required for Qwen3.5-0.8B training + eval**. Vast.ai charges per GB-hour, so sizing for the actual scenario beats sizing for "all of the above".
+
+| Scenario | Recommended | Tight | Notes |
+|---|---|---|---|
+| **Qwen3.5-0.8B training + eval (M2 / M4 on 1× A100)** | **100 GB** | 80 GB | image 30 + retriever assets ~30 (corpus 14 + IVF-SQ8 16 + e5 0.5) + 2× 0.8B ~3.5 + venvs ~13 + data ~2 + W&B/logs ~5 + headroom ≈ 85 GB. Bump to 120 GB if you re-enable `checkpointing.enabled: true` or run multiple variants on the same box. |
+| **Qwen3.5-2B training + eval** | 130 GB | 100 GB | 2× 2B ~10 GB instead of 0.8B ~3.5 GB; otherwise same as 0.8B row |
+| **M1 reproduction (Qwen2.5-3B GRPO checkpoints)** | 150 GB | 120 GB | adds 27 GB for base + instruct GRPO checkpoints |
+| **+ flat IP index (paper-fidelity exact recall)** | +60 GB | — | only if you specifically need exact recall; M4 uses IVF-SQ8 |
+| **Eval-only (no training; no GRPO checkpoints)** | 60 GB | 50 GB | drop NeMo-RL `.venv` + v2 venv (~13 GB) and W&B/checkpoint headroom |
 
 Have ready:
 - A Vast.ai account with billing set up
@@ -36,7 +56,7 @@ Have ready:
 - (Optional) A `WANDB_API_KEY` for live training curves
 - (Optional) A `HF_TOKEN` if you plan to push artifacts back to HF (downloads are public)
 
-See [`docs/setup/HARDWARE.md`](../setup/HARDWARE.md) for the full accelerator comparison and [`docs/setup/VAST_AI_PLAN_A.md`](../setup/VAST_AI_PLAN_A.md) for cost-optimised eval fleets.
+See [`docs/setup/HARDWARE.md`](../setup/HARDWARE.md) for the full accelerator comparison.
 
 ---
 
@@ -47,7 +67,7 @@ Vast template fields:
 | Field | Value |
 |---|---|
 | Image | `pantomiman/reason-over-search-v1:v1` |
-| Disk space | 150 GB (drop to 60 GB for eval-only boxes) |
+| Disk space | **100 GB for Qwen3.5-0.8B training + eval**; 130 GB for 2B; 150 GB for M1 reproduction; 60 GB for eval-only (see § 0 disk-budget table) |
 | Launch mode | Default Vast SSH/Jupyter mode |
 | GPU filter | A100-80GB or H100-80GB for training; any 24 GB+ for eval |
 | On-start script | leave blank; we bootstrap manually |
@@ -101,9 +121,9 @@ If anything is missing, **STOP**. Don't try to repair the image; it's a docker-r
 
 ---
 
-## 4. Bootstrap (≈10 min cold HF path; ≈35 min compile fallback; <1 min warm)
+## 4. Bootstrap (≈25 min cold HF path; ≈50 min compile fallback; <1 min warm)
 
-One command. Idempotent: re-running prints "already done" for steps that are.
+One command. Idempotent: re-running prints "already present" for steps that are.
 
 ```bash
 bash training/scripts/bootstrap.sh
@@ -114,32 +134,41 @@ Watch for the final line `▶ Bootstrap complete.`. If it errors out, read the e
 What it does, in order (so you know what to expect):
 
 1. **Sanity** (envs, disk, RAM, GPU). Instant.
-2. **Git LFS pull** if `data/training/nq_hotpotqa_train/train.parquet` is missing (or smaller than 1 KB → still an LFS pointer). ~30 s.
-3. **Download Qwen3.5-2B-Base + Qwen3.5-2B** to `$HF_HOME=/workspace/hf_cache` if not cached (~4 min, ~8 GB).
+2. **Git LFS pull** if `data/training/nq_hotpotqa_train/train.parquet` is missing (or still an LFS pointer). ~30 s.
+3. **Download Qwen3.5-2B-Base + Qwen3.5-2B** training weights to `$HF_HOME=/workspace/hf_cache` if not cached (~4 min, ~8 GB).
 4. **`uv sync --extra vllm`** to materialize `training/nemo_rl/.venv` (~2 min from the pre-warmed wheel cache).
-5. **Download the pre-built v2/automodel uv venv** (~5 GB) from `pantomiman/reason-over-search-v1-venvs` on HuggingFace Hub and extract it to `training/nemo_rl/venvs/.../DTensorPolicyWorkerV2/` (~3 min, fast path). Falls back to host-shell compile (~25 min) if HF download fails. **This step cannot run inside a Ray actor** because `nv-grouped-gemm`'s setup.py calls `torch.cuda.init()` at install time and the actor has no GPU.
-6. **Start the IVF-SQ8 retriever** with 8 workers on port 3005, wait until `Uvicorn running` lands in `/tmp/retriever.log`, smoke-check the `/health` endpoint.
+5. **Download the pre-built v2/automodel uv venv** (~5 GB) from `pantomiman/reason-over-search-v1-venvs` and extract to `training/nemo_rl/venvs/.../DTensorPolicyWorkerV2/` (~3 min fast path; ~25 min compile fallback). **This step cannot run inside a Ray actor** because `nv-grouped-gemm`'s setup.py calls `torch.cuda.init()` at install time and the actor has no GPU.
+6. **Download retriever assets**: wiki-18 corpus from `PeterJinGo/wiki-18-corpus` + gunzip + rename → `local_retriever/corpus/wiki18_100w.jsonl` (14 GB after gunzip); IVF-SQ8 index from `pantomiman/reason-over-search` → `local_retriever/indexes/wiki18_100w_e5_ivf4096_sq8.index` (16 GB); `intfloat/e5-base-v2` encoder → `local_retriever/models/e5-base-v2/` (~0.5 GB). ~10 min on a fast link. Mirrors [`local_retriever/README.md`](../../local_retriever/README.md) "Download steps".
+7. **Start the IVF-SQ8 retriever** with 8 workers on port 3005, wait until `Uvicorn running` lands in `/tmp/retriever.log`, smoke-check the `/health` endpoint.
+8. **Download M4 eval models** (Qwen3.5-0.8B hybrid + base) → `eval/qwen3.5_0.8b/` and `eval/qwen3.5_0.8b_base/` (~3.4 GB total). Invokes [`scripts/m4_download_models.sh`](../../scripts/m4_download_models.sh).
 
 Override flags:
 
 ```bash
 SKIP_V2_BUILD=1 bash training/scripts/bootstrap.sh         # skip the long compile/download (eval-only)
 SKIP_RETRIEVER=1 bash training/scripts/bootstrap.sh        # don't auto-start retriever
+SKIP_M4_MODELS=1 bash training/scripts/bootstrap.sh        # skip Qwen3.5-0.8B eval-model downloads
 V2_BUILD_FROM_SOURCE=1 bash training/scripts/bootstrap.sh  # force compile, skip HF tarball
 ```
 
-After bootstrap finishes:
+After bootstrap finishes, sanity:
 
 ```bash
-# Confirm retriever is healthy
+# Retriever healthy?
 curl -sS http://127.0.0.1:3005/health
 # {"status":"healthy"}
 
-# Confirm models cached
+# Training weights cached?
 ls $HF_HOME/hub/ | grep Qwen3.5-2B
 
-# Confirm v2 venv exists (only if you didn't pass SKIP_V2_BUILD=1)
+# v2 venv exists (unless SKIP_V2_BUILD=1)?
 ls training/nemo_rl/venvs/*/DTensorPolicyWorkerV2/bin/python
+
+# Retriever assets all present?
+ls -lh local_retriever/{corpus/wiki18_100w.jsonl,indexes/wiki18_100w_e5_ivf4096_sq8.index,models/e5-base-v2/config.json}
+
+# M4 eval models present?
+ls eval/qwen3.5_0.8b{,_base}/config.json
 ```
 
 ---
@@ -157,98 +186,22 @@ If you don't, prepend `WANDB_MODE=disabled` to any training launch command (or s
 
 ---
 
-## 6. Eval path (M1 reproduction; SGLang + retriever)
+## 6. M4 eval — what's ready, where to go next
 
-The retriever started by `bootstrap.sh` uses the IVF-SQ8 index, which is faster but approximate. The published M1 numbers in [`docs/report/RESULTS_m1.md`](../report/RESULTS_m1.md) used the **flat IP** index for paper-fidelity recall.
+After bootstrap finishes the box has everything M4 (Qwen3.5-0.8B baseline eval) needs:
 
-### 6a. (Optional) Switch retriever to flat IP for paper-fidelity eval
+- Retriever live on `127.0.0.1:3005` (IVF-SQ8 × 8 workers).
+- Both Qwen3.5-0.8B variants on disk at `eval/qwen3.5_0.8b/` and `eval/qwen3.5_0.8b_base/`.
+- Eval pipeline at [`evaluation_qwen35/`](../../evaluation_qwen35/) using the `evaluation_search_r1` conda env (already in the docker image).
 
-Only do this if you specifically want to reproduce M1 numbers exactly. Needs ~65 GB host RAM.
+What's **not** done by bootstrap (because Vast doesn't have SLURM and the launch shape is run-specific):
 
-```bash
-# Download flat index (~60 GB after merge + gunzip)
-cd /workspace/reason_over_search/local_retriever
-huggingface-cli download PeterJinGo/wiki-18-e5-index --repo-type dataset --local-dir indexes
-cat indexes/part_aa indexes/part_ab > indexes/wiki18_100w_e5_flat_inner.index.gz
-gunzip -f indexes/wiki18_100w_e5_flat_inner.index.gz
-rm -f indexes/part_aa indexes/part_ab
+- SGLang server on port 3000. Launch it for the variant you're testing (mirror the launch lines in [`scripts/sbatch_m4.sh`](../../scripts/sbatch_m4.sh) §SGLang server).
+- Per-`(variant, dataset, seed)` invocation. Use [`scripts/run_m4.sh`](../../scripts/run_m4.sh) for single cells; ALICE-only `scripts/sbatch_m4.sh` for the full 7-dataset sweep.
 
-# Stop IVF retriever, restart on flat
-pkill -f retriever_serving.py; sleep 2
-nohup /venv/retriever/bin/python retriever_serving.py \
-  --config retriever_config.yaml --num_retriever 4 --port 3005 \
-  --index ./indexes/wiki18_100w_e5_flat_inner.index \
-  > /tmp/retriever.log 2>&1 &
-until curl -sf http://127.0.0.1:3005/health; do sleep 5; done
-```
+Runbook + design (action format, prompt templates, datasets, expected wall-clock): [`docs/milestone_4/MILESTONE_4.md`](../milestone_4/MILESTONE_4.md).
 
-### 6b. Download GRPO checkpoints (~27 GB)
-
-```bash
-cd /workspace/reason_over_search/evaluation_search_r1
-huggingface-cli download PeterJinGo/SearchR1-nq_hotpotqa_train-qwen2.5-3b-em-grpo \
-  --local-dir search_r1_base_model
-huggingface-cli download PeterJinGo/SearchR1-nq_hotpotqa_train-qwen2.5-3b-it-em-grpo \
-  --local-dir search_r1_instruct_model
-
-# Verify sha256 (catches partial / wrong-checkpoint downloads)
-sha256sum search_r1_base_model/model-00001-of-00003.safetensors
-# Expected: 7ac54e1b9762c3c6d639da28a2cca177fe7db092ff5cf6e5a9a7849a36a9dabf
-sha256sum search_r1_instruct_model/model-00001-of-00003.safetensors
-# Expected: 3d787062256210d1cc6c7c666a0ab0ac83a7a5d0296281b4811df72c968ccd35
-```
-
-Full sha256 + sizes table: [`docs/eval/REPRODUCIBILITY.md#models—confirmed-grpo`](../eval/REPRODUCIBILITY.md#models--confirmed-grpo).
-
-### 6c. Start SGLang on port 3000
-
-```bash
-cd /workspace/reason_over_search
-scripts/manage_sglang.sh switch instruct   # or 'base'
-# Logs at /tmp/sglang_<variant>.log; first-time JIT compile is ~3 to 5 min
-
-# Sanity
-curl -sS http://127.0.0.1:3000/get_model_info | grep -o instruct
-```
-
-The script kills any running SGLang, launches the requested variant on `127.0.0.1:3000` with the canonical flags (`--context-length 8192 --dtype bfloat16 --tp 1 --trust-remote-code`), and waits for `/get_model_info` to come up.
-
-**Constraint**: GPU FAISS + SGLang **cannot share a 24 GB 4090** (16 GB index + 22 GB SGLang > 24 GB VRAM). On 4090 keep retriever on CPU. On 80 GB cards (A100/H100/H200) GPU FAISS + SGLang fit, but CPU FAISS is fine and one less moving part.
-
-### 6d. Smoke-eval (1 dataset × 1 seed; ~6 min on 4090, ~2 min on H100)
-
-```bash
-cd /workspace/reason_over_search
-scripts/run_one.sh instruct bamboogle 1 > /tmp/smoke.log 2>&1
-LATEST=$(ls -dt evaluation_search_r1/results/bamboogle/bamboogle_*_search_r1_instruct_seed1 | head -1)
-grep -E "^(em|f1):" "$LATEST/metric_score.txt"
-```
-
-Expected: EM ≈ 0.36, F1 ≈ 0.45 on Bamboogle/instruct (n=125, greedy). If EM drops to 0.05–0.10 the eval is broken; check `apply_chat`/template/parser surface in [`docs/eval/PAPER_VS_OURS_AUDIT.md`](../eval/PAPER_VS_OURS_AUDIT.md) before touching anything else.
-
-`run_one.sh` is **resume-aware**: any `(variant, dataset, seed)` cell with a `metric_score.txt` is skipped on re-run. Force a re-run via:
-
-```bash
-rm -rf evaluation_search_r1/results/bamboogle/bamboogle_*_search_r1_instruct_seed1
-```
-
-### 6e. Full sweep
-
-Plan B reduced (1 k subsamples, both variants × 7 datasets × 5 seeds) lands in ~30 min on H100, ~3 h on 4090:
-
-```bash
-nohup bash scripts/sweep_b_reduced.sh > /workspace/logs/sweep_b.log 2>&1 & disown
-tail -f /workspace/logs/sweep_b.log
-```
-
-Plan A (full splits × 5 seeds): see [`docs/setup/VAST_AI_PLAN_A.md`](../setup/VAST_AI_PLAN_A.md) for the multi-instance fleet recipe.
-
-Aggregate after a sweep:
-
-```bash
-python scripts/aggregate.py
-# Writes evaluation_search_r1/results/_aggregate/<variant>_summary.json
-```
+**Constraint reminder**: GPU FAISS + SGLang **cannot share a 24 GB 4090** (16 GB index + 22 GB SGLang > 24 GB VRAM). Bootstrap leaves the retriever on CPU FAISS, which is what we want for any GPU under 80 GB. On 80 GB cards CPU FAISS is still fine and one less moving part.
 
 ---
 
@@ -364,15 +317,16 @@ Vast SSH connections drop. Always run long jobs under `nohup … & disown` (logs
 ```bash
 mkdir -p /workspace/logs
 
-# Option A: nohup
-nohup bash scripts/sweep_b_reduced.sh > /workspace/logs/sweep_b.log 2>&1 & disown
-tail -f /workspace/logs/sweep_b.log
+# Option A: nohup (long training run example)
+nohup bash training/scripts/run_grpo_1xa100.sh --variant base --seed 42 --arm qwen_native \
+  > /workspace/logs/m2_full.log 2>&1 & disown
+tail -f /workspace/logs/m2_full.log
 
 # Option B: tmux
-tmux new -s eval
+tmux new -s work
 # inside tmux: run anything
 # Ctrl-b d   to detach
-# tmux attach -t eval   to reattach
+# tmux attach -t work   to reattach
 ```
 
 ---
@@ -382,9 +336,9 @@ tmux new -s eval
 If results matter, exfiltrate first:
 
 ```bash
-# Eval results
+# M4 eval results
 tar czf /tmp/results-$(date +%F).tar.gz \
-  /workspace/reason_over_search/evaluation_search_r1/results
+  /workspace/reason_over_search/evaluation_qwen35/results
 scp -P <PORT> root@ssh<HOST>.vast.ai:/tmp/results-*.tar.gz .
 
 # Training traces
@@ -392,7 +346,7 @@ tar czf /tmp/training-traces-$(date +%F).tar.gz \
   /workspace/reason_over_search/logs
 
 # Or sync to object storage
-rclone sync /workspace/reason_over_search/evaluation_search_r1/results \
+rclone sync /workspace/reason_over_search/evaluation_qwen35/results \
             r2:reason-over-search/results-$(date +%F)
 ```
 
@@ -406,12 +360,10 @@ Then destroy from the Vast UI; persistent-volume billing stops on destroy.
 
 | Phase | Wall-clock | Cost @ $1.20/h on 1× A100 |
 |---|---|---|
-| Bootstrap, fresh box, HF fast path | ~10 min | ~$0.20 |
-| Bootstrap, fresh box, compile fallback | ~35 min | ~$0.70 |
+| Bootstrap, fresh box, HF fast path | ~25 min | ~$0.50 |
+| Bootstrap, fresh box, compile fallback | ~50 min | ~$1.00 |
 | Bootstrap, re-used box | <1 min | ~$0.02 |
 | Smoke combo (2 steps × 4 prompts) | ~5 min | ~$0.10 |
-| Eval Plan B reduced (full 1k×7×2×5) | ~3 h on 4090, ~30 min on H100 | ~$3 to $5 |
-| Eval Plan A (full split × 5 seeds × 7 × 2) | ≤24 h fleet | ~$58 to $108 (multi-instance, see VAST_AI_PLAN_A.md) |
 | Full Phase-2 GRPO run (1005 steps × 510 trajectories) on 1× A100 | ~11 to 17 d | ~$300 to $490 |
 | Same on 1× H100 80 GB SXM | ~5 to 8.5 d | ~$240 to $410 |
 | Same on 1× H200 141 GB SXM | ~4 to 7 d | ~$270 to $470 |
@@ -434,8 +386,8 @@ Recommended hardware for full training runs: **1× H100 80 GB SXM** for best $/r
 | `AttributeError: 'Qwen3_5Model' object has no attribute 'layers'` | `_v2: false` was overridden | Use the YAML default (`_v2: true`); ensure the v2 venv exists |
 | `CUDA error: an illegal memory access` in `torch_chunk_gated_delta_rule` | sequence packing enabled with Qwen3.5 | Add `policy.sequence_packing.enabled=false` (always required) |
 | Ray cluster startup timeout | stale `/tmp/ray` | `rm -rf /tmp/ray` and relaunch |
-| `OSError: model.safetensors not found` from SGLang | GRPO download incomplete | Re-run `huggingface-cli download`; `du -sh search_r1_*_model` should be ~14 GB each |
-| `EM` wildly off paper numbers | wrong checkpoint or `apply_chat=False` for base | Verify sha256 vs [`docs/eval/REPRODUCIBILITY.md`](../eval/REPRODUCIBILITY.md); check [`scripts/run_one.sh:35`](../../scripts/run_one.sh#L35) |
+| Retriever exits with `FileNotFoundError: ./indexes/...` or `./corpus/...` | retriever-asset download skipped or failed | Re-run `bash training/scripts/bootstrap.sh` (idempotent); check `local_retriever/{corpus,indexes,models}/` |
+| `ERROR: model path not found: .../eval/qwen3.5_0.8b...` from sbatch_m4 / run_m4 | M4 model download skipped or `SKIP_M4_MODELS=1` | Run `bash scripts/m4_download_models.sh` |
 | `bad ownership or modes for file /root/.ssh/authorized_keys` | boot hook didn't run | See § 2 manual fix |
 | `cuda out of memory` from SGLang | another process holds VRAM | `nvidia-smi` to find culprit; `pkill -f <name>` |
 
@@ -446,23 +398,22 @@ Recommended hardware for full training runs: **1× H100 80 GB SXM** for best $/r
 ```
 /workspace/reason_over_search/
 ├── data/                                          # 7 eval datasets (jsonl, LFS)
-├── data_subsample/                                # Plan B 1k subsamples (LFS)
 ├── data/training/nq_hotpotqa_train/               # Training parquets (LFS)
 ├── local_retriever/
-│   ├── corpus/wiki18_100w.jsonl                   # 14 GB (downloaded by bootstrap)
-│   ├── indexes/wiki18_100w_e5_ivf4096_sq8.index   # 16 GB (downloaded by bootstrap)
-│   ├── indexes/wiki18_100w_e5_flat_inner.index    # 65 GB (optional, paper-fidelity eval)
-│   └── models/e5-base-v2/                         # 0.5 GB encoder
-├── evaluation_search_r1/
-│   ├── search_r1_base_model/                      # 14 GB (download in § 6b)
-│   ├── search_r1_instruct_model/                  # 14 GB (download in § 6b)
-│   └── results/                                   # eval outputs land here
+│   ├── corpus/wiki18_100w.jsonl                   # 14 GB (downloaded by bootstrap §6)
+│   ├── indexes/wiki18_100w_e5_ivf4096_sq8.index   # 16 GB (downloaded by bootstrap §6)
+│   └── models/e5-base-v2/                         # 0.5 GB encoder (downloaded by bootstrap §6)
+├── eval/
+│   ├── qwen3.5_0.8b/                              # 1.7 GB hybrid (M4, downloaded by bootstrap §8)
+│   └── qwen3.5_0.8b_base/                         # 1.7 GB base (M4, downloaded by bootstrap §8)
+├── evaluation_qwen35/                             # M4 eval pipeline (code only)
+│   └── results/                                   # M4 eval outputs land here
 └── training/
     ├── nemo_rl/.venv/                             # main training venv
     ├── nemo_rl/venvs/.../DTensorPolicyWorkerV2/   # the v2 worker venv
     └── .env                                       # WANDB_API_KEY etc.
 
-$HF_HOME = /workspace/hf_cache                     # Qwen3.5-2B + Qwen3.5-2B-Base cached here
+$HF_HOME = /workspace/hf_cache                     # Qwen3.5-2B + Qwen3.5-2B-Base training weights cached here
 ```
 
 ---
@@ -471,10 +422,10 @@ $HF_HOME = /workspace/hf_cache                     # Qwen3.5-2B + Qwen3.5-2B-Bas
 
 - [`training/scripts/bootstrap.sh`](../../training/scripts/bootstrap.sh) — the actual script
 - [`training/scripts/bootstrap_alice.sh`](../../training/scripts/bootstrap_alice.sh) — same flow on ALICE HPC via Apptainer
-- [`docs/setup/BOOTSTRAP_NEW_INSTANCE.md`](../setup/BOOTSTRAP_NEW_INSTANCE.md) — generic bootstrap (any host, not Vast-specific); leans more on docker pull / docker run
-- [`docs/setup/VAST_INSTANCE_SETUP.md`](../setup/VAST_INSTANCE_SETUP.md) — older Vast-specific eval-only walkthrough; partly superseded by this doc
-- [`docs/setup/VAST_AI_PLAN_A.md`](../setup/VAST_AI_PLAN_A.md) — multi-instance fleet design for cost-optimal Plan A eval
-- [`docs/setup/HARDWARE.md`](../setup/HARDWARE.md) — accelerator comparison
+- [`local_retriever/README.md`](../../local_retriever/README.md) — retriever asset download steps + index choices (bootstrap mirrors these)
+- [`docs/milestone_4/MILESTONE_4.md`](../milestone_4/MILESTONE_4.md) — M4 Qwen3.5-0.8B eval design + runbook
 - [`docs/milestone_2/PHASE_2_RUNBOOK.md`](../milestone_2/PHASE_2_RUNBOOK.md) — operational runbook for Phase-2 training
+- [`docs/setup/BOOTSTRAP_NEW_INSTANCE.md`](../setup/BOOTSTRAP_NEW_INSTANCE.md) — generic bootstrap (any host, not Vast-specific); leans more on docker pull / docker run
+- [`docs/setup/HARDWARE.md`](../setup/HARDWARE.md) — accelerator comparison
 - [`docs/training/CONVERSATION_CONTEXT.md`](../training/CONVERSATION_CONTEXT.md) — current state of training-side work
 - [`docs/training/NEMO_RL_KNOBS.md`](../training/NEMO_RL_KNOBS.md) — every NeMo-RL knob and our recommended values
