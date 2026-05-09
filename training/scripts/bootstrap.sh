@@ -11,6 +11,17 @@
 #   bash training/scripts/bootstrap.sh                      # full setup
 #   SKIP_V2_BUILD=1 bash training/scripts/bootstrap.sh      # skip the long step
 #   SKIP_RETRIEVER=1 bash training/scripts/bootstrap.sh     # don't start retriever
+#   SKIP_M4_MODELS=1 bash training/scripts/bootstrap.sh     # skip Qwen3.5-0.8B eval models
+#
+# What this script provisions, in order:
+#   1. Sanity (envs, GPU, disk, RAM)
+#   2. Git LFS pull (training parquets + eval jsonls if missing)
+#   3. Qwen3.5-2B + Qwen3.5-2B-Base training weights (HF → $HF_HOME)
+#   4. NeMo-RL project venv (uv sync --extra vllm)
+#   5. NeMo-RL v2/automodel worker venv (HF tarball or compile)
+#   6. Retriever assets (corpus + IVF-SQ8 index + e5-base-v2 encoder, ~30 GB)
+#   7. Retriever start (IVF-SQ8 × 8 workers, port 3005)
+#   8. M4 eval models (Qwen3.5-0.8B hybrid + base, ~3.4 GB → eval/)
 #
 # Exits non-zero on any unrecoverable failure.
 
@@ -172,7 +183,59 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 4. Retriever (IVF-SQ8 + 8 workers, v1 default)
+# 4. Retriever assets (corpus, IVF-SQ8 index, e5-base-v2 encoder)
+# Mirrors local_retriever/README.md "Download steps". All three are required
+# before retriever_serving.py will start; paths in retriever_config.yaml are
+# relative (./corpus, ./indexes, ./models) so we drop them under local_retriever/.
+# ---------------------------------------------------------------------------
+mkdir -p local_retriever/corpus local_retriever/indexes local_retriever/models
+
+CORPUS_PATH="local_retriever/corpus/wiki18_100w.jsonl"
+if [[ ! -s "$CORPUS_PATH" ]]; then
+  log "Downloading wiki-18 corpus (~14 GB after gunzip)…"
+  source /opt/miniforge3/etc/profile.d/conda.sh
+  conda activate retriever
+  hf download PeterJinGo/wiki-18-corpus \
+    --repo-type dataset \
+    --include "wiki-18.jsonl.gz" \
+    --local-dir local_retriever/corpus
+  gunzip -f local_retriever/corpus/wiki-18.jsonl.gz
+  mv local_retriever/corpus/wiki-18.jsonl "$CORPUS_PATH"
+  conda deactivate
+else
+  log "Corpus already present at $CORPUS_PATH."
+fi
+
+IVF_INDEX_PATH="local_retriever/indexes/wiki18_100w_e5_ivf4096_sq8.index"
+if [[ ! -s "$IVF_INDEX_PATH" ]]; then
+  log "Downloading IVF-SQ8 index from HF dataset pantomiman/reason-over-search (~16 GB)…"
+  source /opt/miniforge3/etc/profile.d/conda.sh
+  conda activate retriever
+  hf download pantomiman/reason-over-search \
+    retriever/wiki18_100w_e5_ivf4096_sq8.index \
+    --repo-type dataset \
+    --local-dir local_retriever/indexes
+  # HF preserves repo dir structure; flatten to the path retriever_config.yaml expects
+  mv local_retriever/indexes/retriever/wiki18_100w_e5_ivf4096_sq8.index "$IVF_INDEX_PATH"
+  rmdir local_retriever/indexes/retriever 2>/dev/null || true
+  conda deactivate
+else
+  log "IVF-SQ8 index already present at $IVF_INDEX_PATH."
+fi
+
+E5_DIR="local_retriever/models/e5-base-v2"
+if [[ ! -f "$E5_DIR/config.json" ]]; then
+  log "Downloading intfloat/e5-base-v2 encoder (~0.5 GB)…"
+  source /opt/miniforge3/etc/profile.d/conda.sh
+  conda activate retriever
+  hf download intfloat/e5-base-v2 --local-dir "$E5_DIR"
+  conda deactivate
+else
+  log "e5-base-v2 encoder already present at $E5_DIR."
+fi
+
+# ---------------------------------------------------------------------------
+# 5. Retriever (IVF-SQ8 + 8 workers, v1 default)
 # ---------------------------------------------------------------------------
 if [[ "${SKIP_RETRIEVER:-0}" == "1" ]]; then
   warn "SKIP_RETRIEVER=1 — not starting the retriever."
@@ -216,6 +279,23 @@ else
   else
     err "Retriever health check failed: $health"
     exit 1
+  fi
+fi
+
+# ---------------------------------------------------------------------------
+# 6. M4 eval models (Qwen3.5-0.8B hybrid + base) into eval/
+# Skips if SKIP_M4_MODELS=1. The eval pipeline at evaluation_qwen35/ resolves
+# model paths to $REPO_ROOT/eval/<variant>/ by default (overridable via the
+# QWEN35_0_8B_HYBRID_PATH / QWEN35_0_8B_BASE_PATH env vars).
+# ---------------------------------------------------------------------------
+if [[ "${SKIP_M4_MODELS:-0}" == "1" ]]; then
+  warn "SKIP_M4_MODELS=1 — not downloading Qwen3.5-0.8B eval models."
+else
+  if [[ -f "eval/qwen3.5_0.8b/config.json" && -f "eval/qwen3.5_0.8b_base/config.json" ]]; then
+    log "M4 eval models already present at eval/qwen3.5_0.8b{,_base}."
+  else
+    log "Downloading M4 eval models (Qwen3.5-0.8B hybrid + base, ~3.4 GB total)…"
+    PY="/opt/miniforge3/envs/retriever/bin/python" bash scripts/m4_download_models.sh
   fi
 fi
 

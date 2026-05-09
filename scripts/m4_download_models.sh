@@ -15,7 +15,21 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 EVAL_DIR="$REPO_ROOT/eval"
 mkdir -p "$EVAL_DIR"
 
-PY="${PY:-/home/s4374886/.conda/envs/evaluation_search_r1/bin/python}"
+# Auto-discover python (Vast → ALICE → system fallback). Override via PY=...
+if [[ -z "${PY:-}" ]]; then
+  for cand in \
+    /opt/miniforge3/envs/evaluation_search_r1/bin/python \
+    /opt/miniforge3/envs/retriever/bin/python \
+    /home/s4374886/.conda/envs/evaluation_search_r1/bin/python \
+    "$(command -v python3 2>/dev/null)" \
+    "$(command -v python 2>/dev/null)"; do
+    if [[ -x "$cand" ]]; then PY="$cand"; break; fi
+  done
+fi
+if [[ -z "${PY:-}" || ! -x "$PY" ]]; then
+  echo "ERROR: no python interpreter found; set PY=/path/to/python" >&2
+  exit 1
+fi
 
 declare -A REPOS=(
   [qwen3.5_0.8b]=Qwen/Qwen3.5-0.8B
