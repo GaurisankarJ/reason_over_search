@@ -149,7 +149,7 @@ Steps automated:
 4. Start retriever with IVF-SQ8 index + 8 workers
 5. Start W&B agent
 
-Full runbook: `docs/setup/BOOTSTRAP_NEW_INSTANCE.md`.
+Full runbook: [`docs/vast/SETUP_VAST.md`](../vast/SETUP_VAST.md) (Vast.ai); [`docs/setup/BOOTSTRAP_NEW_INSTANCE.md`](../setup/BOOTSTRAP_NEW_INSTANCE.md) (any other docker host).
 
 ---
 

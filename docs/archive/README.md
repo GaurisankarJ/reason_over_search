@@ -20,6 +20,7 @@ Treat anything in this directory as **not load-bearing** for current work. None 
 ## Archived setup docs
 
 - [VAST_INSTANCE_SETUP_v0.md](VAST_INSTANCE_SETUP_v0.md) — original M1-era manual-download Vast.ai walkthrough (corpus + flat IP index + GRPO checkpoints + eval datasets). **Archived 2026-05-09**. Successor: [`docs/vast/SETUP_VAST.md`](../vast/SETUP_VAST.md), which uses [`training/scripts/bootstrap.sh`](../../training/scripts/bootstrap.sh) for one-shot setup, defaults to IVF-SQ8 (flat IP retired), and covers M2 training + M4 Qwen3.5-0.8B eval rather than the M1 GRPO checkpoint reproduction path.
+- [BOOTSTRAP_NEW_INSTANCE_v0.md](BOOTSTRAP_NEW_INSTANCE_v0.md) — original M1-era host-agnostic manual-download walkthrough (parallel content to `VAST_INSTANCE_SETUP_v0.md`, framed for in-house GPU + cloud VM hosts beyond Vast). **Archived 2026-05-09**. Successors: [`docs/vast/SETUP_VAST.md`](../vast/SETUP_VAST.md) for Vast; [`docs/setup/BOOTSTRAP_NEW_INSTANCE.md`](../setup/BOOTSTRAP_NEW_INSTANCE.md) (rewritten thin) for non-Vast hosts — `docker pull`/`run` recipe + delegate to SETUP_VAST.md.
 
 ## Hypotheses that turned out wrong
 
