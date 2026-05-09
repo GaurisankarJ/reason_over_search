@@ -138,7 +138,7 @@ if __name__ == "__main__":
     parser.add_argument("--enable_thinking", type=_str2bool, default=False)
     parser.add_argument("--search_r1_mode", type=_str2bool, default=False)
     parser.add_argument("--prompt_mode", type=str, default='search_r1',
-                        help="'search_r1' (original user-msg template); 'qwen3' / 'qwen3_p1_basic_w_ex' (M3 z7kcxfof prompt); 'qwen3_p3_decide_no_ex' (M3.1 el6s2d2h prompt); 'qwen35' / 'qwen35_p1_basic_w_ex' (M4 Qwen3.5-0.8B baseline, <tool_call>/<tool_response> tags)")
+                        help="'search_r1' (original user-msg template); 'qwen3' / 'qwen3_p1_basic_w_ex' (M3 z7kcxfof prompt); 'qwen3_p3_decide_no_ex' (M3.1 el6s2d2h prompt); 'qwen35' / 'qwen35_native' (M4.1 Qwen3.5-0.8B canonical nested-XML tool use; tools=[SEARCH_TOOL] auto-injects the format spec)")
     # Quick-eval knobs: subsample N items for fast smoke iteration. Wired through
     # config_dict → Config; FlashRAG's Dataset class subsamples at load time
     # (flashrag/dataset/dataset.py:133). Set test_sample_num=100, random_sample=True

@@ -42,8 +42,18 @@ That format is **auto-injected** by Qwen3.5's chat template when `tools=[QWEN35_
 Final M4.1 system message (in [`evaluation_qwen35/flashrag/search_r1/templates.py`](../../evaluation_qwen35/flashrag/search_r1/templates.py) as `QWEN35_NATIVE_TEMPLATE`, registered as `QWEN35_TEMPLATES["qwen35"]` and `QWEN35_TEMPLATES["qwen35_native"]`):
 
 ```text
-You are a helpful assistant. Answer the user's question by using the `search` tool when you need external knowledge; you may call it multiple times. When you have enough information, give the final answer inside <answer> and </answer>. For example, <answer>Beijing</answer>.
+You are a helpful assistant with access to a `search` tool that retrieves Wikipedia passages.
+
+The user will give you a question in the form: Question: <question>
+
+Steps:
+- Call `search` with a focused query in the format described above.
+- The search result will appear as <tool_response>...</tool_response>.
+- If you have enough information, write the final answer inside <answer> and </answer> and stop.
+- Otherwise, refine your query and call `search` again.
 ```
+
+Loop semantics only (search → observe → reason → answer-or-loop). The format spec is auto-injected by the chat template (the `# Tools` block + the `<IMPORTANT>` reminder, both verbatim from the model's [`tokenizer_config.json:chat_template`](https://huggingface.co/Qwen/Qwen3.5-0.8B/raw/main/tokenizer_config.json)) — we don't repeat it. **No few-shot example**: we want to see whether Qwen3.5-0.8B's post-training prior alone is sufficient to drive the loop on this size.
 
 User message:
 
@@ -99,9 +109,9 @@ Per-mode budgets (qwen3 + qwen35 share the M3 shape; search_r1 stays at paper):
 | Variant | Path | `enable_thinking` | `prompt_mode` |
 |---|---|---|---|
 | `qwen3.5_0.8b` (hybrid) | `eval/qwen3.5_0.8b/` | True | `qwen35` |
-| `qwen3.5_0.8b_base` | `eval/qwen3.5_0.8b_base/` | False | `qwen35` |
+| `qwen3.5_0.8b_base` | `eval/qwen3.5_0.8b_base/` | True | `qwen35` |
 
-Hybrid runs with `enable_thinking=True` so the chat template emits `<think>\n` (open block, model fills it). Base runs with `enable_thinking=False` so the chat template emits `<think>\n\n</think>\n\n` (closed empty block) — base wasn't post-trained on the hybrid soft-switch protocol; emitting an open `<think>` would derail it.
+**Both variants run with `enable_thinking=True`** so the chat template emits an open `<think>\n` generation prefix and the model reasons before each tool call. This is mildly off-distribution for the base variant (which wasn't post-trained on the hybrid soft-switch protocol), but giving the base model space to reason before each tool call is worth more than the small cost of seeing an open think block; using the same render shape across variants also makes the hybrid-vs-base comparison directly comparable. (Earlier draft had base on `enable_thinking=False`; flipped 2026-05-09.)
 
 ## Goal
 

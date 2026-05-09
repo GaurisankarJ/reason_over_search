@@ -1,12 +1,12 @@
 # ─── Qwen3 hybrid system-message templates (Phase-1 ALICE training) ──────────
 # Each constant is byte-for-byte the system-message used at training time;
 # evaluating with a different prompt than training produces off-distribution
-# behaviour (see CODE_SETUP_v2 §3 for the alignment audit).
+# behaviour (see CODE_SETUP_m3 §3 for the alignment audit).
 
 # `p1_basic_w_ex` (W&B id z7kcxfof): basic rules + 2-search Hamlet example.
 # Anchored the model on heavy-tool 2-call / 4-turn behaviour (response length
 # ~2050 tokens). End-of-run rollout reward 0.190 over 1046 steps. Evaluated in
-# M3 (RESULTS_v2 §4–§9).
+# M3 (RESULTS_m3 §4–§9).
 QWEN3_0_6B_TEMPLATE = (
     "You are a helpful assistant who can answer questions using multiple Wikipedia search tool calls.\n"
     "You can call the search tool by writing: <search> your query </search>\n"
@@ -50,36 +50,69 @@ QWEN3_TEMPLATES = {
     "qwen3_p3_decide_no_ex": P3_DECIDE_NO_EX_TEMPLATE,
 }
 
-# ─── Qwen3.5 system-message template (M4) ────────────────────────────────────
-# Same prose as `p1_basic_w_ex`, with `<search>` ↔ `<tool_call>` and
-# `<result>` ↔ `<tool_response>`. The Qwen3.5 family ships these tags as
-# in-distribution vocab tokens (CHAT_TEMPLATE.md §2), so we expect lower
-# bootstrap cost than Qwen3-0.6B (Phase-1 v1 finding 5: `<tool_call>` cost
-# nothing at equal step count vs paper `<search>` tags).
+# ─── Qwen3.5 system-message template (M4 / M4.1) ─────────────────────────────
+# M4.1 prompt design (replaces the M4 placeholder flat `<tool_call>X</tool_call>`
+# template): canonical Qwen3.5 nested-XML tool use, minimal system message,
+# `Question: {q}` user message, plain `<answer>X</answer>` (no `\boxed{}`).
 #
-# Used for the M4 baseline eval of Qwen3.5-0.8B (base + hybrid) before any
-# GRPO training; the eventual M4 trained checkpoint will use the same prompt
-# verbatim, so this eval becomes the meaningful "untrained floor".
-QWEN35_0_8B_TEMPLATE = (
-    "You are a helpful assistant who can answer questions using multiple Wikipedia search tool calls.\n"
-    "You can call the search tool by writing: <tool_call> your query </tool_call>\n"
-    "You will receive the result in: <tool_response> your search result </tool_response>\n"
-    "Use the search tool to obtain the information needed for the answer.\n"
-    "Answers should be based on the search results.\n"
-    "You may use the search tool multiple times if needed before giving the final answer.\n"
-    "Provide the final answer in the format: <answer>The final answer is \\[ \\boxed{answer here} \\]</answer>.\n"
-    "For example:\n"
-    "Question: What is the nationality of the author of Hamlet?\n"
-    "<tool_call>Hamlet</tool_call>\n"
-    "<tool_response>The Tragedy of Hamlet was written by William Shakespeare.</tool_response>\n"
-    "<tool_call>William Shakespeare</tool_call>\n"
-    "<tool_response>William Shakespeare was an English playwright.</tool_response>\n"
-    "<answer>The final answer is \\[ \\boxed{English} \\]</answer>"
+# We pass `tools=[QWEN35_SEARCH_TOOL]` to `tokenizer.apply_chat_template`, so
+# Qwen3.5's chat template auto-injects (a) the `# Tools` block with the search
+# function signature, (b) the verbatim format spec
+# (`<tool_call>\n<function=NAME>\n<parameter=ARG>\nVAL\n</parameter>\n</function>\n</tool_call>`),
+# and (c) the `<IMPORTANT>` reminder block — verbatim text from the model's
+# `tokenizer_config.json:chat_template` field on HF (see CHAT_TEMPLATE.md §2,
+# verified against `https://huggingface.co/Qwen/Qwen3.5-0.8B/raw/main/tokenizer_config.json`).
+# Auto-injection is in Qwen3.5's post-training distribution, so leveraging it
+# costs the model zero adaptation vs. the off-distribution flat form.
+#
+# This template (system role) carries only what the auto-injected block does
+# NOT cover: the loop semantics — the user gives a question, the model decides
+# whether to search, observes the result, decides whether to answer or search
+# again. The format spec itself is auto-injected, so we don't repeat it. No
+# few-shot example: we want to see whether the post-training prior alone is
+# enough to drive the loop on this 0.8B model.
+QWEN35_NATIVE_TEMPLATE = (
+    "You are a helpful assistant with access to a `search` tool that retrieves Wikipedia passages.\n"
+    "\n"
+    "The user will give you a question in the form: Question: <question>\n"
+    "\n"
+    "Steps:\n"
+    "- Call `search` with a focused query in the format described above.\n"
+    "- The search result will appear as <tool_response>...</tool_response>.\n"
+    "- If you have enough information, write the final answer inside <answer> and </answer> and stop.\n"
+    "- Otherwise, refine your query and call `search` again."
 )
 
+# OpenAI-style tool schema rendered into the system area by Qwen3.5's chat
+# template. Mirror of training/src/chat_template/tools.py:SEARCH_TOOL so the
+# eval prompt is byte-identical to the training rollout's qwen_native arm
+# (CHAT_TEMPLATE.md §1a). Keep schema small: one `query: str` is all retrieval
+# needs, and shallow schemas reduce the `# Tools` token overhead.
+QWEN35_SEARCH_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "search",
+        "description": (
+            "Search Wikipedia for passages relevant to the query. Returns the "
+            "top-K most relevant chunks. Call this whenever the question "
+            "requires factual knowledge you do not already have."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "string",
+                    "description": "The search query. Be specific.",
+                },
+            },
+            "required": ["query"],
+        },
+    },
+}
+
 QWEN35_TEMPLATES = {
-    "qwen35": QWEN35_0_8B_TEMPLATE,
-    "qwen35_p1_basic_w_ex": QWEN35_0_8B_TEMPLATE,  # explicit alias
+    "qwen35": QWEN35_NATIVE_TEMPLATE,
+    "qwen35_native": QWEN35_NATIVE_TEMPLATE,  # explicit alias
 }
 
 # ─── Search-R1 paper user-message template (M1 baseline reproduction) ────────

@@ -8,12 +8,18 @@
 #   qwen3.5_0.8b           hybrid (instruct + thinking)  -> Qwen/Qwen3.5-0.8B
 #   qwen3.5_0.8b_base      base (pretrained only)        -> Qwen/Qwen3.5-0.8B-Base
 #
-# Both variants use prompt_mode=qwen35 (QWEN35_0_8B_TEMPLATE: same prose as the
-# M3 p1_basic_w_ex Qwen3 prompt with `<search>` ↔ `<tool_call>` and `<result>`
-# ↔ `<tool_response>`). Hybrid runs with enable_thinking=True; base runs with
-# enable_thinking=False (the chat template's `<think>\n\n</think>` auto-injection
-# is harmless on a base model that ignores it; we toggle it to mirror how the
-# eventual M4 trained checkpoints will be served).
+# Both variants use prompt_mode=qwen35 (M4.1 design, QWEN35_NATIVE_TEMPLATE):
+# concise loop-semantics system prompt (no example) + `Question: {q}` user
+# prompt, with `tools=[QWEN35_SEARCH_TOOL]` passed to apply_chat_template so
+# Qwen3.5's chat template auto-injects the canonical nested-XML tool-call
+# format spec (verbatim from the model's tokenizer_config.json:chat_template).
+# Plain `<answer>X</answer>` (no `\boxed{}`).
+#
+# Both variants run with enable_thinking=True so the chat template emits an
+# open `<think>\n` generation prefix and the model reasons before each tool
+# call. Mildly off-distribution for the base model (which wasn't post-trained
+# on the hybrid soft-switch), but the same render shape across variants makes
+# them directly comparable.
 #
 # Pass test_sample_num=100 for the quick eval; omit for the full sweep.
 # Writes results to evaluation_qwen35/results/<dataset>/.
@@ -49,7 +55,15 @@ case "$variant" in
     ;;
   qwen3.5_0.8b_base)
     model_path="${QWEN35_0_8B_BASE_PATH:-$REPO_ROOT/eval/qwen3.5_0.8b_base}"
-    enable_thinking=False
+    # M4.1: base also runs with enable_thinking=True so it gets an open
+    # `<think>\n` generation prefix (vs the closed `<think>\n\n</think>\n\n`
+    # that enable_thinking=False would emit). Base wasn't post-trained on
+    # the hybrid soft-switch, so this is mildly off-distribution for it,
+    # but giving the base model space to reason out loud before each tool
+    # call is worth more than the (small) cost of seeing an open think
+    # block in a never-trained-with-it position. Same prompt + same
+    # render shape => directly comparable to hybrid.
+    enable_thinking=True
     ;;
   *) echo "unknown variant: $variant" >&2; exit 2 ;;
 esac

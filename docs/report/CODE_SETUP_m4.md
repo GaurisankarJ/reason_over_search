@@ -29,7 +29,7 @@ updated: 2026-05-08
 | **Final-answer wrap** | `<answer>The final answer is \[ \boxed{X} \]</answer>` (M3 reproducibility) | plain `<answer>X</answer>` |
 | **Action stop tokens** | `[</search>, </answer>, <\|im_end\|>, <\|endoftext\|>]` | `[</tool_call>, </answer>, <\|im_end\|>, <\|endoftext\|>]` |
 | **Result wrapper** | `" <result>\n{X}\n</result>"` (leading space; in-stream continuation) | `<\|im_end\|>\n<\|im_start\|>user\n<tool_response>\n{X}\n</tool_response><\|im_end\|>\n<\|im_start\|>assistant\n` (turn-bounded; mirrors training-side `format_docs_qwen_native`) |
-| **`enable_thinking`** | True (Qwen3 hybrid) | True for hybrid; False for base (chat template's auto-injected `<think>\n\n</think>` is harmless on a base model) |
+| **`enable_thinking`** | True (Qwen3 hybrid) | **True for both hybrid and base** (M4.1 update 2026-05-09; earlier draft had False for base, flipped to give the base model open `<think>\n` reasoning space; the same render shape across variants also keeps the hybrid-vs-base comparison directly comparable) |
 | **Per-mode budgets** | `max_search_turns=5`, `step_limit=8192`, `max_obs_length=256`, `retrieval_topk=5`, `generator_max_input_len=4096` | identical (M3 and M4 share the same budget shape for cross-family comparability) |
 | **Retrieval text format** | raw `{contents}\n\n` joined and stripped | identical |
 | **Retriever** | IVF-SQ8 × 8 workers (default); flat IP × 2 (paper-fidelity opt-in) | identical (project-root `corpus/`, `indexes/`, `models/`) |
@@ -53,7 +53,7 @@ The 14 alignment fixes catalogued in [`CODE_SETUP_m3.md`](CODE_SETUP_m3.md) §3 
 - top-5 retrieval (#8; same)
 - per-mode budgets (#9; same shape)
 - `generator_max_input_len: 4096` (#10; same)
-- `enable_thinking=True` for hybrid (#11; base uses False)
+- `enable_thinking=True` for hybrid (#11) **and** base (M4.1 update 2026-05-09 — both variants get an open `<think>\n` generation prefix so the model reasons before each tool call)
 - `SLURM_SUBMIT_DIR` for `REPO_ROOT` (#12; same)
 - Retriever 1200 s readiness wait (#13; same as M3.1)
 - HF arrow cache hard-link (#14; n/a if cache already warm from M3.1)
@@ -181,7 +181,7 @@ The worktree shares `.git/objects/` with the main checkout (no extra disk for th
 | Variant | Path | `enable_thinking` | `prompt_mode` |
 |---|---|---|---|
 | `qwen3.5_0.8b` (hybrid) | `eval/qwen3.5_0.8b/` | True | `qwen35` |
-| `qwen3.5_0.8b_base` | `eval/qwen3.5_0.8b_base/` | False | `qwen35` |
+| `qwen3.5_0.8b_base` | `eval/qwen3.5_0.8b_base/` | True | `qwen35` |
 
 Quick eval (100 random items / dataset, seed 1):
 ```bash

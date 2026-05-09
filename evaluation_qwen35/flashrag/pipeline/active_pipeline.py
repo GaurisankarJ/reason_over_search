@@ -15,6 +15,8 @@ from flashrag.search_r1.templates import (
     SEARCH_R1_TEMPLATE,
     QWEN3_0_6B_TEMPLATE,
     QWEN3_TEMPLATES,
+    QWEN35_NATIVE_TEMPLATE,
+    QWEN35_SEARCH_TOOL,
     QWEN35_TEMPLATES,
 )
 from flashrag.search_r1.reward import extract_solution
@@ -23,7 +25,10 @@ from flashrag.search_r1.parser import extract_search_tag_query, extract_tool_cal
 
 # Mode families:
 #   qwen3*  : Phase-1 ALICE training prompts; <search>/<result> tags.
-#   qwen35* : M4 Qwen3.5 prompt; <tool_call>/<tool_response> flat tags.
+#   qwen35* : M4.1 Qwen3.5 canonical nested-XML tool use
+#            (<tool_call><function=search><parameter=query>X</parameter>
+#            </function></tool_call> + turn-bounded <tool_response>); chat
+#            template auto-injects the format spec via tools=[SEARCH_TOOL].
 #   search_r1: original Search-R1 user-message format.
 def _is_qwen3(mode: str) -> bool:
     # Match `qwen3` and `qwen3_*` but NOT `qwen35*`.
@@ -71,9 +76,26 @@ class SearchR1Pipeline(BasicPipeline):
         question = (item.question or "").strip()
         if question and question[-1] != '?':
             question += '?'
-        if _is_qwen_family(self.prompt_mode):
-            # qwen3 / qwen35 prompts hold the full instruction in the system message;
-            # the user message is just the question.
+        if _is_qwen35(self.prompt_mode):
+            # M4.1: canonical Qwen3.5 nested-XML tool use. System carries the
+            # minimal role + protocol; user message is `Question: {q}` only.
+            # We pass `tools=[QWEN35_SEARCH_TOOL]` so Qwen3.5's chat template
+            # auto-injects the `# Tools` block + a verbatim nested-XML format
+            # example + an `<IMPORTANT>` reminder block (CHAT_TEMPLATE.md §2);
+            # the model gets the canonical tool-call format spec for free.
+            messages = [
+                {'role': 'system', 'content': self.prompt_template},
+                {'role': 'user', 'content': f"Question: {question}"},
+            ]
+            query = self.tokenizer.apply_chat_template(
+                messages,
+                tools=[QWEN35_SEARCH_TOOL],
+                tokenize=False, add_generation_prompt=True, enable_thinking=self.enable_thinking,
+            )
+        elif _is_qwen3(self.prompt_mode):
+            # M3 / M3.1 Qwen3-0.6B prompts: full <search>/<result> protocol
+            # baked into the system message; user message is the bare question
+            # (matches the verl_legacy training rollout).
             messages = [
                 {'role': 'system', 'content': self.prompt_template},
                 {'role': 'user', 'content': question},
@@ -196,21 +218,35 @@ class SearchR1Pipeline(BasicPipeline):
                         # so the model has only seen this exact framing in context.
                         query += f"{output_str} <result>\n{retrieval_text}\n</result>"
                     elif _is_qwen35(self.prompt_mode):
-                        # Same shape as qwen3 but with the Qwen3.5-native `<tool_response>` tag,
-                        # to keep the eval prompt consistent with how the eventual M4 trained
-                        # checkpoint will see retrieval observations during training. Leading
-                        # space mirrors the qwen3 rollout (preserves the "model emits </tool_call>,
-                        # observation begins on a fresh space-prefixed line" tokenization).
-                        query += f"{output_str} <tool_response>\n{retrieval_text}\n</tool_response>"
+                        # M4.1: canonical turn-bounded tool response. Mirror of
+                        # training/src/environments/parsers.py:format_docs_qwen_native —
+                        # close the assistant turn at `</tool_call>`, open a synthetic
+                        # user turn carrying `<tool_response>`, close it, re-open the
+                        # assistant turn. Keeps the next generation in-distribution
+                        # (Qwen3.5 was post-trained on this exact multi-turn shape).
+                        # Hybrid models auto-emit `<think>...</think>` from their own
+                        # post-training prior; we don't prepend a `<think>\n` here.
+                        query += (
+                            f"{output_str}<|im_end|>\n"
+                            "<|im_start|>user\n"
+                            "<tool_response>\n"
+                            f"{retrieval_text}\n"
+                            "</tool_response><|im_end|>\n"
+                            "<|im_start|>assistant\n"
+                        )
                     else:
                         # Match generation.py: f'\n\n<information>{search_results.strip()}</information>\n\n'
                         query += f"{output_str}\n\n<information>{retrieval_text}</information>\n\n"
                 else:
                     # Match generation.py: corrective observation when the action is invalid.
                     if _is_qwen35(self.prompt_mode):
+                        # M4.1: Qwen3.5 nested-XML form. Don't dictate the format
+                        # in the corrective (the chat template's `# Tools` block
+                        # already carries the verbatim spec); just remind the model
+                        # to call the tool / use the answer tag.
                         query += (
                             f"{output_str}\nMy previous action is invalid. "
-                            "If I want to search, I should put the query between <tool_call> and </tool_call>. "
+                            "If I want to search, I should call the `search` tool. "
                             "If I want to give the final answer, I should put the answer between "
                             "<answer> and </answer>. Let me try again.\n"
                         )
