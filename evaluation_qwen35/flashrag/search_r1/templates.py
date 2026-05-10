@@ -171,6 +171,32 @@ QWEN35_MINIMAL_NO_SYSTEM_TEMPLATE = (
 
 QWEN35_TEMPLATES["qwen35_minimal_no_system"] = QWEN35_MINIMAL_NO_SYSTEM_TEMPLATE
 
+# ─── M4.4 — ReCall-port system message (Agent-RL/ReCall prose, M4.2 scaffolding) ───
+# Verbatim ReCall `re_call_template_sys` (Agent-RL/ReCall, src/verl/utils/dataset/template.py)
+# adapted to our M4 lock:
+#   - keep `<tool_call>` / `<tool_response>` tags via Qwen3.5 nested-XML (auto-injected by
+#     `tools=[QWEN35_SEARCH_TOOL]`); drop ReCall's JSON-args format reminder (auto-inject covers it)
+#   - swap `\boxed{}` for `<answer>X</answer>` (M4 lock)
+#   - drop the `{func_schemas}` placeholder block (the auto-inject already emits the function signature)
+#   - replace ReCall's weather/Beijing example with a search-style example (Ted Turner / CNN)
+#   - say `search` not "tools" (we have one tool; less abstract for the model)
+# System-role: in-distribution for Qwen3.5's hybrid post-training.
+# Pipeline routes this through the M4.1 branch (active_pipeline._is_qwen35, system + tools=[]).
+QWEN35_RECALL_PORT_TEMPLATE = (
+    "In this environment you have access to a `search` tool that retrieves Wikipedia passages. "
+    "You may perform multiple rounds of search calls.\n"
+    "\n"
+    "In your response, first think about the reasoning process inside <think> </think>, "
+    "then conduct function calling inside <tool_call> </tool_call> in the format described above. "
+    "The results of each search call will be returned inside <tool_response> </tool_response>. "
+    "You can continue to call `search` until you have enough information to answer the user's question. "
+    "When you have the answer, enclose it inside <answer> </answer> and stop calling functions. "
+    "For example: <think> Based on the response from the search call, the founder of CNN is Ted Turner. </think> "
+    "<answer> Ted Turner </answer>."
+)
+
+QWEN35_TEMPLATES["qwen35_recall_port"] = QWEN35_RECALL_PORT_TEMPLATE
+
 # ─── Search-R1 paper user-message template (M1 baseline reproduction) ────────
 SEARCH_R1_TEMPLATE = (
         "Answer the given question. "

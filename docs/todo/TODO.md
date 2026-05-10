@@ -16,7 +16,8 @@ Evergreen pending-work tracker. New TODOs land here; close them by deleting the 
 
 ## M4 (Qwen3.5-0.8B baseline eval)
 
-- **One-seed full-data confirmation** for both base + hybrid (still listed in [`milestone_4/MILESTONE_4.md`](../milestone_4/MILESTONE_4.md) "What's left"; the 2026-05-10 close-out is single-seed).
+- **M4.4 prompt search at n=300** — additive sub-phase to close (or rule out) the M3-vs-M4.2 cross-family gap (avg Δ −0.042 EM in favour of the smaller, older-family Qwen3-0.6B). Plan in [`milestone_4/MILESTONE_4.md` §M4.4](../milestone_4/MILESTONE_4.md): Phase 1 = 5 candidates × 7 datasets × n=300 (~2 h optimised stack), acceptance bar +0.025 mean EM over the M4.2 lock; Phase 2 ablate winner; Phase 3 full sweep + lock. Companion comment file: [`milestone_4/M4_PROMPTS_SCRATCH.md`](../milestone_4/M4_PROMPTS_SCRATCH.md). Implementation gap: only `qwen35_recall_port` (Phase-2 backup) is wired in [`templates.py`](../../evaluation_qwen35/flashrag/search_r1/templates.py); Phase-1 templates B/C/D/E and pipeline branches not yet authored. `scripts/orchestrate_m4_4.sh` not yet authored. Base variant stays at `qwen35_minimal_no_system` per the M4.3 lock.
+- **One-seed full-data confirmation** for both base + hybrid (the 2026-05-10 M4.2 close-out is single-seed).
 
 ## M5 (Qwen3.5-0.8B GRPO training)
 

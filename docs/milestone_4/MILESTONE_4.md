@@ -1,9 +1,9 @@
 ---
-title: MILESTONE 4 (and M4.1) — Qwen3.5-0.8B baseline eval pipeline
-tags: [milestone, eval, qwen3.5, m4, m4.1]
+title: MILESTONE 4 (M4.1 / M4.2 / M4.3 / M4.4) — Qwen3.5-0.8B baseline eval pipeline
+tags: [milestone, eval, qwen3.5, m4, m4.1, m4.2, m4.3, m4.4]
 source: internal
 created: 2026-05-08
-updated: 2026-05-08
+updated: 2026-05-10
 ---
 
 # Milestone 4: Eval pipeline + baselines for Qwen3.5-0.8B (untrained)
@@ -192,17 +192,89 @@ print(tok.apply_chat_template(
 
 Expect: a `<|im_start|>system` block containing the auto-injected `# Tools` + format example + `<IMPORTANT>` reminder + our 3-line role intro; then `<|im_start|>user\nQuestion: Who directed Inception?<|im_end|>`; then `<|im_start|>assistant\n<think>\n` (hybrid generation prefix).
 
-## What's left
+## M4.4 — prompt search to close the M3 cross-family gap
 
-**M4 closed 2026-05-10.** Smoke + full sweep + cross-family comparison all done; results locked in [`../report/RESULTS_m4.md`](../report/RESULTS_m4.md). Headlines: hybrid mean EM **0.060**, base mean EM **0.010** at full Plan A (51,713 items / variant); both below the M3 pre-GRPO Qwen3-0.6B floor of 0.102 EM (avg Δ **−0.042 EM**). M4 hybrid is therefore the locked "untrained floor" target M5 GRPO must beat on the same eval protocol.
+**Status (2026-05-10): plan landed; n=300 / dataset smoke pending. M4.2 baseline + M3-vs-M4 cross-family comparison are closed (see [`RESULTS_m4.md`](../report/RESULTS_m4.md)); M4.4 is an additive prompt-search sub-phase that may revise the locked prompt before M5 commits training compute, but does NOT block M5 scaffold work.**
+
+### Why we revisit the M4.2 lock
+
+M4.2 hybrid `qwen35_minimal` lands at mean EM **0.0594** (n=1000, [`RESULTS_SMOKE_m4.md` §9](../report/RESULTS_SMOKE_m4.md)) / **0.0571** (n=100, §6) / **~0.060** (full Plan A, §10.2 partial). The M3 untrained Qwen3-0.6B hybrid — a *smaller* model from a previous family — reaches **0.102** on the same 7 benchmarks at full Plan A. A 1.7× cross-family gap in favour of the smaller / older model implicates the prompt, not the parameters: Qwen3.5 was post-trained on different tool-use shapes than Qwen3, and we have not yet tested the prompt shapes that the literature (Search-R1, ReSearch / ReCall) and our own M3 / M3.1 ablations identified as load-bearing.
+
+What we have NOT yet tested on Qwen3.5-0.8B:
+
+1. **Search-R1 verbatim `<search>` / `<information>` tag scheme.** M4.2 ported the *prose* but swapped tags to `<tool_call>` / `<tool_response>` to leverage Qwen3.5's `tools=[]` auto-injection. The M3 finding "tag schema is interchangeable" ([`MILESTONE_3.1.md` §findings](../milestone_3/MILESTONE_3.1.md)) suggests the prose matters more than the literal tag tokens. Search-R1's exact paper template drove Qwen2.5-3B to 0.292 EM in our M1 reproduction — never tried directly on Qwen3.5.
+2. **M3.1's winning shape** (system-role + decision-rule scaffolding + no example). [`P3_DECIDE_NO_EX_TEMPLATE`](../../evaluation_qwen35/flashrag/search_r1/templates.py#L32-L42) is the v0-block training-time winner that delivered EM 0.169 in M3.1 — a tested shape for the Qwen3 family that we have not ported across.
+3. **`enable_thinking=False`.** [`RESULTS_SMOKE_m4.md` §6.5](../report/RESULTS_SMOKE_m4.md) flagged that the model emits `<think>` 100 % of the time and entity hallucinations inside it anchor downstream queries. Closing `<think>\n\n</think>` removes that failure path.
+4. **Additive decision rules on top of M4.2.** Smallest delta — keeps the M4.2 user-message structure but appends the two M3.1 decision-rule sentences.
+
+### Phase 1 — broad screen (5 candidates × 7 datasets × n=300)
+
+All candidates run greedy / `seed=1` on the M4-perf optimised stack (multi-block `<tool_response>` per chunk where applicable, per-chunk cap 120 tok, `generator_max_input_len=8192`, retriever IVF-SQ8 × 16 + `asyncio.to_thread` + `INFERENCE_MAX_WORKERS=128`). Final-answer wrap is plain `<answer>X</answer>` for all (no `\boxed{}`).
+
+| # | `prompt_mode` | Locus | Tag scheme | `tools=[]` auto-inject | `enable_thinking` | Decision rules | Example | Source / rationale |
+|---|---|---|---|---|---|---|---|---|
+| **A** | `qwen35_minimal` (control) | user | `<tool_call>` / `<tool_response>` | yes | True | no | no | M4.2 lock; baseline = 0.0594 |
+| **B** | `qwen35_searchr1_pure` | user | `<search>` / `<information>` | no | True | no | no | Verbatim port of [`SEARCH_R1_TEMPLATE`](../../evaluation_qwen35/flashrag/search_r1/templates.py#L175-L186); M1 paper config |
+| **C** | `qwen35_p3_decide_no_ex` | system | `<search>` / `<result>` | no | True | yes | no | Verbatim port of [`P3_DECIDE_NO_EX_TEMPLATE`](../../evaluation_qwen35/flashrag/search_r1/templates.py#L32-L42); M3.1 winner shape |
+| **D** | `qwen35_minimal_decide` | user | `<tool_call>` / `<tool_response>` | yes | True | yes | no | A's user message + the two M3.1 decision sentences |
+| **E** | `qwen35_minimal_nothink` | user | `<tool_call>` / `<tool_response>` | yes | **False** | no | no | A unchanged, `<think>\n\n</think>` closed |
+
+Notes on B and C:
+
+- **B**: byte-identical to the Search-R1 paper template that drove the M1 0.292 EM Qwen2.5-3B reproduction. Empty system, single user message wrapping `SEARCH_R1_TEMPLATE.format(prompt=question)`, retrieval wrap `\n\n<information>{X}</information>\n\n` (search_r1 mode shape). Tests the hypothesis that the prose / tag scheme that worked at the paper's home base also works on Qwen3.5.
+- **C**: system role contains the M3.1 winner; user message is `Question: {q}` (matches M4.1 layout); retrieval wrap `" <result>\n{X}\n</result>"` (qwen3 mode shape). Drop the `\boxed{}` wrapper — M4 EM scorer normalises and the plain form is shorter / matches what M5 training will emit.
+
+Wall-clock estimate: ~25 min / config × 5 configs ≈ **2 h** on the optimised stack (n=300/dataset × 7 datasets = 2100 items / config).
+
+### Acceptance bar
+
+A candidate replaces A only if **mean EM ≥ A + 0.025** at n=300. Wilson 95 % CI half-width at p=0.06, n=300 is ~2.7 pp; +0.025 is the floor for "real lift" rather than noise. Below that, lock M4.2 (A) unchanged for the full sweep.
+
+### Phase 2 — refine the Phase-1 winner (conditional, n=300)
+
+If Phase 1 produces a candidate above the bar, ablate one knob to test additivity. ~25 min wall.
+
+| Phase-1 winner | Phase-2 ablation |
+|---|---|
+| B (Search-R1 verbatim) | B + decision rules from C ("Search-R1 prose + M3.1 rules") |
+| C (M3.1 port) | C + 1-shot Hamlet example (the M3 `p1_basic_w_ex` shape) |
+| D (M4.2 + rules) | D + `enable_thinking=False` (combine D and E) |
+| E (M4.2 no-think) | E + decision rules (combine E and D) |
+
+A Phase-2 winner needs **+0.04** over A to commit to Phase 3 (full sweep).
+
+### Phase 3 — lock + full sweep
+
+Replace the in-flight musique-hybrid cell with the locked-best `prompt_mode`. Re-run all 7 hybrid cells at n=51,713 with the locked prompt; keep the 6 already-finished hybrid cells **only if** the lock equals A (unchanged baseline). Wall-clock ~7 h on the optimised stack. Base variant stays at `qwen35_minimal_no_system` per the M4.3 lock — base lacks the tool-use prior, and M4.3 already locked the right shape there.
+
+### Implementation cost
+
+| Component | Files touched | Effort |
+|---|---|---|
+| Templates B–E | [`evaluation_qwen35/flashrag/search_r1/templates.py`](../../evaluation_qwen35/flashrag/search_r1/templates.py) | ~80 LoC, 4 new constants + registry entries |
+| Pipeline branches | [`evaluation_qwen35/flashrag/pipeline/active_pipeline.py`](../../evaluation_qwen35/flashrag/pipeline/active_pipeline.py) | B and C re-use the existing qwen3 `<search>`/`</search>` action stop + `<information>` / `<result>` env wraps; E needs `enable_thinking` plumbed per-mode |
+| Parser | [`evaluation_qwen35/flashrag/search_r1/parser.py`](../../evaluation_qwen35/flashrag/search_r1/parser.py) | `extract_search_tag_query` already exists from the qwen3 branch — re-used unchanged for B and C |
+| Driver | [`scripts/run_m4.sh`](../../scripts/run_m4.sh) | accept `PROMPT_MODE` for any of the 5 modes; `save_note` tags collide-free |
+| Orchestrator | new `scripts/orchestrate_m4_4.sh` | sequential 5-config × 7-dataset run with skip-aware resumption; identical structure to [`orchestrate_C_then_A.sh`](../../scripts/orchestrate_C_then_A.sh) |
+
+Estimated implementation wall: **3–4 h coding + 1× n=100 sanity-check rendering** before launching the n=300 screen in earnest.
+
+### Risks and stop conditions
+
+- **Noise floor**: at n=300, +0.025 is barely outside CI. Some "lifts" will be noise. The bar is a screening floor; for a Phase-2 winner we want +0.04 before committing to the full sweep.
+- **Diminishing returns**: this is the 4th prompt iteration on M4 (v1 → v2 → v3 → minimal / no-system → M4.4). If Phase 1 produces no candidate above the bar, **ship M4.2 unchanged** and move to M5 — the higher-leverage next step is training, not prompt golf.
+- **Don't expand Phase 1**: if 5 candidates aren't enough, the gap is probably not closeable with prompting alone — that's an evaluative finding, not a "try more prompts" signal.
+
+## What's left
 
 | # | Task | Status |
 |---|---|---|
-| 1 | Quick smoke (100 / dataset) for both variants on the M4.1 prompt | ✅ done; superseded by M4.2/M4.3 prompt asymmetry lock-in |
-| 2 | Full sweep (51,713 items / variant) | ✅ done; [`RESULTS_m4.md`](../report/RESULTS_m4.md) §4 |
-| 3 | Cross-family comparison: M3 vs M4 | ✅ done; [`RESULTS_m4.md`](../report/RESULTS_m4.md) §5 |
-| 4 | M5: eval the first GRPO-trained Qwen3.5-0.8B checkpoint against this floor | ⏳ pending; tracked in [`../milestone_5/MILESTONE_5.md`](../milestone_5/MILESTONE_5.md) |
-| 5 | (Backlog) one-seed full-data confirmation across multiple seeds | ⏳ tracked in [`../todo/TODO.md`](../todo/TODO.md) |
+| 1 | Quick smoke (100 / dataset) for both variants on the M4.1 prompt | ✅ done; M4.2 / M4.3 asymmetric per-variant defaults locked ([`RESULTS_SMOKE_m4.md` §6 / §7](../report/RESULTS_SMOKE_m4.md)) |
+| 2 | Full sweep 51,713 items / variant — base + hybrid baselines (M4.2 lock) | ✅ done 2026-05-10 ([`RESULTS_m4.md` §4](../report/RESULTS_m4.md)); hybrid mean EM 0.060, base 0.010 |
+| 3 | Cross-family comparison M3 (Qwen3-0.6B) vs M4.2 (Qwen3.5-0.8B) baseline | ✅ done 2026-05-10 ([`RESULTS_m4.md` §5](../report/RESULTS_m4.md)); avg Δ −0.042 EM motivates M4.4 |
+| 4 | **M4.4 prompt search at n=300** — close (or rule out) the M3 cross-family gap before committing M5 training compute | 🟡 plan landed 2026-05-10; pending exec on a fresh box |
+| 5 | Cross-family re-comparison M3 vs M4 post-M4.4 lock — refresh [`RESULTS_m4.md`](../report/RESULTS_m4.md) §5 if M4.4 changes the lock | ⏳ blocked on #4 |
+| 6 | M5 (separate milestone): GRPO training on Qwen3.5-0.8B with the M4.4-locked prompt as the byte-aligned eval / train shape — see [`MILESTONE_5.md`](../milestone_5/MILESTONE_5.md) | ⏳ scaffold pending |
 
 ## Pointers
 
