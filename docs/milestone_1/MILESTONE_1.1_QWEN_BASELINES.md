@@ -156,7 +156,7 @@ python scripts/aggregate.py --pattern 'evaluation_search_r1/results/*/qwen3.5-2b
     > docs/milestone_1/RESULTS_QWEN3_BASELINE.md
 ```
 
-(Mirror the format of [`docs/report/RESULTS_m1.md`](RESULTS_m1.md) — per-benchmark mean ± std across seeds, side-by-side base vs hybrid.)
+(Mirror the format of [`docs/report/RESULTS_m1.md`](../report/RESULTS_m1.md): per-benchmark mean ± std across seeds, side-by-side base vs hybrid.)
 
 ## Compute estimate
 
@@ -199,7 +199,7 @@ These same numbers also feed [`docs/training/PAPER_VS_OURS_TRAINING.md §7`](../
 ## See also
 
 - [`MILESTONE_1.md`](MILESTONE_1.md) — original M1 (Search-R1 published checkpoints, Qwen2.5-3B)
-- [`CODE_SETUP_m1.md`](CODE_SETUP_m1.md) — single source of truth for the eval pipeline knobs (sampling, retrieval_topk, max_search_turns, etc.) — re-use for 1.1
+- [`CODE_SETUP_m1.md`](../report/CODE_SETUP_m1.md): single source of truth for the eval pipeline knobs (sampling, retrieval_topk, max_search_turns, etc.); re-use for 1.1
 - [`docs/eval/REPRODUCIBILITY.md`](../eval/REPRODUCIBILITY.md) — the 10 paper-vs-ours divergences that were fixed in M1; same fixes apply here
 - [`docs/training/CHAT_TEMPLATE.md §7`](../training/CHAT_TEMPLATE.md#7-rendered-examples--what-the-model-actually-sees) — exact rendered prompts for both arms (copy-pasteable)
 - [`docs/setup/VAST_AI_PLAN_A.md`](../setup/VAST_AI_PLAN_A.md) — fleet config that Jose used for M1 Plan A; recycle

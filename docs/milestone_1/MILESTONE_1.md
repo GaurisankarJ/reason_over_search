@@ -8,7 +8,7 @@ updated: 2026-05-07
 
 # Milestone 1: Baseline [Search-R1](https://www.alphaxiv.org/abs/2503.09516)
 
-> **Status (2026-05-07): CLOSED.** Plan B v1 within ±2.5 pp of paper across 7 datasets on both base and instruct variants. Locked numerical record: [`RESULTS_m1.md`](RESULTS_m1.md), [`RESULTS_m1.md`](RESULTS_m1.md). Frozen reproducer config: [`CODE_SETUP_m1.md`](CODE_SETUP_m1.md). 3-fix audit: [`../eval/PAPER_VS_OURS_AUDIT.md`](../eval/PAPER_VS_OURS_AUDIT.md). Plan A on Vast.ai (5 seeds × 7 datasets × 2 variants) was Jose-owned and was not executed before the project pivoted to recipe-focused Phase-2 work — see `../report/SUPERVISOR_MEETING_2026-05-07_m0_to_3.md` § 2.
+> **Status (2026-05-07): CLOSED.** Plan B v1 within ±2.5 pp of paper across 7 datasets on both base and instruct variants. Locked numerical record: [`RESULTS_m1.md`](../report/RESULTS_m1.md). Frozen reproducer config: [`CODE_SETUP_m1.md`](../report/CODE_SETUP_m1.md). 3-fix audit: [`../eval/PAPER_VS_OURS_AUDIT.md`](../eval/PAPER_VS_OURS_AUDIT.md). Plan A on Vast.ai (5 seeds × 7 datasets × 2 variants) was Jose-owned and was not executed before the project pivoted to recipe-focused Phase-2 work; see [`../report/SUPERVISOR_MEETING_2026-05-07_m0_to_3.md`](../report/SUPERVISOR_MEETING_2026-05-07_m0_to_3.md) § 2.
 
 ## Phase 1 Context
 
@@ -106,7 +106,7 @@ Target benchmarks:
 - Exhaustive paper-vs-ours audit ([../eval/PAPER_VS_OURS_AUDIT.md](../eval/PAPER_VS_OURS_AUDIT.md)): 8 divergences catalogued, 10 earlier ones already fixed ([../eval/REPRODUCIBILITY.md](../eval/REPRODUCIBILITY.md)).
 - Plan B v0 sweep — preserved as [../archive/RESULTS_PLAN_B_v0.md](../archive/RESULTS_PLAN_B_v0.md); v0 result dirs are committed at `evaluation_search_r1/results/_archive_v0/` (13 runs — bamboogle/instruct in the aggregate is the smoke-test number from ../eval/REPRODUCIBILITY.md, run dir not preserved).
 - Three audit fixes applied: `apply_chat=True` for base ([run_one.sh:35](../../scripts/run_one.sh#L35)), `For example, <answer> Beijing </answer>.` restored ([templates.py:10](../../evaluation_search_r1/flashrag/search_r1/templates.py#L10)), `add_special_tokens` block removed ([active_pipeline.py](../../evaluation_search_r1/flashrag/pipeline/active_pipeline.py)). `temperature: 0.0` kept (paper eval is greedy per upstream `verl` `_validate()` override).
-- **Plan B v1 sweep complete (both variants)** — full comparison in [RESULTS_m1.md](RESULTS_m1.md), aggregated numbers in [RESULTS_m1.md](RESULTS_m1.md), reproducer config locked in [CODE_SETUP_m1.md](CODE_SETUP_m1.md).
+- **Plan B v1 sweep complete (both variants)**: full comparison and aggregated numbers in [RESULTS_m1.md](../report/RESULTS_m1.md), reproducer config locked in [CODE_SETUP_m1.md](../report/CODE_SETUP_m1.md).
 - Vast.ai Plan-A fleet costing: 8× RTX 4090 ≈ $58–77 / 24 h ([../setup/VAST_AI_PLAN_A.md](../setup/VAST_AI_PLAN_A.md)).
 
 ### Plan B v1 — final results
@@ -130,5 +130,5 @@ Format validity (close-rate of `</answer>`): base ≥99.6 % every dataset; instr
 
 ## What's left
 
-1. **Plan A on Vast.ai** — 5 seeds × 7 datasets × 2 variants = 70 runs, ~517 K examples, ≤24 h on a fleet. Reproducer config: [CODE_SETUP_m1.md](CODE_SETUP_m1.md). Instructions for **Jose**: [../setup/VAST_AI_PLAN_A.md](../setup/VAST_AI_PLAN_A.md).
+1. **Plan A on Vast.ai**: 5 seeds × 7 datasets × 2 variants = 70 runs, ~517 K examples, ≤24 h on a fleet. Reproducer config: [CODE_SETUP_m1.md](../report/CODE_SETUP_m1.md). Instructions for **Jose**: [../setup/VAST_AI_PLAN_A.md](../setup/VAST_AI_PLAN_A.md).
 2. **Aggregate, write up, publish**: per-benchmark means + std-dev across the 5 seeds, side-by-side with paper, plus the audit + cost summary.

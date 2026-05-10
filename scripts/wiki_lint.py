@@ -39,14 +39,15 @@ def strip_code(text: str) -> str:
     text = INLINE_RE.sub("", text)
     return text
 STALE_DAYS = 90
-ROOT_BASENAMES = {"README.md", "CONVERSATION_CONTEXT.md", "log.md", "SCHEMA.md"}
+ROOT_BASENAMES = {"README.md", "CONVERSATION_CONTEXT.md", "log.md", "SCHEMA.md", "TODO.md"}
 
 # Substrings in link targets that are intentionally unresolvable in the
 # repo. Matched as substrings (after stripping any `../` prefix). See
 # claude/CLAUDE.md "Wiki link conventions" for context.
 INTENTIONAL_BROKEN = (
     "internship/",                      # gitignored, private
-    "RESULTS_QWEN3_BASELINE.md",        # forward-reference, file not yet authored
+    "RESULTS_QWEN3_BASELINE.md",        # forward-reference, file not yet authored (Jose-owned)
+    "PAPER_VS_OURS_M5.md",              # forward-reference, planned at M5 launch (2026-05-09 log); blocks M5.1 config
 )
 
 
