@@ -194,12 +194,15 @@ Expect: a `<|im_start|>system` block containing the auto-injected `# Tools` + fo
 
 ## What's left
 
-| # | Task |
-|---|---|
-| 1 | Quick smoke (100 / dataset) for both variants on the M4.1 prompt — validate the pipeline end-to-end |
-| 2 | Full sweep (51,713 items / variant) — produce `RESULTS_m4.md` with the M4.1 baseline numbers |
-| 3 | Cross-family comparison: M3 (Qwen3-0.6B hybrid) vs M4 (Qwen3.5-0.8B hybrid + base) on the same 7 datasets — establishes the "untrained floor" for any future M5+ GRPO trained Qwen3.5 checkpoint |
-| 4 | M5 (was M4.1-placeholder; renamed): pick + run the same eval against the first GRPO-trained Qwen3.5-0.8B checkpoint once the recipe-search Phase-2 work produces one |
+**M4 closed 2026-05-10.** Smoke + full sweep + cross-family comparison all done; results locked in [`../report/RESULTS_m4.md`](../report/RESULTS_m4.md). Headlines: hybrid mean EM **0.060**, base mean EM **0.010** at full Plan A (51,713 items / variant); both below the M3 pre-GRPO Qwen3-0.6B floor of 0.102 EM (avg Δ **−0.042 EM**). M4 hybrid is therefore the locked "untrained floor" target M5 GRPO must beat on the same eval protocol.
+
+| # | Task | Status |
+|---|---|---|
+| 1 | Quick smoke (100 / dataset) for both variants on the M4.1 prompt | ✅ done; superseded by M4.2/M4.3 prompt asymmetry lock-in |
+| 2 | Full sweep (51,713 items / variant) | ✅ done; [`RESULTS_m4.md`](../report/RESULTS_m4.md) §4 |
+| 3 | Cross-family comparison: M3 vs M4 | ✅ done; [`RESULTS_m4.md`](../report/RESULTS_m4.md) §5 |
+| 4 | M5: eval the first GRPO-trained Qwen3.5-0.8B checkpoint against this floor | ⏳ pending; tracked in [`../milestone_5/MILESTONE_5.md`](../milestone_5/MILESTONE_5.md) |
+| 5 | (Backlog) one-seed full-data confirmation across multiple seeds | ⏳ tracked in [`../todo/TODO.md`](../todo/TODO.md) |
 
 ## Pointers
 

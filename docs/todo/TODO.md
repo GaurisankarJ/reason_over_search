@@ -16,8 +16,7 @@ Evergreen pending-work tracker. New TODOs land here; close them by deleting the 
 
 ## M4 (Qwen3.5-0.8B baseline eval)
 
-- **Full-sweep close-out**: hybrid 2wikimultihopqa + musique re-running on Vast (the 2026-05-09 run died at 2wiki cell 12/14). Populate [`report/RESULTS_m4.md`](../report/RESULTS_m4.md) and the M3-vs-M4 cross-family table once both finish.
-- **One-seed full-data confirmation** for both base + hybrid (still listed in [`milestone_4/MILESTONE_4.md`](../milestone_4/MILESTONE_4.md) "What's left").
+- **One-seed full-data confirmation** for both base + hybrid (still listed in [`milestone_4/MILESTONE_4.md`](../milestone_4/MILESTONE_4.md) "What's left"; the 2026-05-10 close-out is single-seed).
 
 ## M5 (Qwen3.5-0.8B GRPO training)
 
