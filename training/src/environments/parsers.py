@@ -34,11 +34,17 @@ def parse_query(arm: str, assistant_text: str) -> Optional[str]:
     return q or None
 
 
-# Per-observation char cap, mirroring verl's `max_obs_length=500` (tokens) from
-# Search-R1's v0.2 yaml. We use a char proxy (~4 chars/token for English Wiki
-# text) instead of a real tokenizer so parsers.py stays pure-Python and unit-
-# testable without dragging in transformers. ~500 tokens × 4 ≈ 2000 chars.
-DEFAULT_MAX_OBS_CHARS = 2000
+# Per-observation char cap. Two semantics depending on the format:
+#   - format_docs_paper: TOTAL cap across the whole `<information>` body (matches
+#     verl's `max_obs_length=500` token cap on the joined Search-R1 paper body;
+#     ~500 tokens × 4 chars/token ≈ 2000 chars).
+#   - format_docs_qwen_native: PER-CHUNK cap inside each `<tool_response>` block
+#     (M4.1 v3 multi-block format; ~120 tokens × 4 ≈ 480 chars/chunk).
+# We use char proxies (~4 chars/token for English Wiki text) instead of a real
+# tokenizer so parsers.py stays pure-Python and unit-testable without dragging in
+# transformers.
+DEFAULT_MAX_OBS_CHARS = 2000           # paper-arm total
+DEFAULT_MAX_OBS_CHARS_PER_CHUNK = 480  # qwen_native per-chunk (≈120 tokens)
 
 
 def _truncate_body(body: str, max_chars: int | None) -> str:
@@ -64,25 +70,38 @@ def format_docs_paper(docs: list[str], max_chars: int | None = DEFAULT_MAX_OBS_C
 
 
 def format_docs_qwen_native(
-    docs: list[str], max_chars: int | None = DEFAULT_MAX_OBS_CHARS
+    docs: list[str], max_chars_per_chunk: int | None = DEFAULT_MAX_OBS_CHARS_PER_CHUNK
 ) -> str:
     """Hand-craft the Qwen3.5 chat-template markers for a tool response.
 
     The previous assistant turn ended at `</tool_call>` (vLLM stop string),
     no `<|im_end|>` was emitted. We close the assistant turn, open a synthetic
-    user turn carrying `<tool_response>`, close it, and re-open the assistant
-    so the next generation continues in-distribution.
+    user turn carrying one `<tool_response>...</tool_response>` block PER doc,
+    close the synthetic user turn, and re-open assistant so the next
+    generation continues in-distribution. This per-doc multi-block shape is
+    what `tokenizer.apply_chat_template([{"role":"tool","content":d}, ...])`
+    produces against Qwen3.5's chat template, so the rollout stays canonical
+    (verified on Qwen3.5-0.8B; see eval-side mirror in
+    evaluation_qwen35/flashrag/pipeline/active_pipeline.py qwen35 branch).
 
-    `max_chars` caps the docs body — see `format_docs_paper` for the rationale.
+    `max_chars_per_chunk` caps EACH `<tool_response>` block independently
+    (M4.1 v3 semantics): every chunk reaches the model regardless of any
+    single chunk's length, and oversize chunks get a `…[truncated]` marker.
+    This avoids the v2 failure mode where a long chunk consumed the whole
+    budget and starved later chunks.
     """
-    body = "\n".join(f"Doc {i + 1}: {d}" for i, d in enumerate(docs))
-    body = _truncate_body(body, max_chars)
+    blocks: list[str] = []
+    for d in docs:
+        if max_chars_per_chunk is None or len(d) <= max_chars_per_chunk:
+            blocks.append(f"<tool_response>\n{d}\n</tool_response>")
+        else:
+            truncated = _truncate_body(d, max_chars_per_chunk)
+            blocks.append(f"<tool_response>\n{truncated}\n</tool_response>")
+    body = "\n".join(blocks)
     return (
         "<|im_end|>\n"
         "<|im_start|>user\n"
-        "<tool_response>\n"
-        f"{body}\n"
-        "</tool_response><|im_end|>\n"
+        f"{body}<|im_end|>\n"
         "<|im_start|>assistant\n"
     )
 
@@ -93,5 +112,7 @@ def retriever_failed_message(
     """Wrap a retrieval failure as a tool/info response so the LM can recover."""
     msg = f"Retriever failed: {reason}"
     if arm == "qwen_native":
-        return format_docs_qwen_native([msg], max_chars=max_chars)
+        # Single-chunk failure msg; pass the (total) max_chars as the per-chunk cap —
+        # equivalent for n=1 doc and keeps the API caller-stable.
+        return format_docs_qwen_native([msg], max_chars_per_chunk=max_chars)
     return format_docs_paper([msg], max_chars=max_chars)

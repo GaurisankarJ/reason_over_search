@@ -132,11 +132,17 @@ class Dataset:
         
         if self.sample_num is not None:
             self.sample_num = int(self.sample_num)
+            # Cap at dataset size — bamboogle has only 125 items, so requesting
+            # n=1000 should silently fall back to "use everything available"
+            # rather than raising.
+            effective_n = min(self.sample_num, len(data))
+            if effective_n < self.sample_num:
+                print(f"Sample size {self.sample_num} > dataset size {len(data)}; using full dataset.")
             if self.random_sample:
-                print(f"Random sample {self.sample_num} items in test set.")
-                data = random.sample(data, self.sample_num)
+                print(f"Random sample {effective_n} items in test set.")
+                data = random.sample(data, effective_n)
             else:
-                data = data[: self.sample_num]
+                data = data[: effective_n]
 
         return data
 

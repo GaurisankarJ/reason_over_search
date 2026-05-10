@@ -68,13 +68,26 @@ case "$variant" in
   *) echo "unknown variant: $variant" >&2; exit 2 ;;
 esac
 
-prompt_mode=qwen35
+# M4.3 asymmetric default per variant (RESULTS_SMOKE_m4 §7.4):
+#   hybrid -> qwen35_minimal (auto-inject helps; in-distribution for tool-use post-training)
+#   base   -> qwen35_minimal_no_system (auto-inject hurts; base lacks tool-use prior)
+# Override either via `PROMPT_MODE=<mode>` env var.
+case "$variant" in
+  qwen3.5_0.8b)        default_prompt_mode=qwen35_minimal ;;
+  qwen3.5_0.8b_base)   default_prompt_mode=qwen35_minimal_no_system ;;
+  *)                   default_prompt_mode=qwen35_minimal ;;
+esac
+prompt_mode="${PROMPT_MODE:-$default_prompt_mode}"
+mode_tag=""
+if [[ "$prompt_mode" != "$default_prompt_mode" ]]; then
+  mode_tag="_${prompt_mode}"
+fi
 
 if [[ -n "$test_sample_num" ]]; then
-  save_note="m4_${variant}_seed${seed}_n${test_sample_num}"
+  save_note="m4_${variant}${mode_tag}_seed${seed}_n${test_sample_num}"
   sample_args=(--test_sample_num "$test_sample_num" --random_sample True --seed "$seed")
 else
-  save_note="m4_${variant}_seed${seed}"
+  save_note="m4_${variant}${mode_tag}_seed${seed}"
   sample_args=()
 fi
 save_dir="$EVAL_DIR/results/$dataset"

@@ -39,6 +39,25 @@ def _is_qwen35(mode: str) -> bool:
     return mode == 'qwen35' or mode.startswith('qwen35_')
 
 
+# Qwen3.5 modes that put the protocol in a USER message (Search-R1 style) instead
+# of a system message. Still go through `_is_qwen35` for action_stop, multi-block
+# tool_response wrap, and per-chunk cap; only the prompt-rendering layout differs.
+_QWEN35_USER_PROMPT_MODES = {'qwen35_minimal', 'qwen35_searchr1', 'qwen35_minimal_no_system'}
+
+# Subset of user-prompt modes that ALSO drop the `tools=[]` auto-inject. With
+# no tools= passed, Qwen3.5's chat template emits NO system block at all; the
+# format spec must be inlined into the user message (the template handles this).
+_QWEN35_NO_TOOLS_MODES = {'qwen35_minimal_no_system'}
+
+
+def _is_qwen35_user_prompt(mode: str) -> bool:
+    return mode in _QWEN35_USER_PROMPT_MODES
+
+
+def _is_qwen35_no_tools(mode: str) -> bool:
+    return mode in _QWEN35_NO_TOOLS_MODES
+
+
 def _is_qwen_family(mode: str) -> bool:
     return _is_qwen3(mode) or _is_qwen35(mode)
 
@@ -76,7 +95,26 @@ class SearchR1Pipeline(BasicPipeline):
         question = (item.question or "").strip()
         if question and question[-1] != '?':
             question += '?'
-        if _is_qwen35(self.prompt_mode):
+        if _is_qwen35_user_prompt(self.prompt_mode):
+            # M4.2 / M4.3: Search-R1-style minimal user-message prompt. Two flavours:
+            # - M4.2 (`qwen35_minimal`): tools=[] passed -> chat template auto-injects
+            #   the `# Tools` schema + format spec + `<IMPORTANT>` reminder into the
+            #   SYSTEM role. In-distribution for Qwen3.5's tool-use post-training.
+            # - M4.3 (`qwen35_minimal_no_system`): tools= NOT passed -> no system
+            #   block at all. Format spec is inlined into the user prompt verbatim.
+            #   Off-distribution for tool-use but maximally compact (~150 tokens
+            #   total prompt vs ~424 for M4.2).
+            user_content = self.prompt_template.format(prompt=question)
+            apply_kwargs = dict(
+                tokenize=False, add_generation_prompt=True, enable_thinking=self.enable_thinking,
+            )
+            if not _is_qwen35_no_tools(self.prompt_mode):
+                apply_kwargs['tools'] = [QWEN35_SEARCH_TOOL]
+            query = self.tokenizer.apply_chat_template(
+                [{'role': 'user', 'content': user_content}],
+                **apply_kwargs,
+            )
+        elif _is_qwen35(self.prompt_mode):
             # M4.1: canonical Qwen3.5 nested-XML tool use. System carries the
             # minimal role + protocol; user message is `Question: {q}` only.
             # We pass `tools=[QWEN35_SEARCH_TOOL]` so Qwen3.5's chat template
@@ -119,11 +157,18 @@ class SearchR1Pipeline(BasicPipeline):
 
         remain_length = self.config['generator_max_input_len']
         # Per-mode budgets:
-        #   qwen3   (p1_basic_w_ex): response_length=4096, max_tool_response_length=256, ~5 turns
-        #   qwen35  (M4 baseline) : same shape as qwen3 (no training rollout to anchor against yet,
-        #                           so we keep it consistent for cross-family comparability)
-        #   search_r1 (paper)     : max_turns=4, response=500, obs=500
-        if _is_qwen_family(self.prompt_mode):
+        #   qwen3   (p1_basic_w_ex): response_length=4096, max_tool_response_length=256 (TOTAL), ~5 turns
+        #   qwen35  (M4.1 v3)     : max_obs_per_chunk=120 PER chunk (multi-block); topk=5 -> ~600 tokens/turn obs
+        #   search_r1 (paper)     : max_turns=4, response=500, obs=500 (TOTAL)
+        # qwen3 / search_r1 still use total-cap; qwen35 uses per-chunk cap because each chunk
+        # has its own <tool_response> block (canonical Qwen3.5 multi-result shape).
+        max_obs_per_chunk = 0
+        if _is_qwen35(self.prompt_mode):
+            max_search_turns = 5
+            step_limit = 8192
+            max_obs_per_chunk = 120
+            max_obs_length = 0       # unused for qwen35; per-chunk cap is the active knob
+        elif _is_qwen3(self.prompt_mode):
             max_search_turns = 5
             step_limit = 8192       # no per-step cap; bounded by remain_length
             max_obs_length = 256
@@ -188,15 +233,57 @@ class SearchR1Pipeline(BasicPipeline):
 
                 if search_status.startswith(valid_prefix):
                     search_result = self.retriever.search(search_content)
-                    if _is_qwen_family(self.prompt_mode):
-                        # Match p1_basic_w_ex training rollout exactly (verl_legacy/vllm_rollout.py:286-290):
-                        # raw `{contents}` joined by \n\n, stripped — NO "Doc i(Title:...)" header.
+                    if _is_qwen35(self.prompt_mode):
+                        # M4.1 v3: canonical Qwen3.5 multi-result tool response.
+                        # Emit ONE `<tool_response>...</tool_response>` block per retrieved
+                        # chunk, all stacked inside ONE `<|im_start|>user...<|im_end|>` turn.
+                        # This is the byte-identical render that
+                        #   tokenizer.apply_chat_template([{"role":"tool","content":chunk}, ...])
+                        # produces against Qwen3.5's chat template; verified on the local
+                        # Qwen3.5-0.8B snapshot. PER-CHUNK token cap (max_obs_per_chunk)
+                        # rather than a total budget — each block is independently truncated
+                        # so all topk chunks reach the model regardless of any single chunk's
+                        # length. Marker on truncated chunks signals the cut to the model.
+                        chunk_texts = []
+                        marker = "\n…[truncated]"
+                        marker_ids = self.tokenizer.encode(marker, add_special_tokens=False)
+                        for line in search_result:
+                            ids = self.tokenizer.encode(line['contents'], add_special_tokens=False)
+                            if len(ids) <= max_obs_per_chunk:
+                                chunk_texts.append(line['contents'])
+                            else:
+                                keep = max(0, max_obs_per_chunk - len(marker_ids))
+                                chunk_texts.append(
+                                    self.tokenizer.decode(ids[:keep], skip_special_tokens=True) + marker
+                                )
+                        blocks = "\n".join(
+                            f"<tool_response>\n{c}\n</tool_response>" for c in chunk_texts
+                        )
+                        query += (
+                            f"{output_str}<|im_end|>\n"
+                            "<|im_start|>user\n"
+                            f"{blocks}<|im_end|>\n"
+                            "<|im_start|>assistant\n"
+                        )
+                    elif _is_qwen3(self.prompt_mode):
+                        # Match p1_basic_w_ex training rollout exactly (verl_legacy/vllm_rollout.py:286-290, 419):
+                        # raw `{contents}` joined by \n\n, stripped, total-token-truncated to max_obs_length,
+                        # then wrapped as f" <result>\n{result}\n</result>" (LEADING SPACE before <result>).
+                        # Observation tokens are loss-masked during training (line 421: result_mask=[0]*len),
+                        # so the model has only seen this exact framing in context.
                         retrieval_text = ''
                         for line in search_result:
                             retrieval_text += f"{line['contents']}\n\n"
                         retrieval_text = retrieval_text.strip()
+                        obs_ids = self.tokenizer.encode(retrieval_text, add_special_tokens=False)
+                        if len(obs_ids) > max_obs_length:
+                            retrieval_text = self.tokenizer.decode(
+                                obs_ids[:max_obs_length], skip_special_tokens=True
+                            )
+                        query += f"{output_str} <result>\n{retrieval_text}\n</result>"
                     else:
-                        # Match Search-R1 _passages2string: "Doc i(Title: <title>) <text>\n"
+                        # Match Search-R1 _passages2string: "Doc i(Title: <title>) <text>\n",
+                        # then generation.py: f'\n\n<information>{search_results.strip()}</information>\n\n'.
                         retrieval_text = ''
                         for idx, line in enumerate(search_result):
                             content = line['contents']
@@ -204,38 +291,11 @@ class SearchR1Pipeline(BasicPipeline):
                             text = '\n'.join(content.split('\n')[1:])
                             retrieval_text += f"Doc {idx + 1}(Title: {title}) {text}\n"
                         retrieval_text = retrieval_text.strip()
-                    # Truncate to max_obs_length tokens (paper: 500) so multi-turn prompts don't blow up.
-                    obs_ids = self.tokenizer.encode(retrieval_text, add_special_tokens=False)
-                    if len(obs_ids) > max_obs_length:
-                        retrieval_text = self.tokenizer.decode(
-                            obs_ids[:max_obs_length], skip_special_tokens=True
-                        )
-                    if _is_qwen3(self.prompt_mode):
-                        # Match p1_basic_w_ex training rollout exactly:
-                        # `verl_legacy/vllm_rollout.py:419` encodes f" <result>\n{result}\n</result>"
-                        # (LEADING SPACE before <result>). Different tokenization vs. no-space.
-                        # Observation tokens are loss-masked during training (line 421: result_mask=[0]*len),
-                        # so the model has only seen this exact framing in context.
-                        query += f"{output_str} <result>\n{retrieval_text}\n</result>"
-                    elif _is_qwen35(self.prompt_mode):
-                        # M4.1: canonical turn-bounded tool response. Mirror of
-                        # training/src/environments/parsers.py:format_docs_qwen_native —
-                        # close the assistant turn at `</tool_call>`, open a synthetic
-                        # user turn carrying `<tool_response>`, close it, re-open the
-                        # assistant turn. Keeps the next generation in-distribution
-                        # (Qwen3.5 was post-trained on this exact multi-turn shape).
-                        # Hybrid models auto-emit `<think>...</think>` from their own
-                        # post-training prior; we don't prepend a `<think>\n` here.
-                        query += (
-                            f"{output_str}<|im_end|>\n"
-                            "<|im_start|>user\n"
-                            "<tool_response>\n"
-                            f"{retrieval_text}\n"
-                            "</tool_response><|im_end|>\n"
-                            "<|im_start|>assistant\n"
-                        )
-                    else:
-                        # Match generation.py: f'\n\n<information>{search_results.strip()}</information>\n\n'
+                        obs_ids = self.tokenizer.encode(retrieval_text, add_special_tokens=False)
+                        if len(obs_ids) > max_obs_length:
+                            retrieval_text = self.tokenizer.decode(
+                                obs_ids[:max_obs_length], skip_special_tokens=True
+                            )
                         query += f"{output_str}\n\n<information>{retrieval_text}</information>\n\n"
                 else:
                     # Match generation.py: corrective observation when the action is invalid.

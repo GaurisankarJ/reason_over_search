@@ -106,12 +106,14 @@ Per-mode budgets (qwen3 + qwen35 share the M3 shape; search_r1 stays at paper):
 
 ## Variant dispatch
 
-| Variant | Path | `enable_thinking` | `prompt_mode` |
+| Variant | Path | `enable_thinking` | `prompt_mode` (default) |
 |---|---|---|---|
-| `qwen3.5_0.8b` (hybrid) | `eval/qwen3.5_0.8b/` | True | `qwen35` |
-| `qwen3.5_0.8b_base` | `eval/qwen3.5_0.8b_base/` | True | `qwen35` |
+| `qwen3.5_0.8b` (hybrid) | `eval/qwen3.5_0.8b/` | True | `qwen35_minimal` (M4.2; auto-inject in system) |
+| `qwen3.5_0.8b_base` | `eval/qwen3.5_0.8b_base/` | True | `qwen35_minimal_no_system` (M4.3; no system block) |
 
 **Both variants run with `enable_thinking=True`** so the chat template emits an open `<think>\n` generation prefix and the model reasons before each tool call. This is mildly off-distribution for the base variant (which wasn't post-trained on the hybrid soft-switch protocol), but giving the base model space to reason before each tool call is worth more than the small cost of seeing an open think block; using the same render shape across variants also makes the hybrid-vs-base comparison directly comparable. (Earlier draft had base on `enable_thinking=False`; flipped 2026-05-09.)
+
+**M4.2 / M4.3 (2026-05-09)** lock asymmetric per-variant defaults after smoke iteration. Hybrid does best with the auto-injected `# Tools` + `<IMPORTANT>` block in the system role (mean EM 0.057, n=100/dataset, 6.6× over v3); base does best WITHOUT it (mean EM 0.016 vs 0.003, 5×). Mechanism: the auto-inject's `<IMPORTANT>` reminder drives search loops on hybrid (in-distribution for tool-use post-training); on base it's pure scaffolding noise that crowds out the answer. Full smoke iteration log + cross-comparison with M3 baseline at [`../report/RESULTS_SMOKE_m4.md`](../report/RESULTS_SMOKE_m4.md) (§6 hybrid M4.2, §7 M4.3 + asymmetric lock-in).
 
 ## Goal
 

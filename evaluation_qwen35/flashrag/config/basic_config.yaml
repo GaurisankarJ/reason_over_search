@@ -102,7 +102,7 @@ openai_setting:
   base_url: ~
 
 generator_model_path: ~
-generator_max_input_len: 4096 # max length of the input (qwen3 mode: matches p1_basic_w_ex training response_length=4096)
+generator_max_input_len: 8192 # qwen35 M4.1 v3: bumped from 4096 to fit topk=5 multi-block obs over 5 turns; matches SGLang --context-length 8192
 generator_batch_size: 4 # batch size for generation, invalid for vllm
 generation_params:
   #do_sample: false

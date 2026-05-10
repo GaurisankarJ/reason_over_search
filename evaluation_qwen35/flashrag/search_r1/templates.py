@@ -72,15 +72,19 @@ QWEN3_TEMPLATES = {
 # few-shot example: we want to see whether the post-training prior alone is
 # enough to drive the loop on this 0.8B model.
 QWEN35_NATIVE_TEMPLATE = (
-    "You are a helpful assistant with access to a `search` tool that retrieves Wikipedia passages.\n"
+    "You are a helpful assistant with access to a `search` tool that retrieves Wikipedia passages. "
+    "Always call `search` at least once before answering; do not answer from prior knowledge.\n"
     "\n"
     "The user will give you a question in the form: Question: <question>\n"
     "\n"
     "Steps:\n"
     "- Call `search` with a focused query in the format described above.\n"
-    "- The search result will appear as <tool_response>...</tool_response>.\n"
-    "- If you have enough information, write the final answer inside <answer> and </answer> and stop.\n"
-    "- Otherwise, refine your query and call `search` again."
+    "- Each search call returns several Wikipedia passages, one per "
+    "<tool_response>...</tool_response> block. Some passages may be off-topic; "
+    "use only the relevant ones.\n"
+    "- If the relevant passages contain the answer, write it inside <answer> and </answer> and stop.\n"
+    "- Otherwise, refine your query using facts and entities from those relevant passages "
+    "(not from prior knowledge) and call `search` again."
 )
 
 # OpenAI-style tool schema rendered into the system area by Qwen3.5's chat
@@ -114,6 +118,58 @@ QWEN35_TEMPLATES = {
     "qwen35": QWEN35_NATIVE_TEMPLATE,
     "qwen35_native": QWEN35_NATIVE_TEMPLATE,  # explicit alias
 }
+
+# ─── M4.2 Search-R1-style minimal user-message prompt for Qwen3.5 ────────────
+# v3 hit EM 0.0086 mean across 7 datasets while M3 untrained Qwen3-0.6B got 0.102
+# on the same prompts (RESULTS_SMOKE_m4 §4.3); the gap implicates the ~330-word
+# pre-question scaffolding (auto-injected `# Tools` + `<IMPORTANT>` + our system
+# message). This template ports Search-R1's compact paper prompt to Qwen3.5
+# tags: protocol prose lives in the USER message (Search-R1 style — dense,
+# single-paragraph, one-word `<answer> Beijing </answer>` example), and we
+# still pass `tools=[QWEN35_SEARCH_TOOL]` so the chat template auto-injects
+# the `# Tools` format spec into the system role (in-distribution for
+# Qwen3.5's tool-use post-training; CHAT_TEMPLATE.md §2). System message
+# itself is empty — model sees just the auto-injected block, then our user
+# message containing the protocol + question.
+QWEN35_SEARCH_R1_LIKE_TEMPLATE = (
+    "Answer the given question. "
+    "You must conduct reasoning inside <think> and </think> first every time you get new information. "
+    "After reasoning, if you find you lack some knowledge, you can call the `search` tool in the "
+    "format described above and it will return the top searched results inside <tool_response> and </tool_response>. "
+    "You can search as many times as you want. "
+    "If you find no further external knowledge needed, you can directly provide the answer inside "
+    "<answer> and </answer>, without detailed illustrations. "
+    "For example, <answer> Beijing </answer>. "
+    "Question: {prompt}\n"
+)
+
+QWEN35_TEMPLATES["qwen35_minimal"] = QWEN35_SEARCH_R1_LIKE_TEMPLATE
+QWEN35_TEMPLATES["qwen35_searchr1"] = QWEN35_SEARCH_R1_LIKE_TEMPLATE  # alias
+
+# ─── M4.3 — fully-minimal: no system message, no `tools=[]` auto-inject ──────
+# Strips the `tools=[QWEN35_SEARCH_TOOL]` auto-injected `# Tools` schema +
+# `<IMPORTANT>` reminder block (~220 words) by NOT passing tools= to
+# apply_chat_template. The model now sees ONLY the user message, no system
+# block at all. To compensate we inline the verbatim nested-XML format spec
+# (lifted from the chat template's auto-inject) so the model still has a
+# format anchor; this is technically off-distribution for Qwen3.5's tool-use
+# post-training (the auto-inject is what the model was trained on), but it
+# tests whether further scaffolding reduction lifts EM. Total prompt
+# token count: ~150 (vs ~424 for qwen35_minimal which keeps the auto-inject).
+QWEN35_MINIMAL_NO_SYSTEM_TEMPLATE = (
+    "Answer the given question. "
+    "You must conduct reasoning inside <think> and </think> first every time you get new information. "
+    "After reasoning, if you find you lack some knowledge, you can call the search tool by writing:\n"
+    "<tool_call>\n<function=search>\n<parameter=query>\nyour query\n</parameter>\n</function>\n</tool_call>\n"
+    "The result will be returned inside <tool_response> and </tool_response>. "
+    "You can search as many times as you want. "
+    "If you find no further external knowledge needed, you can directly provide the answer inside "
+    "<answer> and </answer>, without detailed illustrations. "
+    "For example, <answer> Beijing </answer>. "
+    "Question: {prompt}\n"
+)
+
+QWEN35_TEMPLATES["qwen35_minimal_no_system"] = QWEN35_MINIMAL_NO_SYSTEM_TEMPLATE
 
 # ─── Search-R1 paper user-message template (M1 baseline reproduction) ────────
 SEARCH_R1_TEMPLATE = (
