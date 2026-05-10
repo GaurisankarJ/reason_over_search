@@ -42,7 +42,16 @@ def _is_qwen35(mode: str) -> bool:
 # Qwen3.5 modes that put the protocol in a USER message (Search-R1 style) instead
 # of a system message. Still go through `_is_qwen35` for action_stop, multi-block
 # tool_response wrap, and per-chunk cap; only the prompt-rendering layout differs.
-_QWEN35_USER_PROMPT_MODES = {'qwen35_minimal', 'qwen35_searchr1', 'qwen35_minimal_no_system'}
+_QWEN35_USER_PROMPT_MODES = {
+    'qwen35_minimal', 'qwen35_searchr1', 'qwen35_minimal_no_system',
+    # M4.4 Phase 1b user-locus candidates (templates that format with {prompt}
+    # and live in the user role; auto-inject via tools=[]). System-locus
+    # candidates (qwen35_p3_decide_xml, qwen35_research_role) are intentionally
+    # NOT in this set — they route through the system+`Question: {q}` branch.
+    'qwen35_terse', 'qwen35_decide', 'qwen35_search_first',
+    'qwen35_hamlet_1shot', 'qwen35_decompose', 'qwen35_source_only',
+    'qwen35_self_check', 'qwen35_multi_search',
+}
 
 # Subset of user-prompt modes that ALSO drop the `tools=[]` auto-inject. With
 # no tools= passed, Qwen3.5's chat template emits NO system block at all; the

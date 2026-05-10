@@ -194,7 +194,7 @@ Expect: a `<|im_start|>system` block containing the auto-injected `# Tools` + fo
 
 ## M4.4 — prompt search to close the M3 cross-family gap
 
-**Status (2026-05-10): Phase 1 partially executed — first candidate (`qwen35_recall_port`, ReCall-prose port, system-role + reasoning framing) ran and FAILED the acceptance bar (mean EM 0.0510 vs A=0.0594, Δ −0.0084). Four candidates (B / C / D / E) still pending. M4.2 baseline + M3-vs-M4 cross-family comparison are closed (see [`RESULTS_m4.md`](../report/RESULTS_m4.md)); M4.4 is an additive prompt-search sub-phase that may revise the locked prompt before M5 commits training compute, but does NOT block M5 scaffold work.**
+**Status (2026-05-10): Phase 1 complete (Phase 1a + Phase 1b combined = 12 candidates × 7 datasets × n=300). WINNER: `qwen35_terse` (Δ +0.0436, mean EM 0.103 — closes the M3 cross-family gap of 0.102). Secondary marginal pass: `qwen35_research_role` (Δ +0.0257). All other 10 candidates fail the +0.025 bar; the worst (`qwen35_p3_decide_xml`) collapsed at 94.4 % empty-pred rate. Phase 2 (winner ablation) or Phase 3 (full 51,713 sweep with terse-locked prompt) is the next decision point. M4.2 baseline + M3-vs-M4 cross-family comparison stay locked in [`RESULTS_m4.md`](../report/RESULTS_m4.md); Phase 3 will replace the §4 hybrid row if terse holds at full n.**
 
 ### Why we revisit the M4.2 lock
 
@@ -292,6 +292,110 @@ Run: hybrid only, n=300 / dataset (bamboogle capped at full split = 125), greedy
 
 Result files: `evaluation_qwen35/results/<dataset>/<dataset>_*_m4_qwen3.5_0.8b_qwen35_recall_port_seed1_n300/metric_score.txt` (all 7 preserved).
 
+### Phase 1 results — `qwen35_minimal_nothink` (E, 2026-05-10)
+
+Candidate E: structurally identical to A; per-mode `enable_thinking=False` plumbed through `apply_chat_template` so Qwen3.5's chat template emits a closed empty `<think>\n\n</think>\n\n` block instead of the open `<think>\n` generation prefix. Implementation: ~5 LoC (registry entry + per-mode override in [`scripts/run_m4.sh`](../../scripts/run_m4.sh)); zero pipeline-code changes (the `--enable_thinking` CLI flag was already plumbed end-to-end via [`active_pipeline.py`](../../evaluation_qwen35/flashrag/pipeline/active_pipeline.py)). Render verified against `Qwen/Qwen3.5-0.8B` chat template on bamboogle item 0 (A=430 tokens, E=432 tokens — only +2 tokens for the closing `</think>` tag).
+
+Note: the original [HANDOFF](../todo/HANDOFF_M4.4_2026-05-10.md) flagged this as "Pipeline plumbing for `enable_thinking` per-mode needed" — that note was stale (the plumbing was already in place since M4.1).
+
+Run: hybrid only, n=300 / dataset (bamboogle full split = 125), greedy / `seed=1`, optimised stack. Wall-clock **6 min 17 s** for all 7 datasets (377 s total; per-dataset 25–77 s — **~3× faster than recall_port** because closed-think collapses output token counts).
+
+| Dataset | M4.2 baseline (n=1000, §9.1) | M4.4 `qwen35_minimal_nothink` (n=300) | Δ | Empty-pred % |
+|---|---:|---:|---:|---:|
+| bamboogle (n=125) | 0.040 | 0.008 | −0.032 | 64.0 % |
+| nq | 0.065 | 0.017 | −0.048 | 71.0 % |
+| triviaqa | 0.122 | 0.027 | **−0.095** | 62.7 % |
+| popqa | 0.071 | 0.017 | −0.054 | 68.7 % |
+| hotpotqa | 0.067 | 0.023 | −0.044 | 55.0 % |
+| 2wikimultihopqa | 0.041 | **0.127** | **+0.086** | 38.3 % |
+| musique | 0.010 | 0.003 | −0.007 | 44.3 % |
+| **mean** | **0.0594** | **0.0316** | **−0.0278** | **57.7 %** |
+
+**Verdict: fails the acceptance bar by 5.3 pp** (bar = A + 0.025 = 0.0844; E − bar = −0.0528). E is **the worst Phase-1 candidate** to date (recall_port: Δ −0.0084; E: Δ −0.0278). 6 / 7 datasets regress; the single positive (2wikimultihopqa, +0.086) is a chance-correctness artifact, NOT a real signal — see mechanism below.
+
+**Mechanism**: closing `<think>` removes the reasoning channel the hybrid relies on for search-loop control — not just the in-think hallucinations §6.5 flagged. The failure is bimodal:
+
+1. **Empty-pred collapse (38–71 % of items per dataset).** Across the sweep, **57.7 % of items emit no `<answer>` tag at all**. Without the open-think scaffold the model either stops at the first `<tool_call>` cycle or wanders off-format. By contrast, M4.2 (A) empty-pred rate is in the ~5–15 % range on these datasets.
+2. **Bypass-and-fabricate on completed items.** When the model does emit `<answer>`, it overwhelmingly bypasses search and fabricates a confident-sounding answer (sample: "Based on general trivia and known personalities…, Felix Schuster is commonly considered to be the one regulated/presented on the main broadcasts. Thus, he was born first."). On open-domain entity recall (nq / popqa / triviaqa), bypass scores ~0. On 2wikimultihopqa's binary-comparison subset ("Who was born first, X or Y?", "Which film…"), bypass hits roughly 50 % by chance — that's the entire source of the +0.086 lift.
+
+This **inverts the [`RESULTS_SMOKE_m4.md` §6.5](../report/RESULTS_SMOKE_m4.md) hypothesis** that motivated E. §6.5 read the in-think entity hallucinations as a *failure path* worth closing. E shows the open-think block is also the *only reasoning surface the hybrid has* for deciding when to search vs. answer; closing it costs far more than the hallucination tax saves.
+
+**Implication for the rest of Phase 1**: candidate **D** (M4.2 user message + the two M3.1 decision sentences; same in-distribution `<tool_call>` / `<tool_response>` auto-inject as A; `enable_thinking=True` preserved) is now the highest-priority remaining test — it isolates the one knob (decision-rule scaffolding in the user role) that both recall_port and E left unperturbed. B (Search-R1 verbatim) and C (M3.1 winner verbatim) are pending an open design question: both currently use `<search>` / `<information>` or `<search>` / `<result>` tags — OFF-distribution for Qwen3.5 on the action tokens (Qwen3.5 was post-trained on `<tool_call>` / `<tool_response>`). Refactor candidates B′ / C′ would keep the distinctive prose / locus while swapping in the in-distribution `<tool_call>` tags via `tools=[…]` auto-inject; this separates the prose hypothesis from the tag-scheme axis. See [`M4_PROMPTS_SCRATCH.md` §"M4.4 Phase-1 candidates"](M4_PROMPTS_SCRATCH.md) for the I/O-pattern tables.
+
+Result files: `evaluation_qwen35/results/<dataset>/<dataset>_*_m4_qwen3.5_0.8b_qwen35_minimal_nothink_seed1_n300/metric_score.txt` (all 7 preserved).
+
+**Note (2026-05-10): the E run had a routing confound.** `qwen35_minimal_nothink` was registered in `QWEN35_TEMPLATES` but NOT added to `_QWEN35_USER_PROMPT_MODES` in [`active_pipeline.py`](../../evaluation_qwen35/flashrag/pipeline/active_pipeline.py), so the template (intended as A's user message with `enable_thinking=False`) was routed through the system+`Question: {q}` branch instead — the model saw A's protocol prose in the system role (with literal `{prompt}` placeholder dangling) and `Question: {q}` as the user message. The reported Δ −0.0278 therefore confounds (a) closing the open `<think>` block with (b) moving prose from user role to system role with a malformed placeholder. The 6/7-datasets-regress qualitative pattern likely still holds (system-role prose hurts hybrid — independently confirmed by `qwen35_p3_decide_xml` in Phase 1b at Δ −0.0443), but a clean re-run of "A with `enable_thinking=False` only" remains TODO. Phase 1b candidates all properly populate `_QWEN35_USER_PROMPT_MODES` for user-locus entries.
+
+### Phase 1b results — 10-candidate in-distribution prompt ablation (2026-05-10)
+
+After Phase 1a (recall_port + E) closed two failing slots, Phase 1b refactored the remaining design around the in-distribution `<tool_call>` / `<tool_response>` Hermes nested-XML I/O scheme (via `tools=[QWEN35_SEARCH_TOOL]` auto-inject) and expanded to **10 single-knob candidates** ablating prose length, decision rules, system-role placement, retrieval-first guards, role-priming, few-shot examples, decomposition, source-grounding, self-verification, and multi-search encouragement. Full design + per-candidate templates + web-research provenance in [`M4_4_PHASE_1B_DESIGN.md`](M4_4_PHASE_1B_DESIGN.md). All held constant: `enable_thinking=True`, greedy `seed=1`, `tools=[]` auto-inject, plain `<answer>X</answer>`, pipeline branch = qwen35, n=300/dataset (bamboogle full split = 125).
+
+Run: hybrid only, sequential 10-mode × 7-dataset sweep, optimised stack. Wall-clock **1 h 52 min** (10 modes × ~10–12 min each).
+
+Final per-candidate table (sorted by Δ vs A baseline 0.0594):
+
+| # | mode | mean EM | Δ vs A | bar (+0.025) | empty-pred % |
+|---|---|---:|---:|---|---:|
+| 1 | **`qwen35_terse`** | **0.1030** | **+0.0436** | **PASS** | 60.9 % |
+| 2 | `qwen35_research_role` | 0.0851 | +0.0257 | **PASS** (marginal) | 75.6 % |
+| 3 | `qwen35_decide` | 0.0795 | +0.0201 | fail | 74.3 % |
+| 4 | `qwen35_source_only` | 0.0767 | +0.0172 | fail | 64.2 % |
+| 5 | `qwen35_self_check` | 0.0728 | +0.0133 | fail | 68.9 % |
+| 6 | `qwen35_multi_search` | 0.0536 | −0.0058 | fail | 74.6 % |
+| 7 | `qwen35_decompose` | 0.0486 | −0.0109 | fail | 60.7 % |
+| 8 | `qwen35_search_first` | 0.0438 | −0.0156 | fail | 72.6 % |
+| 9 | `qwen35_hamlet_1shot` | 0.0367 | −0.0228 | fail | 77.1 % |
+| 10 | `qwen35_p3_decide_xml` | 0.0151 | **−0.0443** | fail | **94.4 %** |
+
+Per-dataset detail for the winner `qwen35_terse`:
+
+| Dataset | M4.2 (A) baseline | M4.4 `qwen35_terse` | Δ |
+|---|---:|---:|---:|
+| bamboogle (n=125) | 0.040 | 0.088 | +0.048 |
+| nq | 0.065 | 0.103 | +0.038 |
+| triviaqa | 0.122 | 0.213 | **+0.091** |
+| popqa | 0.071 | 0.150 | **+0.079** |
+| hotpotqa | 0.067 | 0.093 | +0.026 |
+| 2wikimultihopqa | 0.041 | 0.057 | +0.016 |
+| musique | 0.010 | 0.017 | +0.007 |
+| **mean** | **0.0594** | **0.1030** | **+0.0436** |
+
+**All 7 datasets show positive Δ** for `qwen35_terse` (binomial sign test p = 0.0078, two-tailed). Largest absolute lifts on triviaqa (+0.091, +75 % rel.) and popqa (+0.079, +111 % rel.) — the open-domain entity-recall datasets where M4.2's bypass-and-fabricate failure mode was most costly.
+
+**Headline result**: `qwen35_terse` closes the M3 cross-family gap. The M3 untrained Qwen3-0.6B benchmark (0.102 mean EM on the same 7 datasets) is what motivated the entire M4.4 sub-phase; terse Qwen3.5-0.8B lands at 0.103 — **statistically indistinguishable from M3**. The locked Qwen3.5-0.8B+M4.4 prompt now matches the smaller / older-family untrained baseline that triggered the prompt search.
+
+**Template that won** (~30 user tokens; total prompt ~370 tokens with auto-inject):
+
+```python
+QWEN35_TERSE_TEMPLATE = (
+    "Use the `search` tool to look up facts as needed. "
+    "When you have the answer, write it inside <answer> and </answer>. "
+    "For example, <answer> Beijing </answer>.\n"
+    "Question: {prompt}\n"
+)
+```
+
+That's it. The M4.2 user message (~95 words / ~80 user tokens) was bloated with clauses that auto-inject already covers — `<think>` instructions, "after reasoning…", `<tool_response>` reminder, "in the format described above". Removing them lets the auto-injected `# Tools` + `<IMPORTANT>` block do the load-bearing work uninhibited, and the model emits cleaner search loops with higher answer-format compliance (60.9 % empty-pred for terse vs the ~70–95 % range for the others, including 94.4 % for the worst).
+
+**Mechanism**: the M4.2 user message was redundant scaffolding on top of in-distribution auto-inject. Two of A's clauses — "in the format described above" and "in the format described above and it will return the top searched results inside `<tool_response>`…" — *refer back* to the auto-injected block, creating a circular dependency that probably degrades attention to the actual question. Removing them lets the model treat the user message as instruction (action + answer-format) and the system as schema (tool spec + format reminder) cleanly.
+
+**Other findings**:
+
+- **System-role prose uniformly hurts hybrid.** `qwen35_p3_decide_xml` (full M3.1 system-role port, in-dist tags) collapsed to 94.4 % empty-pred and Δ −0.0443 — the WORST Phase-1 result. Combined with Phase 1a's `qwen35_recall_port` (system-role, Δ −0.0084), this conclusively rules out the system-role-prose hypothesis for Qwen3.5 hybrid. The M3.1 winning shape does NOT transfer cross-family.
+- **A short system-role *role-prime* helps slightly.** `qwen35_research_role` (one-sentence "You are a research assistant…" in system, hardcoded `Question: {q}` in user) marginally passed the bar (Δ +0.0257). Distinguished from the system-role-prose failure mode by being short, role-only, no protocol prose. Worth combining with terse in a Phase-2 ablation.
+- **Few-shot examples don't transfer.** `qwen35_hamlet_1shot` (A + 2-search Hamlet example with `<think>` blocks) underperformed A on all 7 datasets (Δ −0.0228). M3's `p1_basic_w_ex` finding does NOT transfer to Qwen3.5 — including a multi-turn example in the prompt did not anchor multi-call behaviour; if anything the model over-attended to the Hamlet structure.
+- **Decision rules in user role nearly work.** `qwen35_decide` (A + M3.1's two decision sentences in user role; the original M4.4 candidate D) landed at Δ +0.0201 — narrow miss but the single closest near-miss. Worth pairing with terse in Phase 2 (does `terse + decide` cross the bar?).
+- **Retrieval-first guards hurt.** `qwen35_search_first` (explicit "must search before answering") at Δ −0.0156. Forcing search distorts the model's natural decision boundary; better to let the auto-inject's `<IMPORTANT>` block handle this implicitly.
+- **Source-grounding + uncertainty escape (`<answer>unknown</answer>` if not in results) was the strongest narrow miss with 5/7 positives (Δ +0.0172).** Multi-hop datasets dragged it below the bar. Combining with terse in Phase 2 could lift.
+
+Result files: `evaluation_qwen35/results/<dataset>/<dataset>_*_m4_qwen3.5_0.8b_<mode>_seed1_n300/metric_score.txt` (10 modes × 7 datasets = 70 cells, all preserved).
+
+**Implication for Phase 2 / Phase 3**:
+- **Phase 2 ablations of the winner**: (a) `terse + decide` (M3.1 decision sentences appended to terse), (b) `terse + source_only` (uncertainty escape added to terse), (c) `terse + research_role` (the role-prime as system + terse as user). Each ~10 min at n=300. ~30 min total.
+- **Phase 3 full sweep**: if `terse` (or a Phase-2 winner) holds, run the full n=51,713 hybrid sweep with the locked prompt and replace [`RESULTS_m4.md`](../report/RESULTS_m4.md) §4 hybrid row + §5 cross-family delta refresh.
+
+Both unblocked from this commit forward; M5 scaffold work remains unblocked regardless.
+
 ## What's left
 
 | # | Task | Status |
@@ -299,9 +403,11 @@ Result files: `evaluation_qwen35/results/<dataset>/<dataset>_*_m4_qwen3.5_0.8b_q
 | 1 | Quick smoke (100 / dataset) for both variants on the M4.1 prompt | ✅ done; M4.2 / M4.3 asymmetric per-variant defaults locked ([`RESULTS_SMOKE_m4.md` §6 / §7](../report/RESULTS_SMOKE_m4.md)) |
 | 2 | Full sweep 51,713 items / variant — base + hybrid baselines (M4.2 lock) | ✅ done 2026-05-10 ([`RESULTS_m4.md` §4](../report/RESULTS_m4.md)); hybrid mean EM 0.060, base 0.010 |
 | 3 | Cross-family comparison M3 (Qwen3-0.6B) vs M4.2 (Qwen3.5-0.8B) baseline | ✅ done 2026-05-10 ([`RESULTS_m4.md` §5](../report/RESULTS_m4.md)); avg Δ −0.042 EM motivates M4.4 |
-| 4 | **M4.4 prompt search at n=300** — close (or rule out) the M3 cross-family gap before committing M5 training compute | 🟡 Phase 1 partial: `qwen35_recall_port` ran 2026-05-10, mean EM 0.0510 vs A=0.0594 (FAILED bar by 3.3 pp); B / C / D / E still pending |
-| 5 | Cross-family re-comparison M3 vs M4 post-M4.4 lock — refresh [`RESULTS_m4.md`](../report/RESULTS_m4.md) §5 if M4.4 changes the lock | ⏳ blocked on #4 |
-| 6 | M5 (separate milestone): GRPO training on Qwen3.5-0.8B with the M4.4-locked prompt as the byte-aligned eval / train shape — see [`MILESTONE_5.md`](../milestone_5/MILESTONE_5.md) | ⏳ scaffold pending |
+| 4 | **M4.4 prompt search at n=300** — close (or rule out) the M3 cross-family gap before committing M5 training compute | ✅ Phase 1 complete 2026-05-10: WINNER `qwen35_terse` Δ +0.0436, mean EM 0.1030 — closes the M3 cross-family gap (M3=0.102). Secondary marginal pass `qwen35_research_role` Δ +0.0257. 10 of 12 candidates failed bar (incl. all 3 system-role-prose variants — rules out M3.1 winner shape cross-family). |
+| 4a | **M4.4 Phase 2** — winner ablations at n=300/dataset, ~30 min wall (next milestone TBD) | ⏳ deferred. Run when ready: (i) `terse+decide` = terse user + M3.1 decision sentences appended; (ii) `terse+source_only` = terse user + "use only search results / answer 'unknown' if not found" appended; (iii) `terse+research_role` = role-prime in system + terse as user message. Each must clear **+0.04 over A** (= 0.0994 mean EM) to escalate to Phase 3. If none, lock `qwen35_terse` and go straight to Phase 3. Implementation cost: ~30 LoC (3 template constants + `_QWEN35_USER_PROMPT_MODES` updates) + ~30 min wall. Templates + I/O patterns to be added to [`M4_4_PHASE_1B_DESIGN.md`](M4_4_PHASE_1B_DESIGN.md) §11 (Phase-2 follow-up). |
+| 4b | **M4.4 Phase 3** — full n=51,713 hybrid sweep with locked prompt (next milestone TBD) | ⏳ deferred, blocked on 4a. Wall: ~7 h on the optimised stack. Replaces [`RESULTS_m4.md`](../report/RESULTS_m4.md) §4 hybrid row with the new locked prompt (`qwen35_terse` unless Phase 2 produces a better candidate). Triggers refresh of [`RESULTS_m4.md`](../report/RESULTS_m4.md) §5 cross-family delta (was avg Δ −0.042 favouring M3 Qwen3-0.6B; expect to flip to ~0 or slight M4 advantage after the terse lock). Base variant stays at `qwen35_minimal_no_system` per M4.3 lock (no re-run). |
+| 5 | Cross-family re-comparison M3 vs M4 post-M4.4 lock — refresh [`RESULTS_m4.md`](../report/RESULTS_m4.md) §5 if M4.4 changes the lock | ⏳ blocked on #4b |
+| 6 | M5 (separate milestone): GRPO training on Qwen3.5-0.8B with the M4.4-locked prompt as the byte-aligned eval / train shape — see [`MILESTONE_5.md`](../milestone_5/MILESTONE_5.md) | ⏳ scaffold pending (independent of 4a/4b; can use terse-locked prompt now) |
 
 ## Pointers
 

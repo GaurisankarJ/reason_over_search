@@ -146,6 +146,14 @@ QWEN35_SEARCH_R1_LIKE_TEMPLATE = (
 QWEN35_TEMPLATES["qwen35_minimal"] = QWEN35_SEARCH_R1_LIKE_TEMPLATE
 QWEN35_TEMPLATES["qwen35_searchr1"] = QWEN35_SEARCH_R1_LIKE_TEMPLATE  # alias
 
+# ─── M4.4 candidate E — A's template byte-for-byte; only diff is enable_thinking=False ───
+# Reuses QWEN35_SEARCH_R1_LIKE_TEMPLATE; run_m4.sh sets enable_thinking=False when
+# prompt_mode=qwen35_minimal_nothink, which makes Qwen3.5's chat template emit a
+# closed empty `<think>\n\n</think>\n\n` block instead of the open `<think>\n`
+# generation prefix. Removes the in-think entity-hallucination failure path
+# flagged in RESULTS_SMOKE_m4.md §6.5.
+QWEN35_TEMPLATES["qwen35_minimal_nothink"] = QWEN35_SEARCH_R1_LIKE_TEMPLATE
+
 # ─── M4.3 — fully-minimal: no system message, no `tools=[]` auto-inject ──────
 # Strips the `tools=[QWEN35_SEARCH_TOOL]` auto-injected `# Tools` schema +
 # `<IMPORTANT>` reminder block (~220 words) by NOT passing tools= to
@@ -196,6 +204,198 @@ QWEN35_RECALL_PORT_TEMPLATE = (
 )
 
 QWEN35_TEMPLATES["qwen35_recall_port"] = QWEN35_RECALL_PORT_TEMPLATE
+
+# ─── M4.4 Phase 1b — 10-candidate in-distribution prompt ablation ────────────
+# All 10 candidates use `<tool_call>` / `<tool_response>` via tools=[QWEN35_SEARCH_TOOL]
+# auto-inject (in-distribution for Qwen3.5 post-training); enable_thinking=True;
+# plain <answer>X</answer> (no \boxed{}). The only varying axis is the prompt
+# text (and locus: user / system). See docs/milestone_4/M4_4_PHASE_1B_DESIGN.md.
+
+# #1 — qwen35_terse: length compression. Drop A's cargo-culted Search-R1 clauses
+# (<think> instructions, "after reasoning…", redundant <tool_response> reminder)
+# since auto-inject covers all of those. Test: is A bloated?
+QWEN35_TERSE_TEMPLATE = (
+    "Use the `search` tool to look up facts as needed. "
+    "When you have the answer, write it inside <answer> and </answer>. "
+    "For example, <answer> Beijing </answer>.\n"
+    "Question: {prompt}\n"
+)
+
+# #2 — qwen35_decide: A + the two M3.1-winner decision sentences (verbatim from
+# P3_DECIDE_NO_EX_TEMPLATE). Same auto-inject routing as A; user locus preserved.
+# Original M4.4 candidate D, ported in-distribution.
+QWEN35_DECIDE_TEMPLATE = (
+    "Answer the given question. "
+    "You must conduct reasoning inside <think> and </think> first every time you get new information. "
+    "After reasoning, if you find you lack some knowledge, you can call the `search` tool in the "
+    "format described above and it will return the top searched results inside <tool_response> and </tool_response>. "
+    "You can search as many times as you want. "
+    "Use the information in the search results to determine the final answer. "
+    "After each search result, decide whether another search is needed or whether you can provide the final answer. "
+    "If you find no further external knowledge needed, you can directly provide the answer inside "
+    "<answer> and </answer>, without detailed illustrations. "
+    "For example, <answer> Beijing </answer>. "
+    "Question: {prompt}\n"
+)
+
+# #3 — qwen35_p3_decide_xml: M3.1 winner shape (system role + decision rules,
+# no example) ported to <tool_call>/<tool_response> via auto-inject. Tests
+# whether the prose+locus transferred once the off-distribution tag confound
+# is removed. Routes through the qwen35 system+`Question: {q}` branch (same as
+# recall_port).
+QWEN35_P3_DECIDE_XML_TEMPLATE = (
+    "You are a helpful assistant who can answer questions using the `search` tool.\n"
+    "You can call the search tool using the format described above; results will be returned inside <tool_response> and </tool_response>.\n"
+    "Use the search tool to obtain the information needed for the answer.\n"
+    "Use the information in the search results to determine the final answer.\n"
+    "After each search result, decide whether another search is needed or whether you can provide the final answer.\n"
+    "If a search result is incomplete, search again for the missing information.\n"
+    "You may use the search tool multiple times if needed before giving the final answer.\n"
+    "Provide the final answer in the format: <answer>X</answer>."
+)
+
+# #4 — qwen35_search_first: A + retrieval-first guard prepended. Targets the
+# bypass-and-fabricate failure mode E exposed (57.7 % empty preds + confident
+# hallucinations on completed items). Web research's #1 anti-pattern fix for
+# Qwen3.5.
+QWEN35_SEARCH_FIRST_TEMPLATE = (
+    "You must call the `search` tool to verify facts before answering; "
+    "never answer from prior knowledge alone.\n"
+    "\n"
+    "Answer the given question. "
+    "You must conduct reasoning inside <think> and </think> first every time you get new information. "
+    "After reasoning, call the `search` tool in the format described above; "
+    "results will be returned inside <tool_response> and </tool_response>. "
+    "You can search as many times as you want. "
+    "When the search results contain the answer, provide it inside "
+    "<answer> and </answer>, without detailed illustrations. "
+    "For example, <answer> Beijing </answer>. "
+    "Question: {prompt}\n"
+)
+
+# #5 — qwen35_research_role: short system-role role-prime, user is hardcoded
+# Question: {q}. Distinguished from recall_port (verbose system) and from A
+# (no system) by being short-and-role-only.
+QWEN35_RESEARCH_ROLE_TEMPLATE = (
+    "You are a research assistant. "
+    "For every factual question, verify the answer using the `search` tool before responding. "
+    "Provide the final answer inside <answer> and </answer>."
+)
+
+# #6 — qwen35_hamlet_1shot (RUNS FIRST per 2026-05-10 user direction): A's body
+# + 2-search Hamlet example with full agentic-loop demonstration (<think>
+# planning → <tool_call> → <tool_response> → <think> re-planning → <tool_call>
+# → <tool_response> → <think> synthesise → <answer>). Most concrete
+# in-distribution demonstration the model can see.
+QWEN35_HAMLET_1SHOT_TEMPLATE = (
+    "Answer the given question. "
+    "You must conduct reasoning inside <think> and </think> first every time you get new information. "
+    "After reasoning, if you find you lack some knowledge, you can call the `search` tool in the "
+    "format described above and it will return the top searched results inside <tool_response> and </tool_response>. "
+    "You can search as many times as you want. "
+    "If you find no further external knowledge needed, you can directly provide the answer inside "
+    "<answer> and </answer>, without detailed illustrations.\n"
+    "\n"
+    "Example:\n"
+    "Question: What is the nationality of the author of Hamlet?\n"
+    "<think>\n"
+    "I need to find the author of Hamlet, then look up that author's nationality. "
+    "Let me search for the author first.\n"
+    "</think>\n"
+    "<tool_call>\n<function=search>\n<parameter=query>\nauthor of Hamlet\n</parameter>\n</function>\n</tool_call>\n"
+    "<tool_response>The Tragedy of Hamlet was written by William Shakespeare around 1600.</tool_response>\n"
+    "<think>\n"
+    "The author is William Shakespeare. Now I need to find his nationality.\n"
+    "</think>\n"
+    "<tool_call>\n<function=search>\n<parameter=query>\nWilliam Shakespeare nationality\n</parameter>\n</function>\n</tool_call>\n"
+    "<tool_response>William Shakespeare was an English playwright, widely regarded as the greatest writer in the English language.</tool_response>\n"
+    "<think>\n"
+    "The search results confirm William Shakespeare was English.\n"
+    "</think>\n"
+    "<answer> English </answer>\n"
+    "\n"
+    "Question: {prompt}\n"
+)
+
+# #7 — qwen35_decompose: replace A's prose with explicit 3-stage decomposition
+# (identify facts → search each → combine and answer). Web research recommends
+# explicit decomposition for retrieval tasks.
+QWEN35_DECOMPOSE_TEMPLATE = (
+    "Answer the given question by following these steps:\n"
+    "1. Identify the facts you would need to know to answer the question.\n"
+    "2. For each fact, call the `search` tool to look it up "
+    "(format described above; results come inside <tool_response> and </tool_response>).\n"
+    "3. Combine the search results and write the answer inside <answer> and </answer>.\n"
+    "For example, <answer> Beijing </answer>.\n"
+    "Question: {prompt}\n"
+)
+
+# #8 — qwen35_source_only: A + source-grounding constraint + uncertainty escape
+# (<answer>unknown</answer> if results don't contain the answer). Permits the
+# model to express uncertainty — anti-pattern fix flagged by web research.
+QWEN35_SOURCE_ONLY_TEMPLATE = (
+    "Answer the given question. "
+    "You must conduct reasoning inside <think> and </think> first every time you get new information. "
+    "After reasoning, if you find you lack some knowledge, you can call the `search` tool in the "
+    "format described above and it will return the top searched results inside <tool_response> and </tool_response>. "
+    "You can search as many times as you want.\n"
+    "\n"
+    "Use ONLY information returned by the `search` tool. "
+    "If the search results do not contain the answer, write <answer>unknown</answer>.\n"
+    "\n"
+    "Otherwise, provide the answer inside <answer> and </answer>, without detailed illustrations. "
+    "For example, <answer> Beijing </answer>. "
+    "Question: {prompt}\n"
+)
+
+# #9 — qwen35_self_check: A + self-verification step before final answer.
+# Web research: "self-check at end catches ~1 in 3 hallucinated specifics".
+QWEN35_SELF_CHECK_TEMPLATE = (
+    "Answer the given question. "
+    "You must conduct reasoning inside <think> and </think> first every time you get new information. "
+    "After reasoning, if you find you lack some knowledge, you can call the `search` tool in the "
+    "format described above and it will return the top searched results inside <tool_response> and </tool_response>. "
+    "You can search as many times as you want.\n"
+    "\n"
+    "Before writing the final answer, briefly verify that it is supported by the search results. "
+    "If it is not, refine your query and search again.\n"
+    "\n"
+    "Then provide the answer inside <answer> and </answer>, without detailed illustrations. "
+    "For example, <answer> Beijing </answer>. "
+    "Question: {prompt}\n"
+)
+
+# #10 — qwen35_multi_search: A + refine-and-retry encouragement. Anti-pattern
+# fix for Qwen3.5-0.8B's 1-search bias (M3 broke this by demonstration; #10
+# tests instruction-only intervention).
+QWEN35_MULTI_SEARCH_TEMPLATE = (
+    "Answer the given question. "
+    "You must conduct reasoning inside <think> and </think> first every time you get new information. "
+    "After reasoning, if you find you lack some knowledge, you can call the `search` tool in the "
+    "format described above and it will return the top searched results inside <tool_response> and </tool_response>.\n"
+    "\n"
+    "If the first search result does not fully answer the question, refine your query and search again. "
+    "Continue until you have enough information.\n"
+    "\n"
+    "If you find no further external knowledge needed, you can directly provide the answer inside "
+    "<answer> and </answer>, without detailed illustrations. "
+    "For example, <answer> Beijing </answer>. "
+    "Question: {prompt}\n"
+)
+
+# Registry entries — user-locus templates routed via _QWEN35_USER_PROMPT_MODES
+# (see active_pipeline.py); system-locus templates (#3, #5) routed via the
+# default _is_qwen35 branch (system + user-Question:{q}, same as recall_port).
+QWEN35_TEMPLATES["qwen35_terse"] = QWEN35_TERSE_TEMPLATE
+QWEN35_TEMPLATES["qwen35_decide"] = QWEN35_DECIDE_TEMPLATE
+QWEN35_TEMPLATES["qwen35_p3_decide_xml"] = QWEN35_P3_DECIDE_XML_TEMPLATE
+QWEN35_TEMPLATES["qwen35_search_first"] = QWEN35_SEARCH_FIRST_TEMPLATE
+QWEN35_TEMPLATES["qwen35_research_role"] = QWEN35_RESEARCH_ROLE_TEMPLATE
+QWEN35_TEMPLATES["qwen35_hamlet_1shot"] = QWEN35_HAMLET_1SHOT_TEMPLATE
+QWEN35_TEMPLATES["qwen35_decompose"] = QWEN35_DECOMPOSE_TEMPLATE
+QWEN35_TEMPLATES["qwen35_source_only"] = QWEN35_SOURCE_ONLY_TEMPLATE
+QWEN35_TEMPLATES["qwen35_self_check"] = QWEN35_SELF_CHECK_TEMPLATE
+QWEN35_TEMPLATES["qwen35_multi_search"] = QWEN35_MULTI_SEARCH_TEMPLATE
 
 # ─── Search-R1 paper user-message template (M1 baseline reproduction) ────────
 SEARCH_R1_TEMPLATE = (

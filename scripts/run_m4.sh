@@ -83,6 +83,13 @@ if [[ "$prompt_mode" != "$default_prompt_mode" ]]; then
   mode_tag="_${prompt_mode}"
 fi
 
+# M4.4 candidate E: structurally identical to A (qwen35_minimal) but with
+# enable_thinking=False so the chat template emits a closed empty `<think>`
+# block. Per-mode override here keeps the variant-level default intact.
+if [[ "$prompt_mode" == "qwen35_minimal_nothink" ]]; then
+  enable_thinking=False
+fi
+
 if [[ -n "$test_sample_num" ]]; then
   save_note="m4_${variant}${mode_tag}_seed${seed}_n${test_sample_num}"
   sample_args=(--test_sample_num "$test_sample_num" --random_sample True --seed "$seed")
