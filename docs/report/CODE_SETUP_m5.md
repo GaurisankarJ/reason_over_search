@@ -220,21 +220,40 @@ cd /workspace/reason_over_search
 cd training_m5_1
 bash setup.sh                           # uv sync --extra vllm against vendored nemo_rl/
 
-# M5 smoke (50 steps, MuSiQue 200-row subsample, 1× A100-80GB)
-bash scripts/smoke.sh                   # ≤30 min wall, target ≤25 s/step
+# M5 smoke (pipeline validation; 10 steps, smoke shape)
+bash scripts/smoke.sh                   # 93.1 s/step (mean ex-warmup); see RESULTS_SMOKE_m5 §2.
 
-# M5.1 smoke at production shape (~100 steps)
-CONFIG=configs/m5_1_research_paper.yaml bash scripts/smoke.sh
+# M5.2 baseline (production shape × 10 steps; no system gains)
+bash scripts/run.sh --mode prod -- grpo.max_num_steps=10 grpo.val_period=0 checkpointing.enabled=false
 
-# M5.1 full run
-CONFIG=configs/m5_1_research_paper.yaml bash scripts/run.sh
+# M5.1 full run (paper-faithful + Phase 2 system gains winner)
+bash scripts/run.sh --mode prod
 ```
 
 Per-experiment W&B project naming: `reason_over_search_m5_<N>` (smoke uses `…_smoke` suffix). Avoids cross-experiment metric pollution.
 
 ---
 
-## 6. Pointers
+## 6. M5.2 — System-gains iteration plan
+
+After the M5.1 paper-faithful baseline lands (`m5_1_research_paper.yaml` authored 2026-05-10), Phase 2 explores **non-paper-faithful throughput levers** on the same branch (paper-faithful state preserved on `research_v2_a`).
+
+Lever menu, scope, and per-iteration protocol: [`RESULTS_SMOKE_m5.md` §5](RESULTS_SMOKE_m5.md#5-phase-2--m52-system-gains-plan).
+
+User-imposed boundaries (2026-05-10):
+- **Paper-faithful values are locked**: G=5, batch shape, KL term, reward, max_total_sequence_length, num_steps.
+- Source menu: [`../research/RUNTIME_EFFICIENCY.md`](../research/RUNTIME_EFFICIENCY.md), filtered to levers that change only throughput.
+- Skipped: G=5→4 (touches GRPO baseline), seq=4096→3072 (truncation rate), DAPO / drop-KL / LoRA / async-GRPO (training math), EAGLE-3 / 8-bit-AdamW / decolocation (PR-level effort or 2-GPU).
+
+Per-iteration protocol:
+1. Single-lever delta against the v7 baseline. No stacking until each lever is individually measured.
+2. 10 steps at production shape (`num_prompts_per_step=64`, `max_total_sequence_length=8192`).
+3. Record mean s/step (steps 2-10, ex-warmup), peak VRAM, new failure modes.
+4. Stack levers in order; record in [`RESULTS_SMOKE_m5.md` §6](RESULTS_SMOKE_m5.md#6-phase-2-results--todo); commit each smoke's config + log under `logs/exp_<N>/`.
+
+---
+
+## 7. Pointers
 
 - M5 milestone narrative: [`../milestone_5/MILESTONE_5.md`](../milestone_5/MILESTONE_5.md)
 - M5 / M5.1 smoke results: [`RESULTS_SMOKE_m5.md`](RESULTS_SMOKE_m5.md)
