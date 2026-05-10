@@ -394,7 +394,47 @@ Phase 1b ran and produced a clear winner `qwen35_terse` (Δ +0.0436) and a margi
 
 **Wall**: 3 candidates × ~10 min = ~30 min sequential. Templates would be ~30 LoC additions to [`templates.py`](../../evaluation_qwen35/flashrag/search_r1/templates.py); mode names registered in [`_QWEN35_USER_PROMPT_MODES`](../../evaluation_qwen35/flashrag/pipeline/active_pipeline.py) (2A and 2B; 2C has both system + user — uses the system+user routing pattern from `qwen35_research_role` but with terse user). The user message for 2C would need a small pipeline tweak (or the simpler workaround: prepend the role-prime to the terse user message and use the user-only routing).
 
-**Phase 3** (after Phase 2 lock, ~7 h wall, full n=51,713 sweep with the final locked prompt): re-runs all 7 hybrid datasets at full n with the locked prompt; replaces [`RESULTS_m4.md`](../report/RESULTS_m4.md) §4 hybrid row + §5 cross-family delta. Base variant stays at `qwen35_minimal_no_system` per M4.3 lock — no re-run.
+**Phase 3** (after Phase 2 lock, ~7 h wall, full n=51,713 sweep with the final locked prompt): re-runs all 7 hybrid datasets at full n with the locked prompt; replaces [`RESULTS_m4.md`](../report/RESULTS_m4.md) §4 hybrid row + §5 cross-family delta.
+
+## 12. Phase-4 follow-up — base variant prompt search (deferred — next milestone TBD)
+
+Phase 1b only searched **hybrid**. The base variant is currently locked at `qwen35_minimal_no_system` per [M4.3 §"Variant dispatch"](MILESTONE_4.md#L15) (mean EM 0.010, n=51,713). That lock was driven by the auto-inject-hurts-base finding: `qwen35_minimal_no_system` (no system, no `tools=[]`) beat `qwen35_minimal` (with auto-inject) **5×**, attributed to base lacking the tool-use post-training prior.
+
+Phase 1b changed the picture for hybrid: the M4.2 user prose was bloated, and a 3-sentence user message (terse) cleanly beats it. **The base-variant analog is untested**: does a terse user message + no-auto-inject improve over the M4.3 lock? Possible mechanisms:
+1. Base benefits even more from a clean user message than hybrid, because there's no auto-inject to fall back on for protocol semantics.
+2. Base might now benefit from auto-inject *if* the user message is clean enough — M4.3 tested auto-inject WITH a bloated user message (`qwen35_minimal`), so the test wasn't clean.
+3. Some intermediate variant (e.g., short role-prime in user role since base has no system) might lift further.
+
+### Phase 4 candidates (n=300/dataset, greedy seed=1, base variant)
+
+| # | mode | system | tools=[] | user message | rationale |
+|---|---|---|---|---|---|
+| 4A | `qwen35_minimal_no_system` (CONTROL) | none | no | M4.3 verbose user msg w/ inline format spec | Re-anchor M4.3 lock at n=300 (current value 0.010 was at n=51,713). |
+| 4B | `qwen35_terse_no_system` | none | **no** | Phase-1b terse user msg + inlined `<tool_call>` format spec | Cleanest base candidate: terse prose, no auto-inject, format spec stays inlined per M4.3 lock structure. |
+| 4C | `qwen35_terse` (auto-inject) | none | **yes** | Phase-1b terse user msg, format spec auto-injected | Re-test "auto-inject is bad for base" with a clean user message. Cheapest test of mechanism 2. |
+| 4D | `qwen35_terse_role_no_system` | none | no | Short role-prime ("You are a research assistant. ...") prepended to terse user msg | No system role available without `tools=[]`, so the role-prime goes in user. Tests Phase-1b winner #2 (research_role) at base. |
+
+**Acceptance bar (Phase 4)**: **mean EM ≥ M4.3 lock + 0.025 = 0.035** at n=300. Same +0.025 threshold as Phase 1b; baseline anchored to the existing locked value.
+
+If 4A re-anchors below 0.010 (n=300 variance) and a candidate just clears the bar relative to 4A's measured value, that's still a valid lift signal (intra-sweep comparison). If 4A re-anchors above 0.020, treat the bar as +0.025 over the re-anchored 4A.
+
+**Implementation cost**:
+- ~30 LoC: 3 new template constants (`qwen35_terse_no_system`, `qwen35_terse_role_no_system`) — `qwen35_terse` already exists from Phase 1b; pipeline routing for the `_no_system` variants is already present (M4.3 path via `_QWEN35_NO_TOOLS_MODES`).
+- ~30 LoC: extend the orchestrator pattern in `/tmp/run_phase1b_sweep.sh` to a `run_phase4_base_sweep.sh` that boots SGLang with the base model path (`eval/qwen3.5_0.8b_base`) instead of hybrid, then sweeps the 4 modes × 7 datasets.
+
+**Wall**: 4 candidates × ~10 min ≈ **~40 min**. Plus model swap on SGLang: ~3 min.
+
+### Phase 5 — base full benchmark
+
+After Phase 4 locks a base winner (or confirms M4.3 lock if no candidate clears bar): re-run full n=51,713 × 7 datasets on base with the locked prompt. Wall ~7 h on the optimised stack. Replaces [`RESULTS_m4.md`](../report/RESULTS_m4.md) §4 base row and triggers §5 cross-family table refresh (will pair with hybrid Phase 3 results).
+
+If Phase 4 produces NO candidate above bar, M4.3 lock stays and Phase 5 is skipped (base row in [`RESULTS_m4.md`](../report/RESULTS_m4.md) §4 already reflects M4.3 lock at full n).
+
+### Open design questions for Phase 4
+
+1. **`enable_thinking` for base?** Currently `True` per `scripts/run_m4.sh` (mildly off-distribution for base). Worth re-testing False for base specifically — the no-think failure mode that broke hybrid (empty-pred collapse) may be lower-cost for base since base wasn't post-trained on hybrid soft-switch anyway. Phase 4 could add a `qwen35_terse_no_system_nothink` variant. Decide based on Phase 4 wall-budget tolerance.
+2. **Larger candidate set?** Phase 4 currently has 4 candidates. If results are interesting (e.g., 4C `qwen35_terse` with auto-inject lifts base), consider expanding with more single-knob ablations modelled on Phase 1b. Defer until first 4 land.
+3. **Combined hybrid+base lock**: should M4.4 require both variants to lock before declaring "M4.4 done"? Currently the cross-family table in [`RESULTS_m4.md`](../report/RESULTS_m4.md) §5 uses both variants. Pragmatic answer: yes — schedule Phase 5 to follow Phase 4 directly so the §5 table refreshes once with both new locks.
 
 ## Sources (web research, May 2026)
 
