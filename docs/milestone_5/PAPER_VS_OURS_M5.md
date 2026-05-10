@@ -152,7 +152,40 @@ If over budget: cheapest knobs to cut, in order of expected wins, are `max_respo
 
 **Big caveat**: paper's 8192-token total response budget vs ours of `max_new_tokens × max_search_turns ≈ 2500` is a ~3× tighter rollout. If rollouts truncate often, raise `max_new_tokens` to 1024 or 1640 for paper-fairness (see §4 note).
 
-## 8. Pointers
+## 8. Resolved decisions (2026-05-10 evening)
+
+After the M5 smoke step-1 success + the comprehensive paper-mapping audit, the following Group-C calls are locked. All target the m5_1_research_paper.yaml; a subset that's safe at smoke shape is also applied to m5_smoke.yaml ahead of the M5.1 production smoke.
+
+| Knob | Locked value | Reason |
+|---|---|---|
+| `use_leave_one_out_baseline` | **false** | Paper uses group-mean baseline (verl GRPO default); LOO was a non-paper carry from M2 |
+| `lr_warmup_steps_ratio` | **0.0** | Paper uses verl default (no warmup); 0.285-ratio warmup was the M2 carry, dropped |
+| `policy.generation.max_new_tokens` | **1024** | Per-turn cap; total rollout budget = 1024 × ~5 turns ≈ 5000 tokens, in the ballpark of paper's 8192 implicit cap |
+| `env.search_r1.max_obs_chars` | **1024** (smoke) / consider unbounded for production | Paper has no per-obs cap; smoke at 1024 is the safety net, may relax in production yaml |
+| `env.search_r1.max_turns` | **10** | Paper has no explicit cap; bounded by `max_total_sequence_length` |
+| `policy.max_total_sequence_length` | smoke: **4096** (memory-safe); production: **8192** | Paper effectively uses ~8704 total context (512 prompt + 8192 response) |
+| `policy.train_micro_batch_size` | smoke: **2**; production: best-fit | Step-2 OOM at micro=4 by 0.31 GB; production yaml tunes to memory ceiling |
+| `policy.generation.vllm_cfg.gpu_memory_utilization` | smoke: **0.5**; production: best-fit | Lower than M2's 0.7 to leave more headroom for the policy worker between wake/sleep cycles |
+| **Reward formula** | F1-only on `<answer>X</answer>` content (no 0.1 floor) | Phase-1 finding #4 (the floor masks tool-use signal at 0.8B) |
+| **Answer wrap** | plain `<answer>X</answer>` (no `\boxed{}`) | M4 lock; eval scorer accepts both |
+| **Action tags** | Qwen3.5-native `<tool_call>` / `<tool_response>` | In-distribution Qwen3.5 post-training |
+| **Training data** | MuSiQue train (19,938 rows) | Confirmed matches paper §3.1 + `Agent-RL/ReCall@re-search/data/prepare_musique.py` |
+
+## 9. Deferred system gains (after M5.1 production yaml lands)
+
+These do not change training mathematics; pure throughput. Probe these AFTER the production yaml is correct and the production-shape smoke gives a baseline s/step number.
+
+| Lever | Where | Expected gain | Risk |
+|---|---|---|---|
+| `torch.compile` on policy fwd/bwd | NeMo-RL `policy.dtensor_cfg` (check upstream knob) | 10-30% step time (1.x training-side) | Compilation cache must persist across runs; Qwen3.5 hybrid layers may not compile cleanly |
+| vLLM AOT compile cache reuse | already on (`/root/.cache/vllm_0/torch_compile_cache/`) | already capturing; just verify cache survives Vast instance restarts | Cache is per-(model, vLLM version, GPU arch); invalidates on any of those changing |
+| `async_grpo.enabled: true` | NeMo-RL grpo config | overlap rollout-generation with policy-train step | Slightly off-policy advantage (bounded by `max_trajectory_age_steps`); adds complexity |
+| `sequence_packing.enabled: true` | NeMo-RL policy config | 20-40% on training step (per upstream docs) | **BLOCKED**: Qwen3.5 GatedDeltaNet kernel crashes with packing ([training/fix/CHANGES.md §5](../../training/fix/CHANGES.md)); upstream NeMo-RL bug |
+| Higher `vllm_cfg.gpu_memory_utilization` | YAML | bigger KV cache → bigger rollout concurrency | OOM during wake/sleep transitions (we already learned 0.7 was unsafe at micro=4) |
+| `policy.generation.colocated.enabled: true` (already on) | YAML | already saves a process boundary | n/a — verified on |
+| Flash Attention 3 | vendor venv pin | 5-15% on attention layers | Requires nemo_rl venv rebuild + AOT cache invalidate |
+
+## 10. Pointers
 
 - M5 milestone narrative: [`MILESTONE_5.md`](MILESTONE_5.md)
 - M5 code setup: [`../report/CODE_SETUP_m5.md`](../report/CODE_SETUP_m5.md)

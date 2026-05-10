@@ -136,17 +136,31 @@ Two byte-level checks before declaring M5 smoke green:
    - "Empty `<answer>`" → F1 = 0
    - "Format-broken (no `<answer>` tag)" → F1 = 0 (no format penalty added — this is the M5.1 divergence #1)
 
-### 3.5 What gets logged (M5 smoke) — TODO
+### 3.5 What gets logged (M5 smoke) — Partial (2026-05-10)
 
-To be filled from the smoke run:
+**Step 1 ground truth from the 4th smoke attempt** ([wandb run `jeedpsjq` in project `reason_over_search_m5_1`](https://wandb.ai/gaurisankarj1996-leiden-university/reason_over_search_m5_1/runs/jeedpsjq)):
+- Setup wall-clock: **73.0 s** (vLLM init 44.1 s + Policy init 9.0 s + other 15.7 s; both worker venvs reused from disk cache)
+- **Step 1 wall-clock: 145.58 s** at 20 trajectories (4 prompts × 5 group)
+- Step 1 rollout produced a 5-turn dialogue on most prompts (env.step exercised the full search→retrieve→continue→answer path)
 
-- per-step wall-clock (mean, p50, p95, distribution histogram)
-- reward/mean trajectory across the 50 steps
-- generation-token-count distribution (mean, p50, p95, max)
+**Step 2 OOM'd**: `log_softmax` over 248,320 vocab needed 15.15 GB, only 14.84 GB free; off by 0.31 GB. Caused by vLLM's sleep-mode resident footprint (6.74 GB) + PyTorch allocator fragmentation. Fixed by:
+- `train_micro_batch_size: 4 → 2` (halves the log_softmax tensor per microbatch)
+- `gpu_memory_utilization: 0.7 → 0.5` (vLLM gives back more memory on sleep)
+- (`PYTORCH_ALLOC_CONF=expandable_segments:True` was tried but breaks NeMo-RL's CUDA IPC weight sharing — rejected)
+
+**Group C resolutions applied to m5_smoke.yaml** (see [`../milestone_5/PAPER_VS_OURS_M5.md §8`](../milestone_5/PAPER_VS_OURS_M5.md) for the locked decisions):
+- `use_leave_one_out_baseline: true → false` (paper uses group-mean)
+- `max_new_tokens: 500 → 1024` (paper budget is 8192 total)
+- `max_obs_chars: 480 → 1024` (paper has no per-obs cap)
+- `lr_warmup: 14 steps → 0` (paper uses no warmup)
+- `max_num_steps: 50 → 10` (smoke validation only needs ~5 stable steps)
+
+**Remaining smoke deliverables** (from the next launch with the above fixes):
+- per-step wall-clock mean / p50 / p95 over steps 1-10
+- reward/mean trajectory + `near_em_rate` (F1 ≥ 0.8 rate)
+- generation-token-count distribution
 - `tool_call_counts/mean` per rollout
-- `had_valid_answer` rate
-- gradient-norm trajectory
-- clip-ratio mean
+- gradient-norm + clip-ratio trajectories
 
 ---
 

@@ -74,6 +74,12 @@ if [[ -f "${REPO_ROOT}/training_m5_1/.env" ]]; then
     set -a; source "${REPO_ROOT}/training_m5_1/.env"; set +a
 fi
 
+# NOTE: PYTORCH_ALLOC_CONF=expandable_segments:True was tried for log_softmax
+# fragmentation but breaks NeMo-RL's CUDA-IPC weight sharing between policy
+# worker and vLLM worker (pidfd_getfd "Operation not permitted"). Stay on the
+# default allocator; reduce memory pressure via train_micro_batch_size +
+# vllm_cfg.gpu_memory_utilization in the yaml instead.
+
 TS="$(date -u +%Y%m%dT%H%MZ)"
 RUN_NAME="qwen3.5-0.8b-musique-m5_${MODE}-seed${SEED}-${TS}"
 # Checkpoint dir keyed by (mode, seed); not timestamped, so resumes work.

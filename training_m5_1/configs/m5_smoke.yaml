@@ -26,8 +26,11 @@ grpo:
   # [smoke] 4 prompts × 5 generations = 20 trajectories per step (milestone
   # doc M5 smoke shape). Production shape will be 96 prompts × 5 = 480.
   num_prompts_per_step: 4
-  # [smoke] 50 steps. Production will be ~500–1000 (paper schedule).
-  max_num_steps: 50
+  # [smoke] 10 steps: enough for stable s/step measurement + memory stability
+  # check across multiple wake/sleep cycles. Reduced from 50 (which was ~2 h
+  # wall and unnecessary for validation). Production schedule is ~156 steps
+  # for 2 epochs of MuSiQue at paper bs=256, scaled inversely if we drop bs.
+  max_num_steps: 10
   max_num_epochs: 1
   # [smoke] Validation off for end-to-end smoke — exercising val codepath
   # would slow the smoke without producing useful signal at 50 steps.
@@ -36,11 +39,18 @@ grpo:
   val_at_end: false
   max_val_samples: 256
   val_batch_size: 256
-  # [paper] verl max_turns=4. M5 ups to 5 (milestone doc §"Prompt + tag
-  # scheme (carry from M4)"), matching M4 eval's max_search_turns.
-  max_rollout_turns: 5
+  # Paper has NO explicit max_turns cap; bounded only by the 8192-token
+  # total-response budget. NeMo-RL env REQUIRES an explicit cap, so we set
+  # generously (10) so the per-turn token budget (`max_new_tokens` * turns)
+  # plus prompt budget naturally caps things before max_turns bites. With
+  # max_new_tokens=500 and max_total_sequence_length=4096, the effective
+  # turn ceiling is ~7 turns; 10 is safe headroom.
+  max_rollout_turns: 10
   normalize_rewards: true
-  use_leave_one_out_baseline: true
+  # Paper uses group-mean baseline (verl GRPO default), not LOO. Flipped to
+  # false 2026-05-10 per the M5.1 paper-faithfulness audit (Group C). LOO has
+  # slightly lower variance but is non-paper.
+  use_leave_one_out_baseline: false
   overlong_filtering: false
   use_dynamic_sampling: false
   dynamic_sampling_max_gen_batches: 10
@@ -125,9 +135,13 @@ policy:
   # 20 traj/step = num_prompts_per_step × num_generations_per_prompt.
   # One optimizer step per training step (pure on-policy GRPO).
   train_global_batch_size: 20
-  # [memory] 0.8B (~1.6 GB bf16) is much smaller than 2B; can push micro-batch
-  # higher than M2's 2. Smoke at 4; tune up to 8 if no OOM on first real run.
-  train_micro_batch_size: 4
+  # [memory] 0.8B is small but Qwen3.5's vocab is 248,320 — log_softmax during
+  # logprob inference allocates batch*seq*vocab*2bytes ≈ huge. Step 1 worked at
+  # micro=4 but step 2 OOM'd by 0.15 GB margin (PyTorch frag + vLLM sleep
+  # footprint). micro=2 halves the logprob memory peak; combined with the
+  # vLLM gpu_memory_utilization drop and expandable_segments env var, gives
+  # ~8 GB additional headroom.
+  train_micro_batch_size: 2
   generation_batch_size: 32
   logprob_batch_size: ${policy.train_micro_batch_size}
   # [paper] verl max_prompt_length=4096. Matches M4 eval's generator_max_input_len.
@@ -137,17 +151,19 @@ policy:
   offload_optimizer_for_logprob: false
 
   # ---- DTensor backend ----
-  # _v2: false (v1 DTensor worker) avoids the lazy automodel-venv build that
-  # NeMo-RL kicks off inside a GPU-less Ray `_env_builder` actor. That build
-  # needs nv-grouped-gemm whose setup.py calls torch.cuda.init() at install
-  # time -> fails with "No CUDA GPUs are available" (verified first smoke
-  # attempt 2026-05-10). For 0.8B + DTensor TP=1 the v1 path is functionally
-  # equivalent; flip to true only after `bash training/scripts/bootstrap.sh`
-  # has materialised the dtensor_policy_worker_v2 venv via the HF tarball
-  # (pantomiman/reason-over-search-v1-venvs, fast path; or V2_BUILD_FROM_SOURCE=1
-  # for a ~25 min compile on a Vast box with GPU access).
+  # _v2: true REQUIRES the pre-built v2 worker venv at
+  # training/nemo_rl/venvs/nemo_rl.models.policy.workers.dtensor_policy_worker_v2.DTensorPolicyWorkerV2/
+  # (~12 GB; download via `hf download pantomiman/reason-over-search-v1-venvs
+  # dtensor_policy_worker_v2.tar.gz --repo-type dataset` then extract).
+  # WITHOUT that venv, NeMo-RL's lazy _env_builder Ray actor calls
+  # `uv run --locked --extra automodel ...` which triggers nv-grouped-gemm's
+  # setup.py -> torch.cuda.init() -> "No CUDA GPUs are available" (the actor
+  # is allocated GPU-less). v1 (`_v2: false`) was tried as workaround but
+  # crashed on Qwen3.5: `'Qwen3_5Model' object has no attribute 'layers'`
+  # (parallelize.py:661); v2 + nemo_automodel handles the Qwen3.5 layer
+  # discovery correctly.
   dtensor_cfg:
-    _v2: false
+    _v2: true
     enabled: true
     cpu_offload: false
     sequence_parallel: false
@@ -284,25 +300,31 @@ policy:
       foreach: false
       fused: false
 
-  # ---- LR schedule (smoke: short warmup so the smoke shows non-warmup behaviour) ----
+  # ---- LR schedule: constant from step 1 (paper-faithful) ----
+  # Paper uses verl default `lr_warmup_steps_ratio=0.0` -> no warmup, constant
+  # LR. M2 anchor had 0.285 ratio of warmup; dropped 2026-05-10 per Group C
+  # audit. LinearLR retained with total_iters=1 (effectively no-op) so the
+  # NeMo-RL scheduler stack still validates.
   scheduler:
     - name: "torch.optim.lr_scheduler.LinearLR"
       kwargs:
-        start_factor: 0.1
+        start_factor: 1.0
         end_factor: 1.0
-        # [smoke] 14 = 0.285 × 50, paper-style ratio applied to smoke length.
-        total_iters: 14
+        total_iters: 1
     - name: "torch.optim.lr_scheduler.ConstantLR"
       kwargs:
         factor: 1.0
         total_iters: 10000000000
-    - milestones: [14]
+    - milestones: [1]
 
   # ---- Generation (vLLM, colocated on the single A100) ----
   generation:
     backend: "vllm"
-    # [paper] verl max_response_length=500.
-    max_new_tokens: 500
+    # Paper budget is 8192 tokens TOTAL across all rollout turns (not per turn);
+    # ours is per-turn. 1024 per turn × ~5 typical turns = ~5000 (closer to
+    # paper's 8192 implicit ceiling). Bumped from 500 (M2 anchor) per Group C
+    # audit; production yaml will pair this with max_total_sequence_length=8192.
+    max_new_tokens: 1024
     # [paper] verl rollout temperature=1.
     temperature: 1.0
     # [paper] verl rollout top_p=1.
@@ -327,10 +349,13 @@ policy:
       tensor_parallel_size: 1
       pipeline_parallel_size: 1
       expert_parallel_size: 1
-      # [memory] 0.8B leaves plenty of A100 headroom; 0.7 is safe and the kv
-      # cache fits comfortably at 4096-tok prompts × 20 traj. Bump to 0.8 if
-      # rollout step is the bottleneck after first run.
-      gpu_memory_utilization: 0.7
+      # [memory] vLLM "sleeps" between rollout/train cycles but holds ~10%
+      # of utilization as resident even when asleep. At 0.7 that was 6.74 GB
+      # resident which left only 14.8 GB free when policy worker hit the
+      # log_softmax peak (15.15 GB needed → OOM by 0.35 GB). 0.5 cuts vLLM
+      # asleep footprint to ~4.8 GB AND its active KV cache to ~40 GB which
+      # is still 600x concurrency at 4096-tok prompts (overkill for 20 traj).
+      gpu_memory_utilization: 0.5
       max_model_len: ${policy.max_total_sequence_length}
       enforce_eager: false
       use_deep_gemm: false
@@ -386,12 +411,14 @@ env:
     retriever_url: "http://127.0.0.1:3005"
     # [paper] M4 retrieval_topk=5 (milestone doc §"Prompt + tag scheme").
     top_n: 5
-    # [paper] M4 max_search_turns=5.
-    max_turns: 5
-    # M4 v3 per-chunk cap: 120 tokens × ~4 chars/token = 480 chars/chunk.
-    # Routed through `max_chars_per_chunk` for qwen_native (env code dispatches
-    # the kwarg by arm — see search_r1_env.py:223-).
-    max_obs_chars: 480
+    # Aligned with paper (no explicit cap); bounded by max_total_sequence_length.
+    max_turns: 10
+    # Paper has NO per-observation cap; raw retrieval text appended as-is.
+    # We keep a per-chunk cap as a safety net but raise from M4's 480 chars
+    # (~120 tokens; M4 v3 lock) to 1024 chars (~256 tokens), much closer to
+    # the paper's effective behaviour. Routed through `max_chars_per_chunk`
+    # for qwen_native (env code dispatches by arm — see search_r1_env.py:223-).
+    max_obs_chars: 1024
     request_timeout_s: 30.0
 
 # =============================================================================
