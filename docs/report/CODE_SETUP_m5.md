@@ -59,35 +59,51 @@ The M2 NeMo-RL setup decisions catalogued in [`docs/training/PAPER_VS_OURS_TRAIN
 
 ```text
 training_m5_1/
-  nemo_rl/                   # vendored NeMo-RL @ v0.6.0 (copied from training/nemo_rl/)
-  src/                       # overlay base; copied from training/src/, drifts as needed
-    reward.py                # CHANGED in M5.1: F1-only on <answer>…</answer>
-    parser.py                # imports from evaluation_qwen35 so train ≡ eval parsers
-    retrieval_env.py         # turn-bounded <tool_response> wrap (carry from M4)
-    dataset_adapter.py       # MuSiQue → NeMo-RL row format
-    processor.py
-    registry.py
+  nemo_rl/                            # SYMLINK -> ../training/nemo_rl/  (disk: 23 G; symlink until disk allows a real copy)
+  src/                                # overlay; copied from training/src/, then 14 import sites + several files edited
+    rewards/search_r1.py              # CHANGED: F1-only on <answer>...</answer> (re-exports normalize_answer + extract_solution from evaluation_qwen35)
+    environments/parsers.py           # CHANGED: qwen_native parse_query delegates to evaluation_qwen35 extract_tool_call_query
+    environments/search_r1_env.py     # CHANGED: docstring rewrite, em_check fallback -> f1_check, em_hit_rate -> near_em_rate, max_chars kwarg fix
+    datasets/search_r1.py             # unchanged structure; data_path now points at MuSiQue parquet
+    processors/search_r1.py           # docstring comment updated for MuSiQue
+    chat_template/tools.py            # CHANGED: re-export QWEN35_SEARCH_TOOL from evaluation_qwen35
+    prompts/m5_qwen35_user.txt        # NEW: pre-staged from M4.2 canonical (qwen35_minimal); regenerate via sync_m4_prompts.py
+    prompts/_archive_m2/              # M2 prompt files archived here
+    registry.py                       # CHANGED: all imports renamed training. -> training_m5_1.
   configs/
-    m5_smoke.yaml            # TODO: 20 traj/step, 50 steps, MuSiQue 200-row subsample
-    m5_1_research_paper.yaml # TODO: M5.1 paper-faithful config
+    m5_smoke.yaml                     # NEW: 20 traj/step, 50 steps, MuSiQue, qwen_native, 1xA100
+    m5_1_research_paper.yaml          # TODO (M5.1 step 6): paper-faithful production config
+    _archive_m2/                      # grpo_qwen3.5_2b_{1,2}xa100.yaml archived here
   scripts/
-    run.sh                   # CONFIG=… bash scripts/run.sh
-    smoke.sh                 # 50-step smoke with per-step time histogram
-    prep_musique.py          # train-split conversion
-  setup.sh                   # mirror of training/setup.sh
-  README.md
+    run.sh                            # NEW: --mode smoke|prod, --seed N, [-- extra hydra overrides]
+    smoke.sh                          # NEW: thin alias for `run.sh --mode smoke`
+    run_grpo.py                       # CHANGED: REPO_ROOT/training_m5_1/nemo_rl path; import training_m5_1.src.registry
+    prep_musique.py                   # NEW: downloads RUC-NLPIR/FlashRAG_datasets musique/train.jsonl -> data/training/musique/train.parquet
+    sync_m4_prompts.py                # NEW: materialises QWEN35_TEMPLATES[mode] into src/prompts/m5_*.txt
+    bootstrap.sh, bootstrap_alice.sh  # still M2-shaped; rewrite when M5.1 launches on a fresh Vast box
+    _archive_m2/                      # run_grpo_{1,2}xa100.sh + prepare_dataset.py archived here
+  tests/
+    test_reward_parity.py             # CHANGED: rewritten for F1 semantics; M2 byte-parity assertion dropped
+    test_parser_dispatch.py           # unchanged (still pinning qwen_native + paper arm regex behaviour)
+    test_format_helpers.py            # unchanged
+    test_env_step.py, test_dataset_adapter.py  # unchanged
+  setup.sh                            # mirror of training/setup.sh; comments still mention training/ (cosmetic)
+  README.md                           # CHANGED: M5.1-specific narrative + run sequence
 ```
 
-### 3.2 Overlay deltas vs `training/src/` (M5)
+### 3.2 Overlay deltas vs `training/src/` (M5; status 2026-05-10)
 
-| File | M2 (`training/src/`) | M5 (`training_m5_1/src/`) | Why |
-|---|---|---|---|
-| `reward.py` | EM-only (Search-R1 `qa_em.py` port) | **TODO M5.1**: F1-only on `<answer>…</answer>` | M5.1 divergence #1 |
-| `parser.py` | training-side parsers | **re-exports** from `evaluation_qwen35.flashrag.search_r1.parser:extract_tool_call_query` and `…:answer_utils.extract_solution` | Single source of truth for parser logic; closes the precedent that M3 had to fix in 14 alignment points |
-| `retrieval_env.py` | turn-bounded `<tool_response>` wrap (M2 qwen_native arm) | **identical**; smoke includes a byte-for-byte check vs M4's `evaluation_qwen35/flashrag/pipeline/active_pipeline.py` qwen35 branch | Hard alignment requirement |
-| `dataset_adapter.py` | NQ + HotpotQA mix | **MuSiQue only** | M5.1 dataset choice |
-| `processor.py` | unchanged | unchanged | — |
-| `registry.py` | unchanged | unchanged | — |
+| File (M5 layout) | M2 (`training/src/`) | M5 (`training_m5_1/src/`) | Status | Why |
+|---|---|---|---|---|
+| `rewards/search_r1.py` | EM-with-shaping (Search-R1 `qa_em.py` port) | F1-only on `<answer>...</answer>`; re-exports `normalize_answer` + `extract_solution` from `flashrag.search_r1.reward`; adds `f1_check` | **done** | M5.1 divergence #1; same scorer code path as M4 eval |
+| `environments/parsers.py` | local `_RE_QWEN_QUERY` regex | qwen_native arm delegates to `flashrag.search_r1.parser.extract_tool_call_query`; paper arm regex kept local | **done** | Single source of truth for the action parser (M3 14-fix precedent) |
+| `environments/search_r1_env.py` | turn-bounded `<tool_response>` wrap; `em_check` fallback; `em_hit_rate` metric | identical wrap + byte-for-byte M4 alignment; `f1_check` fallback under truncation; `near_em_rate` metric (F1 ≥ 0.8); fixed `max_chars_per_chunk` kwarg dispatch bug (was `max_chars=`, would TypeError on first qwen_native search turn) | **done** | Hard alignment + M5.1 reward consistency + latent bug fix |
+| `chat_template/tools.py` | local `SEARCH_TOOL` dict | re-export `QWEN35_SEARCH_TOOL` (aliased as `SEARCH_TOOL`) from `flashrag.search_r1.templates` | **done** | Locks training schema = eval schema |
+| `prompts/m5_qwen35_user.txt` | n/a (M2 used `search_r1_qwen_native_user.txt`) | pre-staged from M4.2 canonical (`qwen35_minimal`); written by `scripts/sync_m4_prompts.py --mode <key>` | **done; re-run after M4.4 lock** | Dynamic sync avoids hard-coding the prompt text in training overlay |
+| `datasets/search_r1.py` | reads NQ + HotpotQA parquet | unchanged code; new `data_path: data/training/musique/train.parquet` in m5_smoke.yaml | **done** (dataset-agnostic adapter; only the config path changes) | M5.1 dataset choice (MuSiQue only) |
+| `processors/search_r1.py` | docstring mentions NQ+HotpotQA only | docstring updated to mention both NQ+HotpotQA (M2) and MuSiQue (M5.1) | **done** (no functional change; `data_source` field optional) | Documentation only |
+| `registry.py` | `from training.src...` imports | `from training_m5_1.src...` (14 import sites renamed across src/, tests/, scripts/) | **done** | Package isolation between sibling experiments |
+| **Tests** | M2 byte-parity assertions | rewritten `test_reward_parity.py` with re-export identity checks + F1 semantics + 5 hand-picked rollouts (milestone doc M5.1 step 6 requirement) | **done** (23 pure-Python tests pass) | M5.1 invariants |
 
 ### 3.3 Smoke config (`configs/m5_smoke.yaml`) — TODO
 
