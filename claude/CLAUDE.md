@@ -251,7 +251,7 @@ Do **not** change `temperature` or `top_p`; paper eval is greedy. See note above
 Phase-1 (build the pipeline): **complete** as of 2026-05-01. NeMo-RL @ v0.6.0 vendored at `training/nemo_rl/`, training data prepped + LFS-committed, overlay at `training/src/` (dataset adapter, processor, retrieval env, reward, registry; 9 files, 19 unit tests pass), GRPO YAML configs for 1× and 2× A100, parameterized launch scripts. Audit: [docs/training/README.md](../docs/training/README.md). Hyperparameter cross-check: [docs/training/PAPER_VS_OURS_TRAINING.md](../docs/training/PAPER_VS_OURS_TRAINING.md).
 
 Phase-2 (run training): runbook at [docs/milestone_2/PHASE_2_RUNBOOK.md](../docs/milestone_2/PHASE_2_RUNBOOK.md). The original 3 seeds × {base, hybrid} = 6 runs plan is **superseded by the recipe ablation plan above**, since wall-clock makes 6 paired runs unaffordable. To launch:
-1. Boot Vast.ai instance; bootstrap via [`docs/vast/SETUP_VAST.md`](../docs/vast/SETUP_VAST.md) (uses `pantomiman/reason-over-search-v1:v1` + `training/scripts/bootstrap.sh`).
+1. Boot Vast.ai instance; bootstrap via [`docs/vast/SETUP_VAST.md`](../docs/vast/SETUP_VAST.md) (uses `pantomiman/reason-over-search-v1:v2` + `training/scripts/bootstrap.sh`).
 2. Edit [`training/configs/grpo_qwen3.5_2b_1xa100.yaml`](../training/configs/grpo_qwen3.5_2b_1xa100.yaml) (knobs: [`docs/training/NEMO_RL_KNOBS.md`](../docs/training/NEMO_RL_KNOBS.md)).
 3. Launch via [`training/scripts/run_grpo_1xa100.sh`](../training/scripts/run_grpo_1xa100.sh) (single GPU) or `run_grpo_2xa100.sh` (decolocated rollout vs train, faster but needs 2 GPUs).
 4. Validation in-loop is **not yet enabled**; wire `val_period: 50` per [`docs/training/VALIDATION.md`](../docs/training/VALIDATION.md) before the long ablations.

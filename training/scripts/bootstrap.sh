@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# Idempotent one-shot bootstrap for a fresh `pantomiman/reason-over-search-v1:v1`
-# Vast box. Runs everything that the docker image cannot bake (anything that
+# Idempotent one-shot bootstrap for a fresh `pantomiman/reason-over-search-v1:v2`
+# Vast box (v1 also works; v2 = v1 + transformers 5.7.0 baked in for Qwen3.5
+# model_type=qwen3_5 AutoConfig support). Runs everything that the docker image
+# cannot bake (anything that
 # needs GPU access at build time, or content that would balloon the image).
 #
 # Designed to be re-runnable: each step checks existing state and skips if
@@ -64,8 +66,26 @@ log "GPU: ${gpu_name}"
 
 # Conda envs
 if ! /opt/miniforge3/bin/conda env list 2>/dev/null | grep -q '^retriever '; then
-  err "Conda env 'retriever' missing. This script expects pantomiman/reason-over-search-v1:v1 (or rebuild)."
+  err "Conda env 'retriever' missing. This script expects pantomiman/reason-over-search-v1:v2 (or :v1)."
   exit 1
+fi
+
+# transformers 5.7.0 in eval venv: required for Qwen3.5 (model_type=qwen3_5)
+# AutoConfig support; the v2 image bakes this in, the v1 image ships 4.57.1.
+# Idempotent: pip skips if already at 5.7.0. SGLang's install-time pin says
+# transformers==4.57.1 but works at runtime under 5.7.0 (verified on Vast
+# 2026-05-09; documented in docs/report/CODE_SETUP_m4.md §4-bis.1).
+EVAL_PY="${EVAL_PY:-/venv/evaluation_search_r1/bin/python}"
+if [[ -x "$EVAL_PY" ]]; then
+  current_tf=$("$EVAL_PY" -c "import transformers; print(transformers.__version__)" 2>/dev/null || echo none)
+  if [[ "$current_tf" != "5.7.0" ]]; then
+    log "Upgrading transformers in eval venv ${current_tf} → 5.7.0 (Qwen3.5 qwen3_5 arch)…"
+    "$EVAL_PY" -m pip install --quiet --no-cache-dir transformers==5.7.0
+  else
+    log "Eval venv transformers already at 5.7.0."
+  fi
+else
+  warn "Eval venv python not at $EVAL_PY; skipping transformers upgrade."
 fi
 
 # .env

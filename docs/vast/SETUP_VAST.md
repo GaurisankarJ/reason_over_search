@@ -9,7 +9,8 @@ updated: 2026-05-09
 # SETUP_VAST.md — total setup guide for a fresh Vast.ai instance
 
 > **Audience**: a human operator OR a Claude agent given SSH access to a freshly
-> booted Vast.ai instance running `pantomiman/reason-over-search-v1:v1`. Follow
+> booted Vast.ai instance running `pantomiman/reason-over-search-v1:v2` (use v2;
+> v2 = v1 + transformers 5.7.0 baked in, which Qwen3.5 needs). Follow
 > this end-to-end and the box ends up with retrieval, eval (M4 Qwen3.5-0.8B),
 > and training (M2 GRPO) all set up and ready to run. After bootstrap finishes
 > you don't run anything in this doc; you launch your actual experiments per
@@ -66,7 +67,7 @@ Vast template fields:
 
 | Field | Value |
 |---|---|
-| Image | `pantomiman/reason-over-search-v1:v1` |
+| Image | `pantomiman/reason-over-search-v1:v2` (v1 also works; v2 adds transformers 5.7.0 for Qwen3.5 `model_type=qwen3_5`) |
 | Disk space | **100 GB for Qwen3.5-0.8B training + eval**; 130 GB for 2B; 150 GB for M1 reproduction; 60 GB for eval-only (see § 0 disk-budget table) |
 | Launch mode | Default Vast SSH/Jupyter mode |
 | GPU filter | A100-80GB or H100-80GB for training; any 24 GB+ for eval |
@@ -117,7 +118,7 @@ pwd && which uv && conda env list 2>/dev/null | head && \
 
 Expect: cwd is the repo root; `uv` resolves; conda envs include `retriever` and `evaluation_search_r1`; one A100/H100/etc.; ≥30 GB free.
 
-If anything is missing, **STOP**. Don't try to repair the image; it's a docker-rebuild job, not a runtime fix. Confirm `pantomiman/reason-over-search-v1:v1` (or rebuilt v1+) was used.
+If anything is missing, **STOP**. Don't try to repair the image; it's a docker-rebuild job, not a runtime fix. Confirm `pantomiman/reason-over-search-v1:v2` (or `:v1`) was used.
 
 ---
 
@@ -376,7 +377,7 @@ Recommended hardware for full training runs: **1× H100 80 GB SXM** for best $/r
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| `bootstrap.sh: Conda env 'retriever' missing` | wrong docker image | Confirm `pantomiman/reason-over-search-v1:v1` (or rebuilt v1+) |
+| `bootstrap.sh: Conda env 'retriever' missing` | wrong docker image | Confirm `pantomiman/reason-over-search-v1:v2` (or `:v1`) |
 | `bootstrap.sh: nvidia-smi not found` | not a GPU instance | Vast template selection issue; pick a GPU machine |
 | Retriever times out during rollouts | flat IP fallback by mistake | Confirm `local_retriever/retriever_config.yaml`'s `index_path` is the IVF; restart with `--num_retriever 8` (`bootstrap.sh` does this) |
 | `KeyError: 'task_name'` in DataLoader | running pre-fix code | `git pull`; fix is in `training/src/datasets/search_r1.py` |

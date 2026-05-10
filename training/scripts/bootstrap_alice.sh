@@ -4,7 +4,7 @@
 # Why Apptainer: NeMo-RL pins torch==2.10.0 from the pytorch-cu129 index
 # and TransformerEngine to CUDA 12.9+. Alice's highest available CUDA module
 # is 12.4.0, so native conda/uv installs won't produce a working training env.
-# The Docker image pantomiman/reason-over-search-v1:v1 (CUDA 12.9.1) is the
+# The Docker image pantomiman/reason-over-search-v1:v2 (CUDA 12.9.1) is the
 # only supported runtime; Apptainer lets us run it on SLURM without root.
 #
 # What this script does (all idempotent):
@@ -44,7 +44,7 @@ err()  { echo "${BOLD}${RED}✗${RESET} $*" >&2; exit 1; }
 # ---------------------------------------------------------------------------
 SIF_DIR="/zfsstore/user/s4374886/apptainer"
 SIF_PATH="${SIF_DIR}/reason-over-search-v1.sif"
-DOCKER_IMAGE="docker://pantomiman/reason-over-search-v1:v1"
+DOCKER_IMAGE="docker://pantomiman/reason-over-search-v1:v2"
 
 HF_HOME="${HF_HOME:-/zfsstore/user/s4374886/hf_cache}"
 UV_CACHE_PATH="${UV_CACHE_PATH:-/zfsstore/user/s4374886/uv_cache}"

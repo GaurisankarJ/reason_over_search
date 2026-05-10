@@ -75,7 +75,7 @@ Create a `training/` folder at the repo root containing the NeMo-RL setup with t
 
 ## Deliverables — Phase 1 status
 
-1. ✓ **Docker image** at `pantomiman/reason-over-search-v1:v1` ships uv + pre-warmed NeMo-RL wheel cache. Stable surfaces (`local_retriever`, `evaluation_search_r1`) baked unchanged from M1.
+1. ✓ **Docker image** at `pantomiman/reason-over-search-v1:v2` ships uv + pre-warmed NeMo-RL wheel cache. Stable surfaces (`local_retriever`, `evaluation_search_r1`) baked unchanged from M1.
 2. ✓ **Training dataset** prepped + committed via Git LFS — `data/training/nq_hotpotqa_train/{train,test}.parquet` (169,615 + 51,713 rows). NeMo-RL row schema verified.
 3. ✓ **Training code** wired up: 9 overlay files at `[training/src/](../../training/src/)`, 5 test files at `[training/tests/](../../training/tests/)` (19 pass; env/dataset modules cleanly skip without nemo_rl). Two GPU-layout configs at `[training/configs/](../../training/configs/)`. Launch scripts at `[training/scripts/](../../training/scripts/)`. W&B wired via `[training/.env](../../training/.env.example)`.
 4. ✓ **Code reviewed**: NeMo-RL master config schema cross-checked field-by-field; reward function 15-test parity vs M1 eval pipeline; verl-vs-NeMo-RL hyperparameter audit complete in `[PAPER_VS_OURS_TRAINING.md §6](../training/PAPER_VS_OURS_TRAINING.md#6-hyperparameters)`.
@@ -114,7 +114,7 @@ Saved to **Vast.ai persistent storage** (`/workspace/persistent/checkpoints/...`
 The full sequence — pre-flight checklist, retriever setup, smoke run, real runs, monitoring, eval gate, post-Phase-2 — lives in `**[PHASE_2_RUNBOOK.md](PHASE_2_RUNBOOK.md)`**. Brief outline:
 
 1. **Pre-flight** (local): tests pass, LFS objects present, docker image current, W&B key ready.
-2. **Boot Vast** with `pantomiman/reason-over-search-v1:v1`, 1×/2× A100 80GB, ≥150 GB persistent storage, ≥100 GB RAM.
+2. **Boot Vast** with `pantomiman/reason-over-search-v1:v2`, 1×/2× A100 80GB, ≥150 GB persistent storage, ≥100 GB RAM.
 3. **Set up + validate retriever** at `127.0.0.1:3005`.
 4. **Download Qwen3.5-2B models** (base + hybrid) into `training/models/` via `huggingface-cli download Qwen/Qwen3.5-2B-Base` and `Qwen/Qwen3.5-2B`. ~5 GB each (bf16 weights + tokenizer/config). One-time per Vast instance; lives on persistent storage so it survives across instance restarts. Commands in `[training/README.md#models](../../training/README.md#models)`; runbook step at `[PHASE_2_RUNBOOK.md§4](PHASE_2_RUNBOOK.md)`. The launch scripts default to passing the HF repo IDs (`Qwen/Qwen3.5-2B-Base` / `Qwen/Qwen3.5-2B`) — vLLM resolves them via the HF cache populated by these downloads. Override with `policy.model_name=<absolute-path>` to use a specific local copy.
 5. **Smoke run** (5 steps, single seed) to verify all pipes connect.

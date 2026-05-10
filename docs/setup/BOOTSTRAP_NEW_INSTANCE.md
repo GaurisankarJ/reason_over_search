@@ -28,14 +28,17 @@ Same accelerator + RAM + disk envelope as Vast; pick a row in [SETUP_VAST.md § 
 ## Step 1 — get the image
 
 ```bash
-docker pull pantomiman/reason-over-search-v1:v1
+docker pull pantomiman/reason-over-search-v1:v2   # recommended: v1 + transformers 5.7.0 (Qwen3.5 qwen3_5 arch)
+# docker pull pantomiman/reason-over-search-v1:v1 # original
 ```
 
 Or build from source (rebuild instructions in [`docker/reason-over-search-v1/README.md`](../../docker/reason-over-search-v1/README.md)):
 
 ```bash
 git clone <repo-url> reason_over_search && cd reason_over_search
-docker build -f docker/reason-over-search-v1/Dockerfile -t reason-over-search-v1:v1 .
+docker build --platform linux/amd64 \
+  -f docker/reason-over-search-v1/Dockerfile.v2 \
+  -t pantomiman/reason-over-search-v1:v2 .
 ```
 
 The image bundles two conda envs (`retriever`, `evaluation_search_r1`) at `/opt/miniforge3/envs/`, the NeMo-RL pre-warmed uv wheel cache at `/.uv/cache`, and the boot-hook for SSH perms (Vast-only; no-op on other hosts).
@@ -50,7 +53,7 @@ docker run --rm -it \
   -p 3000:3000 -p 3005:3005 \
   -v "$HOME/ros":/workspace \
   --entrypoint /bin/bash \
-  pantomiman/reason-over-search-v1:v1
+  pantomiman/reason-over-search-v1:v2
 ```
 
 Notes:

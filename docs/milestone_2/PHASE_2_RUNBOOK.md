@@ -39,11 +39,19 @@ uv run --no-project --with pytest pytest training/tests/ -v
 The latest image on Docker Hub should match the committed `training/nemo_rl/` ref. If you bumped NeMo-RL recently, rebuild:
 
 ```bash
-docker build \
-  --build-arg NEMO_RL_REF=v0.6.0 \
-  --build-arg UV_EXTRAS=vllm \
-  -f docker/reason-over-search-v1/Dockerfile -t pantomiman/reason-over-search-v1:v1 .
-docker push pantomiman/reason-over-search-v1:v1
+# Build v2 (recommended; thin layer on :v1 with transformers 5.7.0 for Qwen3.5)
+docker build --platform linux/amd64 \
+  -f docker/reason-over-search-v1/Dockerfile.v2 \
+  -t pantomiman/reason-over-search-v1:v2 .
+docker push pantomiman/reason-over-search-v1:v2
+
+# Build v1 from scratch (broken right now: NeMo-RL upstream made automodel+vllm
+# extras mutually exclusive; needs UV_EXTRAS=vllm only or a NEMO_RL_REF SHA pin):
+# docker build \
+#   --build-arg NEMO_RL_REF=v0.6.0 \
+#   --build-arg UV_EXTRAS=vllm \
+#   -f docker/reason-over-search-v1/Dockerfile -t pantomiman/reason-over-search-v1:v1 .
+# docker push pantomiman/reason-over-search-v1:v1
 ```
 
 ---

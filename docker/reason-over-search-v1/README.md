@@ -1,4 +1,8 @@
-# reason-over-search v1 (Docker)
+# reason-over-search v1 / v2 (Docker)
+
+> **Tags on Docker Hub**: `pantomiman/reason-over-search-v1:v1` (original) and `pantomiman/reason-over-search-v1:v2` (= v1 + `transformers==5.7.0`, adds Qwen3.5 `model_type=qwen3_5` AutoConfig support). **Use `:v2` for new Vast instances.** v1 is kept for reproducing the M1/M2 smoke-results runs on which the M2 numbers were anchored.
+>
+> The image-rebuild path (`Dockerfile`) currently hits an upstream NeMo-RL conflict on a fresh build (`automodel`+`vllm` extras became mutually exclusive after 2026-05-02). For now, `Dockerfile.v2` is a thin layer FROM `:v1` that adds the transformers upgrade — see "Build v2" below.
 
 ## Hybrid paradigm
 
@@ -58,12 +62,23 @@ docker run --rm alpine df -h /
 
 Raise Docker / Colima / Desktop **RAM (8G+)** and try again.
 
+## Build v2 (recommended; thin layer on `:v1`)
+
+```bash
+docker build --platform linux/amd64 \
+  -f docker/reason-over-search-v1/Dockerfile.v2 \
+  -t pantomiman/reason-over-search-v1:v2 .
+```
+
+Dockerfile.v2 is `FROM pantomiman/reason-over-search-v1:v1` + `pip install transformers==5.7.0` (in the eval venv) + `LABEL version=2`. The new layer is ~500 MB; the rest is shared with v1.
+
 ## Push to Docker Hub
 
 ```bash
 docker tag reason-over-search-v1:v1 pantomiman/reason-over-search-v1:v1
 docker login
-docker push pantomiman/reason-over-search-v1:v1
+docker push pantomiman/reason-over-search-v1:v1   # v1
+docker push pantomiman/reason-over-search-v1:v2   # v2 (only the new layer is uploaded; rest dedups)
 ```
 
 ## Run an interactive shell
