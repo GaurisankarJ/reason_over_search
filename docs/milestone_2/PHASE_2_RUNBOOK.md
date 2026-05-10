@@ -12,7 +12,7 @@ Concrete sequence to run Search-R1 GRPO training on Vast.ai. Phase 1 (build the 
 
 > **TL;DR** — boot the docker image on Vast.ai, run [`bash training/scripts/bootstrap.sh`](../../training/scripts/bootstrap.sh) (idempotent: pulls LFS, downloads Qwen weights + v2 venv tarball, starts retriever), then `bash training/scripts/run_grpo_1xa100.sh --variant base --seed 42 -- policy.sequence_packing.enabled=false policy.dynamic_batching.enabled=true policy.train_micro_batch_size=2`. Eval on Bamboogle through the Milestone-1 pipeline.
 
-> **Plan pivot (2026-05-04 onwards).** The original "3 seeds × {base, hybrid} = 6 runs" plan is **superseded by the recipe-ablation plan in [`docs/TODO_2026-05-04.md`](../TODO_2026-05-04.md)**. With smoke-anchored wall-clock at 11–17 d / run on 1× A100 80GB and a $1000 USD budget, that supports ~2–3 runs (the JustRL plain-GRPO control + the E2H+S-GRPO+MC-GRPO stack), not 6. The "6-run plan" subsection below is kept for reference but is no longer the live target.
+> **Plan pivot (2026-05-04 onwards).** The original "3 seeds × {base, hybrid} = 6 runs" plan is **superseded by the recipe-ablation plan in [`docs/TODO_2026-05-04.md`](../todo/TODO_2026-05-04.md)**. With smoke-anchored wall-clock at 11–17 d / run on 1× A100 80GB and a $1000 USD budget, that supports ~2–3 runs (the JustRL plain-GRPO control + the E2H+S-GRPO+MC-GRPO stack), not 6. The "6-run plan" subsection below is kept for reference but is no longer the live target.
 
 ---
 
@@ -204,7 +204,7 @@ If anything blows up here, fix it before committing real GPU-hours.
 
 ## Real runs — recipe ablation plan (current target)
 
-The active plan: **C-minimal control + the optimised stack** (~2 runs, fits the $1000 budget). See [`docs/TODO_2026-05-04.md`](../TODO_2026-05-04.md) for full ordering. Each run is one launch of [`run_grpo_1xa100.sh`](../../training/scripts/run_grpo_1xa100.sh) with the always-required Qwen3.5 overrides:
+The active plan: **C-minimal control + the optimised stack** (~2 runs, fits the $1000 budget). See [`docs/TODO_2026-05-04.md`](../todo/TODO_2026-05-04.md) for full ordering. Each run is one launch of [`run_grpo_1xa100.sh`](../../training/scripts/run_grpo_1xa100.sh) with the always-required Qwen3.5 overrides:
 
 ```bash
 # JustRL plain-GRPO control (no tricks; recipe baseline)
@@ -305,7 +305,7 @@ The first-pass training run is **mechanics verification only** — checkpointing
 1. **Confirm `train/reward_mean` climbed** above 0 over the run, and the loss/KL/grad-norm curves are sane. That's the first-pass success criterion.
 2. **Update §7 of [PAPER_VS_OURS_TRAINING.md](../training/PAPER_VS_OURS_TRAINING.md#7-compute) "Ours — observed"** with measured wall-clock, GPU-hours, $/run from the W&B run summary. Replaces the linear/sub-linear smoke extrapolation with a real anchor.
 3. **Re-enable validation + checkpointing** — flip the `[DISABLED for first-pass training]` blocks in both YAMLs back to `enabled: true` / `val_period: 100` / `val_at_start: true` / restore `data.validation`. See [`VALIDATION.md §7`](../training/VALIDATION.md#7-re-enabling-validation-planned-not-active) for the planned re-enable.
-4. **Run the recipe-ablation plan** ([`docs/TODO_2026-05-04.md`](../TODO_2026-05-04.md)): JustRL plain-GRPO control + the optimised stack (E2H curriculum + S-GRPO + MC-GRPO). 2 to 3 runs total — the original 6-run plan is superseded by smoke-anchored wall-clock making it unaffordable. Smoke-eval each finished checkpoint on Bamboogle through the M1 eval pipeline ([`MILESTONE_1.1_QWEN_BASELINES.md`](../milestone_1/MILESTONE_1.1_QWEN_BASELINES.md) gives you the untrained baseline to beat).
+4. **Run the recipe-ablation plan** ([`docs/TODO_2026-05-04.md`](../todo/TODO_2026-05-04.md)): JustRL plain-GRPO control + the optimised stack (E2H curriculum + S-GRPO + MC-GRPO). 2 to 3 runs total — the original 6-run plan is superseded by smoke-anchored wall-clock making it unaffordable. Smoke-eval each finished checkpoint on Bamboogle through the M1 eval pipeline ([`MILESTONE_1.1_QWEN_BASELINES.md`](../milestone_1/MILESTONE_1.1_QWEN_BASELINES.md) gives you the untrained baseline to beat).
 5. **Aggregate** across runs, side-by-side vs. paper Table 3 + the JustRL control, write up.
 
 ---

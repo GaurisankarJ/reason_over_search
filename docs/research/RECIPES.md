@@ -171,7 +171,7 @@ None yet. If this recipe gets tested, create a new results file in `docs/trainin
 ## E2H curriculum (Easy-to-Hard data scheduler)
 
 **Source paper**: [E2H Reasoner, arXiv 2506.06632, ICLR 2026](../papers/2506.06632_e2h.md)
-**Status**: planned. Item #5 in the active ablation list ([`../TODO_2026-05-04.md`](../TODO_2026-05-04.md)). No runs yet.
+**Status**: planned. Item #5 in the active ablation list ([`../TODO_2026-05-04.md`](../todo/TODO_2026-05-04.md)). No runs yet.
 
 ### What it is
 

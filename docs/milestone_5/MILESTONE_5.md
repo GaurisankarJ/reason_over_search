@@ -156,7 +156,7 @@ Parser to import / re-export from M4: `evaluation_qwen35/flashrag/search_r1/pars
 
 [M2 smoke results](../training/SMOKE_RESULTS_2026-05-06.md) on Qwen3.5-2B at the smoke shape: **~57 s/step** at 20 trajectories/step (1× A100-80GB). Qwen3.5-0.8B at the same shape should be **2-3× faster** per step (forward+backward and rollout-generate both scale with model size). Working target for M5 smoke: **≤25 s/step** at 20 traj/step on 1× A100-80GB. If M5 lands above 35 s/step, that's a flag to investigate before launching M5.1 full-shape (rollout-engine config, vLLM kv-cache size, sequence-packing settings).
 
-[`docs/TODO_2026-05-04.md`](../TODO_2026-05-04.md) target for the wider recipe-search work is **≤10 h per ablation run**. At 25 s/step that's 1440 steps; at 35 s/step it's 1030 steps. ReSearch paper schedule (per [`PAPER_VS_OURS_TRAINING.md`](../training/PAPER_VS_OURS_TRAINING.md) §5) is ~500 steps at the published-checkpoint shape — fits comfortably under either bound, before any of the systems wins from [`RUNTIME_EFFICIENCY.md`](../research/RUNTIME_EFFICIENCY.md).
+[`docs/TODO_2026-05-04.md`](../todo/TODO_2026-05-04.md) target for the wider recipe-search work is **≤10 h per ablation run**. At 25 s/step that's 1440 steps; at 35 s/step it's 1030 steps. ReSearch paper schedule (per [`PAPER_VS_OURS_TRAINING.md`](../training/PAPER_VS_OURS_TRAINING.md) §5) is ~500 steps at the published-checkpoint shape — fits comfortably under either bound, before any of the systems wins from [`RUNTIME_EFFICIENCY.md`](../research/RUNTIME_EFFICIENCY.md).
 
 ## Run sequence
 
@@ -181,7 +181,7 @@ Parser to import / re-export from M4: `evaluation_qwen35/flashrag/search_r1/pars
    - Reward: paper uses format + EM partial credit; we use F1-only.
    - Answer wrap: paper produces `\boxed{…}` inside `<answer>`; we produce plain `<answer>X</answer>`.
 4. **Smoke at full shape, partial steps**: ~100 steps at the M5.1 batch shape on MuSiQue, on 1× A100-80GB. Goal: tight per-step time estimate at the production shape so the wall-clock projection is real, not extrapolated from a 20-traj smoke.
-5. **Wall-clock projection**: per-step time × paper schedule (steps) → total hours → cost at \$1.20/h. Compare to the [`docs/TODO_2026-05-04.md`](../TODO_2026-05-04.md) ≤10 h target; if over, identify the cheapest knob to cut (usually `max_response_length` or rollout group size).
+5. **Wall-clock projection**: per-step time × paper schedule (steps) → total hours → cost at \$1.20/h. Compare to the [`docs/TODO_2026-05-04.md`](../todo/TODO_2026-05-04.md) ≤10 h target; if over, identify the cheapest knob to cut (usually `max_response_length` or rollout group size).
 6. **Re-verify**: re-run the rendered-prompt byte check, re-confirm reward path on 5 hand-picked rollouts (correct, partial-overlap, wrong, empty, format-broken — F1 should be 1.0 / 0<F1<1 / 0 / 0 / 0).
 7. **Document**: fill in [`CODE_SETUP_m5.md`](../report/CODE_SETUP_m5.md) M5.1 sections; update [`RESULTS_SMOKE_m5.md`](../report/RESULTS_SMOKE_m5.md) with the M5.1 smoke + projection; commit `training_m5_1/configs/m5_1_research_paper.yaml`.
 8. **Wrap M5.1**: bash `training_m5_1/scripts/run.sh` is now the canonical "ReSearch paper recipe on Qwen3.5-0.8B (with the two divergences)" entry point. The launch is reproducible from a clean Vast box via `bootstrap.sh` + `cd training_m5_1 && bash setup.sh && bash scripts/run.sh`.
@@ -198,7 +198,7 @@ The motivation for the per-experiment folder is to let a second experiment be co
 Candidates for M5.2 (not committed yet, just possibilities so the layout is exercised):
 - Reward ablation: F1 → EM, or F1 + small format penalty.
 - Dataset: HotpotQA train → MuSiQue (the paper-default mix).
-- Algorithm: GRPO → MC-GRPO (item #3 from [`docs/TODO_2026-05-04.md`](../TODO_2026-05-04.md) ablation list).
+- Algorithm: GRPO → MC-GRPO (item #3 from [`docs/TODO_2026-05-04.md`](../todo/TODO_2026-05-04.md) ablation list).
 
 ## What's left
 
@@ -225,4 +225,4 @@ Candidates for M5.2 (not committed yet, just possibilities so the layout is exer
 - M3 14-fix audit (the precedent for closing train/eval rollout drift): [`../report/CODE_SETUP_m3.md`](../report/CODE_SETUP_m3.md) §3.
 - ReSearch paper (algorithm + recipe source of truth): [arXiv:2503.19470](https://arxiv.org/abs/2503.19470), notes at [`../papers/2503.19470_research.md`](../papers/2503.19470_research.md).
 - ReSearch official codebase (concrete configs): [`Agent-RL/ReSearch`](https://github.com/Agent-RL/ReSearch).
-- Active recipe-ablation plan (the wider story M5 sits inside): [`../TODO_2026-05-04.md`](../TODO_2026-05-04.md).
+- Active recipe-ablation plan (the wider story M5 sits inside): [`../TODO_2026-05-04.md`](../todo/TODO_2026-05-04.md).

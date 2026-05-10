@@ -1757,7 +1757,7 @@ Hardware scaling factors below are cross-vendor relative throughput estimates (H
 | **1× H200 141 GB SXM** | ≈ 10 min | ~6 min | 7 d / 4 d (= 168 h / 96 h) | ~$2.80 | **$270–470** | 96 × $2.80 = $269; 168 × $2.80 = $470 |
 
 Caveats:
-- These are **single-run** numbers. The original Phase-2 plan (3 seeds × 2 variants = 6 runs) is **superseded** by the recipe-ablation pivot in [`docs/TODO_2026-05-04.md`](../TODO_2026-05-04.md): with 11–17 d / run on 1× A100, the budget supports ~2–3 runs total (the C-minimal control + the stack), not 6.
+- These are **single-run** numbers. The original Phase-2 plan (3 seeds × 2 variants = 6 runs) is **superseded** by the recipe-ablation pivot in [`docs/TODO_2026-05-04.md`](../todo/TODO_2026-05-04.md): with 11–17 d / run on 1× A100, the budget supports ~2–3 runs total (the C-minimal control + the stack), not 6.
 - Vast prices fluctuate ±50% by supply; the `$/hr` column is a median, not a quote.
 - Seq-packing-off is conservative; if a future Qwen3.5 patch makes packing safe with Mamba layers, expect another 15–25% speedup.
 

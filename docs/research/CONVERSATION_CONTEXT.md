@@ -80,7 +80,7 @@ report (report/CONVERSATION_CONTEXT.md, SUPERVISOR_MEETING_2026-05-07_m0_to_3.md
 thesis writeup (Jun 2026)
 ```
 
-The active ablation list (priority order, ≤10 h per run target) lives in [`../TODO_2026-05-04.md`](../TODO_2026-05-04.md) and the project [`CLAUDE.md`](../../claude/CLAUDE.md) "Active ablation plan".
+The active ablation list (priority order, ≤10 h per run target) lives in [`../TODO_2026-05-04.md`](../todo/TODO_2026-05-04.md) and the project [`CLAUDE.md`](../../claude/CLAUDE.md) "Active ablation plan".
 
 ## 7. Doc inventory
 

@@ -10,7 +10,7 @@ updated: 2026-05-08
 
 ## Context
 
-M3 closed on 2026-05-07 with a tried-and-tested eval pipeline for the Qwen3-0.6B family ([`evaluation_research/`](../../evaluation_research/), 14 alignment fixes audited in [`report/CODE_SETUP_m3.md`](../report/CODE_SETUP_m3.md)). M4 stands up the equivalent pipeline for the **Qwen3.5-0.8B** family so that any future GRPO checkpoint we train on Qwen3.5 has an "untrained floor" to be compared against. Qwen3.5-0.8B is the first model from the new Qwen3.5 small-model family (0.8B / 2B / 4B / 9B; the M2 NeMo-RL training pipeline targets the 2B; we start at 0.8B for cheap iteration per [`TODO_2026-05-04.md`](../TODO_2026-05-04.md)).
+M3 closed on 2026-05-07 with a tried-and-tested eval pipeline for the Qwen3-0.6B family ([`evaluation_research/`](../../evaluation_research/), 14 alignment fixes audited in [`report/CODE_SETUP_m3.md`](../report/CODE_SETUP_m3.md)). M4 stands up the equivalent pipeline for the **Qwen3.5-0.8B** family so that any future GRPO checkpoint we train on Qwen3.5 has an "untrained floor" to be compared against. Qwen3.5-0.8B is the first model from the new Qwen3.5 small-model family (0.8B / 2B / 4B / 9B; the M2 NeMo-RL training pipeline targets the 2B; we start at 0.8B for cheap iteration per [`TODO_2026-05-04.md`](../todo/TODO_2026-05-04.md)).
 
 The two snapshots evaluated:
 
@@ -206,6 +206,6 @@ Expect: a `<|im_start|>system` block containing the auto-injected `# Tools` + fo
 - M3 narrative: [`../milestone_3/MILESTONE_3.md`](../milestone_3/MILESTONE_3.md), [`../milestone_3/MILESTONE_3.1.md`](../milestone_3/MILESTONE_3.1.md)
 - M3 alignment audit (the 14 fixes M4 inherits unchanged): [`../report/CODE_SETUP_m3.md`](../report/CODE_SETUP_m3.md) §3
 - M3 results table: [`../report/RESULTS_m3.md`](../report/RESULTS_m3.md)
-- Active recipe-ablation plan (drives M5+ training on Qwen3.5): [`../TODO_2026-05-04.md`](../TODO_2026-05-04.md)
+- Active recipe-ablation plan (drives M5+ training on Qwen3.5): [`../TODO_2026-05-04.md`](../todo/TODO_2026-05-04.md)
 - Phase-2 NeMo-RL training pipeline (smoke-tested on 1× A100 for Qwen3.5-2B): [`../training/SMOKE_RESULTS_2026-05-06.md`](../training/SMOKE_RESULTS_2026-05-06.md)
 - Qwen3.5 chat template (verbatim): [`../training/CHAT_TEMPLATE.md`](../training/CHAT_TEMPLATE.md) §2

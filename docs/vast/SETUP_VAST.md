@@ -218,7 +218,7 @@ Pre-reqs: bootstrap finished without `SKIP_V2_BUILD=1` (you need the `DTensorPol
 | Recipe-ablation (`C-minimal`, `+MC-GRPO`, etc.) | base | qwen_native | 1005 steps; ~11–17 d on 1× A100, ~5–8.5 d on 1× H100 |
 | One-off `full custom` | (you choose) | (you choose) | compose your own Hydra args |
 
-The recipe-ablation plan supersedes the original 6-run plan. See [`docs/TODO_2026-05-04.md`](../TODO_2026-05-04.md) for the prioritised list (systems-only → C-minimal → +MC-GRPO → +S-GRPO → +E2H curriculum) and [`docs/milestone_2/PHASE_2_RUNBOOK.md`](../milestone_2/PHASE_2_RUNBOOK.md) for the full operational runbook.
+The recipe-ablation plan supersedes the original 6-run plan. See [`docs/TODO_2026-05-04.md`](../todo/TODO_2026-05-04.md) for the prioritised list (systems-only → C-minimal → +MC-GRPO → +S-GRPO → +E2H curriculum) and [`docs/milestone_2/PHASE_2_RUNBOOK.md`](../milestone_2/PHASE_2_RUNBOOK.md) for the full operational runbook.
 
 ### 7b. Required Hydra overrides
 

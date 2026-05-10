@@ -154,7 +154,7 @@ Wall-clock projection is now smoke-anchored (not "TBD"), so the first-run gate i
 - **Already-decided hardware.** 1× H100 80GB SXM if Vast supply has it (~$400/run, 5–8.5 d). Else 1× A100 80GB SXM (~$300–490/run, 11–17 d).
 - **Step-100 health-check.** Regardless of hardware, at step 100 (~1 h H100 / ~2.5 h A100) check W&B `train/reward_mean` curve. If flat at ~0 (no rewardable trajectories) → abort and debug, don't burn the rest of the run.
 
-**Phase-2 budget reality.** ~$1000 USD total → **2–3 full runs**, not the 6 of the original 3-seed × 2-variant plan. The recipe-ablation pivot in [`docs/TODO_2026-05-04.md`](../TODO_2026-05-04.md) reflects this.
+**Phase-2 budget reality.** ~$1000 USD total → **2–3 full runs**, not the 6 of the original 3-seed × 2-variant plan. The recipe-ablation pivot in [`docs/TODO_2026-05-04.md`](../todo/TODO_2026-05-04.md) reflects this.
 
 ## 8. Data
 

@@ -306,4 +306,4 @@ Same 8-worker IVF-SQ8 retriever (~134 GB RAM peak) + SGLang on 1× A100-80GB. CP
 - M4 milestone narrative: [`../milestone_4/MILESTONE_4.md`](../milestone_4/MILESTONE_4.md)
 - M4 results table (when populated): `RESULTS_m4.md` (planned)
 - Qwen3.5 chat template (verbatim): [`../training/CHAT_TEMPLATE.md`](../training/CHAT_TEMPLATE.md) §2
-- Active recipe-ablation plan: [`../TODO_2026-05-04.md`](../TODO_2026-05-04.md)
+- Active recipe-ablation plan: [`../TODO_2026-05-04.md`](../todo/TODO_2026-05-04.md)

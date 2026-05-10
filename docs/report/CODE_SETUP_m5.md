@@ -178,7 +178,7 @@ def compute_reward(rollout):
 
 Repeat §3.4 after the M5.1 config lands. Add:
 
-3. **Wall-clock projection**: per-step time × paper schedule → total hours. Compare to [`docs/TODO_2026-05-04.md`](../TODO_2026-05-04.md) ≤10 h target. If over, identify the cheapest knob to cut (typically `max_response_length` or `num_prompts_per_step`) and re-smoke.
+3. **Wall-clock projection**: per-step time × paper schedule → total hours. Compare to [`docs/TODO_2026-05-04.md`](../todo/TODO_2026-05-04.md) ≤10 h target. If over, identify the cheapest knob to cut (typically `max_response_length` or `num_prompts_per_step`) and re-smoke.
 
 ---
 
@@ -214,4 +214,4 @@ Per-experiment W&B project naming: `reason_over_search_m5_<N>` (smoke uses `…_
 - M4 eval pipeline (the rollout-shape source of truth): [`CODE_SETUP_m4.md`](CODE_SETUP_m4.md), [`../milestone_4/MILESTONE_4.md`](../milestone_4/MILESTONE_4.md)
 - ReSearch paper: [arXiv:2503.19470](https://arxiv.org/abs/2503.19470), notes at [`../papers/2503.19470_research.md`](../papers/2503.19470_research.md)
 - ReSearch official codebase: [`Agent-RL/ReSearch`](https://github.com/Agent-RL/ReSearch)
-- Active recipe-ablation plan: [`../TODO_2026-05-04.md`](../TODO_2026-05-04.md)
+- Active recipe-ablation plan: [`../TODO_2026-05-04.md`](../todo/TODO_2026-05-04.md)

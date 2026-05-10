@@ -137,7 +137,7 @@ Smoke-anchored (1× A100 80GB SXM, ~57 s/step at 20 traj/step → linearly extra
 | **2× A100 80 GB SXM** | **6.5–9.5 d** (156–228 h) | **$370–550** at ~$2.40/h |
 | **1× H200 141 GB SXM** | **4–7 d** (96–168 h) | **$270–470** at ~$2.80/h |
 
-The original Phase-2 plan (3 seeds × {base, hybrid} = 6 runs) is **superseded** by the recipe-ablation pivot in [`docs/TODO_2026-05-04.md`](../TODO_2026-05-04.md): with $1000 budget total, that supports ~2–3 runs. Recommended hardware: 1× H100 if available, 1× A100 otherwise.
+The original Phase-2 plan (3 seeds × {base, hybrid} = 6 runs) is **superseded** by the recipe-ablation pivot in [`docs/TODO_2026-05-04.md`](../todo/TODO_2026-05-04.md): with $1000 budget total, that supports ~2–3 runs. Recommended hardware: 1× H100 if available, 1× A100 otherwise.
 
 **Step-100 health check.** Regardless of hardware, at step 100 (~1 h H100 / ~2.5 h A100) check the W&B `train/reward_mean` curve. If flat at ~0, abort and debug rather than burning the rest of the run.
 

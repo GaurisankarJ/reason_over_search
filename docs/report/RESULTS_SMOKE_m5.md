@@ -93,7 +93,7 @@ All runs: 1× A100-80GB on Vast.ai (`pantomiman/reason-over-search-v1:v1`), `Qwe
 | Paper schedule | TODO steps | [ReSearch paper §B](https://arxiv.org/abs/2503.19470) + `Agent-RL/ReSearch` config |
 | Total wall-clock | TODO h | per-step × steps |
 | Cost @ \$1.20/h on 1× A100-80GB | \$ TODO | Vast.ai pricing |
-| Fits ≤10 h target? | TODO (Y/N) | [`../TODO_2026-05-04.md`](../TODO_2026-05-04.md) |
+| Fits ≤10 h target? | TODO (Y/N) | [`../TODO_2026-05-04.md`](../todo/TODO_2026-05-04.md) |
 | If N: cheapest knob to cut | TODO | typically `max_response_length` or `num_prompts_per_step` |
 
 ### 3.4 What we learned — TODO
@@ -131,4 +131,4 @@ All runs: 1× A100-80GB on Vast.ai (`pantomiman/reason-over-search-v1:v1`), `Qwe
 - M4 eval pipeline (the rollout-shape source of truth): [`../milestone_4/MILESTONE_4.md`](../milestone_4/MILESTONE_4.md), [`CODE_SETUP_m4.md`](CODE_SETUP_m4.md), [`RESULTS_SMOKE_m4.md`](RESULTS_SMOKE_m4.md)
 - ReSearch paper: [arXiv:2503.19470](https://arxiv.org/abs/2503.19470), notes at [`../papers/2503.19470_research.md`](../papers/2503.19470_research.md)
 - ReSearch official codebase: [`Agent-RL/ReSearch`](https://github.com/Agent-RL/ReSearch)
-- Active recipe-ablation plan: [`../TODO_2026-05-04.md`](../TODO_2026-05-04.md)
+- Active recipe-ablation plan: [`../TODO_2026-05-04.md`](../todo/TODO_2026-05-04.md)

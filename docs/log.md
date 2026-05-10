@@ -78,7 +78,7 @@ Conventions:
 ## 2026-05-05
 
 - Decision: pivot the thesis question from "extend RLVR via tool-use" to "is post-training a small LM to Search-R1 results feasible under realistic resource constraints, and what is the optimised recipe?" Recorded in [`report/SUPERVISOR_MEETING_2026-05-07_m0_to_3.md`](report/SUPERVISOR_MEETING_2026-05-07_m0_to_3.md).
-- Decision: candidate recipe = E2H curriculum + S-GRPO + MC-GRPO with a JustRL plain-GRPO control. Recorded in [`report/SUPERVISOR_MEETING_2026-05-07_m0_to_3.md`](report/SUPERVISOR_MEETING_2026-05-07_m0_to_3.md), expanded in [`TODO_2026-05-04.md`](TODO_2026-05-04.md).
+- Decision: candidate recipe = E2H curriculum + S-GRPO + MC-GRPO with a JustRL plain-GRPO control. Recorded in [`report/SUPERVISOR_MEETING_2026-05-07_m0_to_3.md`](report/SUPERVISOR_MEETING_2026-05-07_m0_to_3.md), expanded in [`TODO_2026-05-04.md`](todo/TODO_2026-05-04.md).
 
 ## 2026-05-04
 

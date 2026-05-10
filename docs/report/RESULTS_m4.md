@@ -116,4 +116,4 @@ Untrained-floor comparison once full sweeps are in. M3 reference is the pre-GRPO
 - M4 milestone narrative: [`../milestone_4/MILESTONE_4.md`](../milestone_4/MILESTONE_4.md)
 - M4 code-setup deltas vs M3: [`CODE_SETUP_m4.md`](CODE_SETUP_m4.md)
 - M3 results (the within-family floor): [`RESULTS_m3.md`](RESULTS_m3.md)
-- Active recipe-ablation plan (drives any future M5+ Qwen3.5 GRPO training): [`../TODO_2026-05-04.md`](../TODO_2026-05-04.md)
+- Active recipe-ablation plan (drives any future M5+ Qwen3.5 GRPO training): [`../TODO_2026-05-04.md`](../todo/TODO_2026-05-04.md)
