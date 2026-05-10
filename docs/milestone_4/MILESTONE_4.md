@@ -194,7 +194,7 @@ Expect: a `<|im_start|>system` block containing the auto-injected `# Tools` + fo
 
 ## M4.4 — prompt search to close the M3 cross-family gap
 
-**Status (2026-05-10): plan landed; n=300 / dataset smoke pending. M4.2 baseline + M3-vs-M4 cross-family comparison are closed (see [`RESULTS_m4.md`](../report/RESULTS_m4.md)); M4.4 is an additive prompt-search sub-phase that may revise the locked prompt before M5 commits training compute, but does NOT block M5 scaffold work.**
+**Status (2026-05-10): Phase 1 partially executed — first candidate (`qwen35_recall_port`, ReCall-prose port, system-role + reasoning framing) ran and FAILED the acceptance bar (mean EM 0.0510 vs A=0.0594, Δ −0.0084). Four candidates (B / C / D / E) still pending. M4.2 baseline + M3-vs-M4 cross-family comparison are closed (see [`RESULTS_m4.md`](../report/RESULTS_m4.md)); M4.4 is an additive prompt-search sub-phase that may revise the locked prompt before M5 commits training compute, but does NOT block M5 scaffold work.**
 
 ### Why we revisit the M4.2 lock
 
@@ -265,6 +265,33 @@ Estimated implementation wall: **3–4 h coding + 1× n=100 sanity-check renderi
 - **Diminishing returns**: this is the 4th prompt iteration on M4 (v1 → v2 → v3 → minimal / no-system → M4.4). If Phase 1 produces no candidate above the bar, **ship M4.2 unchanged** and move to M5 — the higher-leverage next step is training, not prompt golf.
 - **Don't expand Phase 1**: if 5 candidates aren't enough, the gap is probably not closeable with prompting alone — that's an evaluative finding, not a "try more prompts" signal.
 
+### Phase 1 results — `qwen35_recall_port` (ran first, 2026-05-10)
+
+Drafted as a Phase-2 backup but executed first while Phase 1 implementation work (B / C / D / E) was still pending; it lifts directly into the existing M4.1 system-role + `tools=[]` render branch with zero pipeline-code changes (template-only delta). Adapts the verbatim Agent-RL/ReCall `re_call_template_sys` prose ([`Agent-RL/ReCall/src/verl/utils/dataset/template.py`](https://github.com/Agent-RL/ReCall/blob/main/src/verl/utils/dataset/template.py)) onto the M4.2 scaffolding — keeps `<tool_call>` / `<tool_response>` tags via Qwen3.5 nested-XML auto-inject, swaps `\boxed{}` for `<answer>X</answer>`, drops the redundant `{func_schemas}` + JSON-args reminder blocks (auto-inject covers both), replaces ReCall's weather example with a search-style Ted Turner / CNN example.
+
+Constant: [`QWEN35_RECALL_PORT_TEMPLATE`](../../evaluation_qwen35/flashrag/search_r1/templates.py) (~95 words, 456 prompt tokens vs A's 418). Render verified against `Qwen/Qwen3.5-0.8B` chat template before launch.
+
+Run: hybrid only, n=300 / dataset (bamboogle capped at full split = 125), greedy / `seed=1`, optimised stack (16-worker retriever + `asyncio.to_thread` + 128 client workers). Wall-clock 17 min 19 s for all 7 datasets (1039 s total; per-dataset 79–180 s).
+
+| Dataset | M4.2 baseline (n=1000, §9.1) | M4.4 `qwen35_recall_port` (n=300) | Δ |
+|---|---:|---:|---:|
+| bamboogle (n=125) | 0.040 | 0.024 | −0.016 |
+| nq | 0.065 | 0.053 | −0.012 |
+| triviaqa | 0.122 | 0.123 | +0.001 |
+| popqa | 0.071 | 0.067 | −0.004 |
+| hotpotqa | 0.067 | 0.070 | +0.003 |
+| 2wikimultihopqa | 0.041 | 0.017 | **−0.024** |
+| musique | 0.010 | 0.003 | −0.007 |
+| **mean** | **0.0594** | **0.0510** | **−0.0084** |
+
+**Verdict: fails the acceptance bar by 3.3 pp.** 5 / 7 datasets regress; the largest single drop is 2wikimultihopqa (−0.024), a multi-hop dataset where M4.2 was already weak. Below A on aggregate at p < 0.10 (binomial sign test on per-dataset Δ).
+
+**Mechanism (likely):** moving the protocol prose from user role (M4.2) into system role and re-framing it around ReCall's "<think> reasoning + <tool_call> action" schema *adds* scaffolding tokens (+38 prompt tokens) without changing what the model already knew from the auto-injected `# Tools` + `<IMPORTANT>` block. The auto-inject is the load-bearing piece for hybrid (per [`RESULTS_SMOKE_m4.md` §7.3](../report/RESULTS_SMOKE_m4.md)); piling more system-role prose on top crowds it without adding signal, and on multi-hop datasets the extra system-role text appears to displace search-loop attention.
+
+**Implication for the rest of Phase 1**: candidate D (M4.2 + M3.1 decision rules in the *user* message — no system change) and candidate E (M4.2 + `enable_thinking=False`) become the highest-priority remaining tests, since both keep the M4.2 user-role + auto-inject base intact and modify only one knob each. Candidate C (full M3.1 system-role port) is now lower priority — `qwen35_recall_port` is a milder "system-role prose" intervention than C and already failed.
+
+Result files: `evaluation_qwen35/results/<dataset>/<dataset>_*_m4_qwen3.5_0.8b_qwen35_recall_port_seed1_n300/metric_score.txt` (all 7 preserved).
+
 ## What's left
 
 | # | Task | Status |
@@ -272,7 +299,7 @@ Estimated implementation wall: **3–4 h coding + 1× n=100 sanity-check renderi
 | 1 | Quick smoke (100 / dataset) for both variants on the M4.1 prompt | ✅ done; M4.2 / M4.3 asymmetric per-variant defaults locked ([`RESULTS_SMOKE_m4.md` §6 / §7](../report/RESULTS_SMOKE_m4.md)) |
 | 2 | Full sweep 51,713 items / variant — base + hybrid baselines (M4.2 lock) | ✅ done 2026-05-10 ([`RESULTS_m4.md` §4](../report/RESULTS_m4.md)); hybrid mean EM 0.060, base 0.010 |
 | 3 | Cross-family comparison M3 (Qwen3-0.6B) vs M4.2 (Qwen3.5-0.8B) baseline | ✅ done 2026-05-10 ([`RESULTS_m4.md` §5](../report/RESULTS_m4.md)); avg Δ −0.042 EM motivates M4.4 |
-| 4 | **M4.4 prompt search at n=300** — close (or rule out) the M3 cross-family gap before committing M5 training compute | 🟡 plan landed 2026-05-10; pending exec on a fresh box |
+| 4 | **M4.4 prompt search at n=300** — close (or rule out) the M3 cross-family gap before committing M5 training compute | 🟡 Phase 1 partial: `qwen35_recall_port` ran 2026-05-10, mean EM 0.0510 vs A=0.0594 (FAILED bar by 3.3 pp); B / C / D / E still pending |
 | 5 | Cross-family re-comparison M3 vs M4 post-M4.4 lock — refresh [`RESULTS_m4.md`](../report/RESULTS_m4.md) §5 if M4.4 changes the lock | ⏳ blocked on #4 |
 | 6 | M5 (separate milestone): GRPO training on Qwen3.5-0.8B with the M4.4-locked prompt as the byte-aligned eval / train shape — see [`MILESTONE_5.md`](../milestone_5/MILESTONE_5.md) | ⏳ scaffold pending |
 
