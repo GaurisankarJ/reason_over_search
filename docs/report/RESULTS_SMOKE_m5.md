@@ -382,7 +382,7 @@ Two verification smokes were run before any further production attempt:
 | `keep_top_k: 3` (requires `metric_name: "train:loss_mean"`) | 3 rolling | 9.6 GB | only final + 2 best-by-loss survive |
 | Free up `/workspace` (e.g. evict M3 training dir, 56 GB) | 12 | 38.4 GB on freed disk | none — but requires user authorization to delete M3 artifacts |
 
-**Pending user decision.** Until resolved, do NOT relaunch `M5.1-prod-a2` — it will run for 50 steps and then fail to save due to disk-full, just like a1 fail-shape but at write time instead of assert time.
+**User decision (2026-05-11):** the next prod run will be capped at **step 100**. With `save_period: 50`, that's **2 saves × 3.2 GB = 6.4 GB** — fits the 17 GB free comfortably. Yaml as committed is correct for this plan. If the run is later extended past step 100, revisit this table (option A: bump `save_period` to 200; option B: free `training/` 56 GB if no longer needed).
 
 ### 7.6 Rules going forward — DO NOT SKIP
 
@@ -420,6 +420,7 @@ Two verification smokes were run before any further production attempt:
 | 2026-05-11 | Checkpoint metric switched to `train/loss/mean` (db0852b) | Was `val:accuracy`; needed a value to compare for `keep_top_k`. With val disabled, switched to a training metric + `keep_top_k=0`. **⚠ THIS DECISION WAS WRONG — it crashed M5.1-prod-a1 at step 50. See §7.** |
 | 2026-05-11 | Checkpoint metric → `null`, `keep_top_k` → `null`, `save_optimizer` → `false` | Postmortem fix (§7) after step-50 crash. `null` metric bypasses the `train:`/`val:` prefix assertion; `null` keep_top_k retains all saves; `save_optimizer=false` keeps per-save to ~1.6 GB so 12 × 50-step saves fit the 120 GB /workspace partition. Verified by two ckpt-verify smokes. |
 | 2026-05-11 | Pre-flight ckpt smoke mandatory for any `checkpointing:` change | Direct rule from §7.6: 2-step `save_period=2` smoke before production. Cost ~5 min vs. up to 25 d if skipped. |
+| 2026-05-11 | Next prod run capped at step 100 (user) | 12-save plan @ 3.2 GB each = 38.4 GB doesn't fit 17 GB free `/workspace`. Cap at 100 = 2 saves @ 6.4 GB fits cleanly. If run is extended later, revisit §7.5.1. |
 
 ---
 
