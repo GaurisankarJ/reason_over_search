@@ -9,7 +9,7 @@ status: training-in-flight
 
 # Results M5: Qwen3.5-0.8B GRPO Training (M5 + M5.1)
 
-**Status (2026-05-11):** M5.1 production training is running on Vast 1× A100-80GB (pid 178440, W&B run `uwbodqgt`). This doc holds the final results + transferable observations once training completes; smoke / iteration history lives at [`RESULTS_SMOKE_m5.md`](RESULTS_SMOKE_m5.md).
+**Status (2026-05-11):** M5.1-prod-a1 (pid 178440, W&B `uwbodqgt`) ran for 50 steps then **crashed at the first checkpoint save** due to a `metric_name` format violation (postmortem in [`RESULTS_SMOKE_m5.md` §7](RESULTS_SMOKE_m5.md#7-critical-postmortem--step-50-checkpoint-save-crash-2026-05-11)). The fix has been applied and verified by two smoke runs. M5.1-prod-a2 awaits user authorization to relaunch. This doc holds the final results + transferable observations once training completes; smoke / iteration history lives at [`RESULTS_SMOKE_m5.md`](RESULTS_SMOKE_m5.md).
 
 ## 1. Run roster
 
@@ -41,7 +41,7 @@ Pipeline: [`training_m5_1/`](../../training_m5_1/). Code-setup audit: [`CODE_SET
 | Schedule | 2 epochs × 311 steps = **622 steps total** | Paper: 2 epochs × ~78 steps = 156 (same data, smaller batch) |
 | System gains | O1 (fused AdamW) + R2 (vLLM async_engine) + R1 (prefix caching, default on A100) | M5.2 — non-paper, orthogonal to training math |
 | Validation | disabled (no MuSiQue dev parquet) | Eval out-of-band via `evaluation_qwen35` on final ckpt |
-| Checkpoint | every 50 steps, `train/loss/mean`, `keep_top_k=0` | ~12 saves over the run |
+| Checkpoint | every 50 steps, `metric_name: null`, `keep_top_k: null`, `save_optimizer: false` | ~12 saves × ~1.6 GB ≈ 20 GB total. Updated post-crash; see [`RESULTS_SMOKE_m5.md` §7](RESULTS_SMOKE_m5.md#7-critical-postmortem--step-50-checkpoint-save-crash-2026-05-11). |
 
 ## 3. Smoke results
 

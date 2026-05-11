@@ -38,7 +38,10 @@ NeMo-RL auto-numbers `logs/exp_NNN/` per launch. Mapping → smoke version (so a
 | exp_007 | v7-a1 | 22:14 | M5.2 v7 attempt 1 (production shape, micro=2): step 2 OOM. Root cause: NeMo-RL TP=1 path casts full [B,S,V] logits to fp32 before chunk (`model_utils.py:1378`); 16.3 GiB allocation; ours 13.11 GiB free. | local-only (W&B deleted) |
 | exp_008 | v7-a2 | 23:00 | M5.2 v7 attempt 2 (micro=1): step 1 = 55.6 min, step 2 = 59.1 min. Established the 25-d ETA basis before live data revised down. | local-only (W&B deleted) |
 | exp_009 | M5.1-a1 | 2026-05-11 01:03 | First M5.1 prod launch: crashed at boot with `Validation dataset is required if validation is enabled` (`data.validation: null`, but `val_at_end: true`) | local-only (W&B deleted) |
-| **exp_010** | **M5.1-prod** | **01:05** | **Live production run (pid 178440). Per-step trace in §6** | **kept (live; don't touch)** |
+| exp_010 | M5.1-prod-a1 | 01:05 | **CRASHED at step 50 (19h35m of compute lost).** `AssertionError: metric_name=train/loss/mean must start with 'val:' or 'train:'`. Postmortem: §9. | retained for forensics |
+| exp_011 | smoke-ckpt-verify1 | 2026-05-11 21:15 | First fix verification: `metric_name: null` bypassed the assertion; step 2 saved 8.9 GB (weights + optim). Confirmed fix, exposed disk budget bug (12 × 8.9 GB = 107 GB > 120 GB partition). | deleted after verification |
+| exp_012 | smoke-ckpt-verify2 | 2026-05-11 22:05 | Second fix verification: `save_optimizer: false` → confirms ~1.6 GB-per-save footprint (12 × 1.6 GB ≈ 19 GB; fits comfortably). | deleted after verification |
+| TBD | M5.1-prod-a2 | TBD (user-authorized) | Production relaunch with `metric_name: null` + `keep_top_k: null` + `save_optimizer: false` from step 0. Not yet started. | — |
 
 Failure-mode summary (what each smoke taught us, in order):
 
@@ -50,10 +53,11 @@ Failure-mode summary (what each smoke taught us, in order):
 6. **v6**: All fixes from v1-v5 stacked + Group-C paper-faithful flips applied. 10 steps clean. **Baseline established.**
 7. **v7-a1**: At production seq=8192, the `log_softmax` peak doubles to 16.3 GB at micro=2. OOM by 0.62 GiB. The NeMo-RL TP=1 path skips the chunked cast — `logprob_chunk_size` only wires to `LogprobsPostProcessor`, not `LossPostProcessor`. Fix: micro=1 (slow but works) or patch upstream (deferred).
 8. **v7-a2**: micro=1 production shape — established the 25-d projection. Confirms the loop is solid; just slow.
-9. **M5.1-a1**: `val_at_end: true` + `data.validation: null` is an at-boot assertion in NeMo-RL. Fix: disable val + switch ckpt metric to `train/loss/mean` + `keep_top_k: 0`.
-10. **M5.1-prod (exp_010, live)**: All learnings folded in. Running.
+9. **M5.1-a1**: `val_at_end: true` + `data.validation: null` is an at-boot assertion in NeMo-RL. Fix: disable val + switch ckpt metric to `train/loss/mean` + `keep_top_k: 0`. **⚠ This fix introduced a latent step-50 crash (see #11).**
+10. **M5.1-prod-a1 (exp_010)**: All learnings folded in. **Crashed at step 50 — 19h35m of compute lost.** See §9 postmortem.
+11. **Ckpt-verify smokes (exp_011, exp_012)**: confirmed the two-part fix — `metric_name: null` bypasses the format assertion AND `save_optimizer: false` keeps per-save footprint to ~1.6 GB so 12 saves fit the 120 GB partition. Sets `M5.1-prod-a2` up for clean run.
 
-The 10 iterations weren't redundant — each one fixed a different layer of the stack (Ray actor lifecycle → disk → DTensor backend → memory → allocator → config-completeness → memory again → config). Every step is captured in the docs above.
+The iterations weren't redundant — each one fixed a different layer of the stack (Ray actor lifecycle → disk → DTensor backend → memory → allocator → config-completeness → memory again → config → checkpoint metric format → checkpoint disk budget). Every step is captured in the docs above.
 
 ## 2. v6 — M5 smoke (pipeline validation, smoke shape) — SUCCESS
 
@@ -224,12 +228,14 @@ The one lever that would meaningfully change the answer — patching NeMo-RL `mo
 
 ## 6. M5.1 production training — LIVE
 
-### 6.1 Launch state (2026-05-11 ~01:05 UTC, pid 178440)
+### 6.1 Launch state (2026-05-11 ~01:05 UTC, pid 178440) — CRASHED step 50
 
-- Config: [m5_1_research_paper.yaml @ db0852b](../../training_m5_1/configs/m5_1_research_paper.yaml) — paper-faithful + M5.2 system gains (O1 fused AdamW, R2 vLLM async_engine) + validation disabled (no MuSiQue dev split; eval out-of-band).
-- Schedule: `max_num_steps=622`, `max_num_epochs=2`. Display shows `Step N/311` (per-epoch); transition to epoch 2 at step 311.
-- Checkpoint: every 50 steps to `results/grpo/m5_prod/seed42/`. First save at step 50. `train/loss/mean` metric, `keep_top_k=0` (keep all).
-- W&B run: `qwen3.5-0.8b-musique-m5_prod-seed42` on project `reason_over_search_m5_1`.
+- Config @ launch: [m5_1_research_paper.yaml @ db0852b](../../training_m5_1/configs/m5_1_research_paper.yaml) — paper-faithful + M5.2 system gains.
+- Schedule: `max_num_steps=622`, `max_num_epochs=2`.
+- Checkpoint: every 50 steps to `results/grpo/m5_prod/seed42/`. **Crashed at step 50 save** — `metric_name: "train/loss/mean"` violated NeMo-RL's `train:` or `val:` prefix requirement (`grpo.py:2040`). Compounding bug: `keep_top_k: 0` would have deleted every save. 19h35m of compute lost. **Full postmortem in §9.**
+- W&B run (a1): `qwen3.5-0.8b-musique-m5_prod-seed42` on project `reason_over_search_m5_1`.
+
+**Relaunch config (`M5.1-prod-a2`)** uses `metric_name: null` + `keep_top_k: null` + `save_optimizer: false`. Both verify smokes (§9.4) passed. Awaiting user authorization to start.
 
 ### 6.2 Per-step trajectory (live, refresh as steps land)
 
@@ -308,7 +314,94 @@ Phase shares are stable (training ~70%, logprobs ~20%, generation ~8%); the abso
 
 ---
 
-## 7. Decision log
+## 7. CRITICAL POSTMORTEM — step-50 checkpoint save crash (2026-05-11)
+
+**⚠ This is the single most expensive mistake in M5. Read before touching `checkpointing:` in any NeMo-RL config.**
+
+### 7.1 What happened
+
+`M5.1-prod-a1` (pid 178440, W&B `uwbodqgt`) ran **clean for 50 steps (~19h35m of A100-80GB time, ≈\$30)** and then crashed *while writing the first checkpoint*. The crash was an `AssertionError` from `nemo_rl/algorithms/grpo.py:2040`:
+
+```
+AssertionError: metric_name=train/loss/mean must start with 'val:' or 'train:'
+```
+
+**Compute lost: 19h35m. No checkpoint saved. Run cannot resume — must restart from step 0.**
+
+### 7.2 Root cause (two compounding bugs in commit `db0852b`)
+
+The validation-fix commit (M5.1-a1 → M5.1-prod-a1 transition; see #9 in §1.1) made two checkpoint-config edits without checking the NeMo-RL source contract:
+
+| Field | Value set @ db0852b | What NeMo-RL actually requires |
+|---|---|---|
+| `metric_name` | `"train/loss/mean"` (**slash separator**) | **Colon prefix** `train:` or `val:` — asserted in `grpo.py:2040`. Asserted at **save time**, not boot time. |
+| `keep_top_k` | `0` | `0` means **slice `[0:]` = delete every saved checkpoint** in `checkpoint.py:266`. `None` means "keep all" (per the docstring at `checkpoint.py:46`). |
+
+Either bug alone would have wiped progress. Combined, the run could not have produced a usable checkpoint regardless of when it crashed.
+
+### 7.3 Why this wasn't caught earlier
+
+1. **The assertion fires only at save time.** Smoke v6 (10 steps, ckpt disabled) and v7 (no ckpt path exercised) never touched it. The smoke harness didn't run with `checkpointing.enabled=true` + `save_period ≤ max_num_steps`.
+2. **NeMo-RL's checkpoint config docs don't mention the prefix contract.** Only the DPO Llama recipe yaml uses `metric_name: null`; we copied from a recipe that used `val:accuracy` and swapped a metric without realizing the colon was load-bearing.
+3. **`keep_top_k: 0` reads like "no limit"** in plain English — but in code it's a literal slice index. The docstring contradicts the typical English reading.
+4. **No pre-flight smoke with `checkpointing.enabled=true`.** The config change was 6 lines; we treated it as low-risk. It wasn't.
+
+### 7.4 The fix (current state of both yamls)
+
+Both [`m5_1_research_paper.yaml`](../../training_m5_1/configs/m5_1_research_paper.yaml) and [`m5_smoke.yaml`](../../training_m5_1/configs/m5_smoke.yaml) now use:
+
+```yaml
+checkpointing:
+  metric_name: null      # bypasses the assertion entirely (DPO Llama recipe pattern)
+  higher_is_better: false
+  keep_top_k: null       # None = keep all (per checkpoint.py:46 docstring)
+  save_period: 50
+  save_optimizer: false  # 1.6 GB/save instead of 8.9 GB; 12 saves fit 120 GB partition
+```
+
+`metric_name: null` is the safe default when validation is disabled — `keep_top_k` ordering is meaningless without a comparable metric anyway, so dropping both is correct.
+
+### 7.5 Verification (don't skip this for any future ckpt config change)
+
+Two verification smokes were run before any further production attempt:
+
+| Smoke | What it verified | Outcome |
+|---|---|---|
+| `smoke-ckpt-verify1` (exp_011, 2026-05-11 21:15) | `metric_name: null` bypasses the assertion at save time | step 2 saved 8.9 GB cleanly (weights + optimizer + tokenizer). **Assertion fixed.** Exposed the next bug: 8.9 GB × 12 saves = 107 GB > 120 GB partition. |
+| `smoke-ckpt-verify2` (exp_012, 2026-05-11 22:05) | `save_optimizer: false` actual on-disk footprint | step 2 saved **3.2 GB** (consolidated fp32 safetensors @ 0.8B params × 4 B + 13 MB tokenizer). **Bigger than the 1.6 GB bf16 estimate** because NeMo-RL's DTensor consolidate path upcasts to fp32. 12 × 3.2 = **38.4 GB**. Current `/workspace` free: 14 GB — **DOES NOT FIT**. See §7.5.1. |
+
+#### 7.5.1 Open issue — production save_period still needs adjustment
+
+`save_optimizer: false` is correct and fixes the 8.9 → 3.2 GB drop, but 12 × 3.2 GB still exceeds the partition. Options for the next production launch:
+
+| Option | Saves | Disk | Sub-ckpt evals lost |
+|---|---:|---:|---|
+| `save_period: 50` (current yaml) | 12 | 38.4 GB | none — but **WON'T FIT** |
+| `save_period: 100` | 6 | 19.2 GB | step 50/150/250/350/450/550 sub-evals (every other table row in [`RESULTS_m5.md §5.1`](RESULTS_m5.md#51-sub-checkpoint-evaluations)) |
+| `save_period: 200` | 3 | 9.6 GB | most sub-evals (keeps step 200/400/600 only) |
+| `keep_top_k: 3` (requires `metric_name: "train:loss_mean"`) | 3 rolling | 9.6 GB | only final + 2 best-by-loss survive |
+| Free up `/workspace` (e.g. evict M3 training dir, 56 GB) | 12 | 38.4 GB on freed disk | none — but requires user authorization to delete M3 artifacts |
+
+**Pending user decision.** Until resolved, do NOT relaunch `M5.1-prod-a2` — it will run for 50 steps and then fail to save due to disk-full, just like a1 fail-shape but at write time instead of assert time.
+
+### 7.6 Rules going forward — DO NOT SKIP
+
+1. **Any `checkpointing:` config change requires a 2-step smoke with `enabled: true` + `save_period: 2` BEFORE production launch.** Cost: ~5 min. Cost of skipping: up to 25 d on the floor.
+2. **Verify both the save event AND the disk footprint match expectations** — the verify1 smoke would have caught the disk bug too if we'd checked `du -sh` on the save.
+3. **Use `metric_name: null` whenever validation is disabled.** Don't invent a training-metric name — NeMo-RL's prefix contract is `val:` or `train:` (colon), not slash. Slash will pass boot and crash at first save.
+4. **Use `keep_top_k: null` (not `0`) to retain all checkpoints.** `0` is the kill switch.
+5. **Cross-check NeMo-RL source for any non-default checkpoint field**: `nemo_rl/algorithms/grpo.py:2040` (assertion), `nemo_rl/utils/checkpoint.py:240,266` (keep_top_k semantics).
+6. **Disk budget = `(save_size) × (max_num_steps / save_period)` + safety**. Plan this before launch.
+
+### 7.7 Cost of the lesson
+
+- 19h35m of A100-80GB compute (≈\$30 @ \$1.50/h).
+- Restart from step 0 = +25 d worst-case (or +5-10 d if the live "shrink-and-improve" dynamic recurs quickly).
+- Documentation cost: this section + rule list above. Cheap relative to a repeat incident.
+
+---
+
+## 8. Decision log
 
 | Date | Decision | Rationale |
 |---|---|---|
@@ -324,11 +417,13 @@ Phase shares are stable (training ~70%, logprobs ~20%, generation ~8%); the abso
 | 2026-05-11 | `train_micro_batch_size: 2 → 1` | v7 step-2 OOM at production seq=8192. NeMo-RL TP=1 path casts full [B,S,V] logits to fp32 before any chunking (model_utils.py:1378). 0.62 GiB short. |
 | 2026-05-11 | Phase-2 iteration plan (v7→v8→…) truncated to bundled O1+R2 commit | Each iteration ~5h at production shape; user-headed-to-bed budget couldn't fit five iterations AND launch full training. O1/R2 are textbook-safe shipped features; no measurement needed. |
 | 2026-05-11 | Validation disabled at runtime | First launch crashed: `val_at_end: true` + `data.validation: null`. No MuSiQue dev parquet (`prep_musique.py` only emits train split). Eval final ckpt out-of-band via evaluation_qwen35. |
-| 2026-05-11 | Checkpoint metric switched to `train/loss/mean` | Was `val:accuracy`; needed a value to compare for `keep_top_k`. With val disabled, switched to a training metric + `keep_top_k=0` (keep all 12 saves). |
+| 2026-05-11 | Checkpoint metric switched to `train/loss/mean` (db0852b) | Was `val:accuracy`; needed a value to compare for `keep_top_k`. With val disabled, switched to a training metric + `keep_top_k=0`. **⚠ THIS DECISION WAS WRONG — it crashed M5.1-prod-a1 at step 50. See §7.** |
+| 2026-05-11 | Checkpoint metric → `null`, `keep_top_k` → `null`, `save_optimizer` → `false` | Postmortem fix (§7) after step-50 crash. `null` metric bypasses the `train:`/`val:` prefix assertion; `null` keep_top_k retains all saves; `save_optimizer=false` keeps per-save to ~1.6 GB so 12 × 50-step saves fit the 120 GB /workspace partition. Verified by two ckpt-verify smokes. |
+| 2026-05-11 | Pre-flight ckpt smoke mandatory for any `checkpointing:` change | Direct rule from §7.6: 2-step `save_period=2` smoke before production. Cost ~5 min vs. up to 25 d if skipped. |
 
 ---
 
-## 8. Pointers
+## 9. Pointers
 
 - M5 milestone narrative: [`../milestone_5/MILESTONE_5.md`](../milestone_5/MILESTONE_5.md)
 - M5 code-setup audit: [`CODE_SETUP_m5.md`](CODE_SETUP_m5.md)

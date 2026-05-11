@@ -110,14 +110,18 @@ loss_fn:
 checkpointing:
   enabled: false
   checkpoint_dir: "results/grpo/m5_smoke"
-  metric_name: "val:accuracy"
-  higher_is_better: true
-  keep_top_k: 3
+  # See m5_1_research_paper.yaml for the postmortem on these two fields:
+  # `train/loss/mean` and `keep_top_k: 0` both crashed production. Use
+  # nulls here so a verification smoke can flip `enabled: true` without
+  # tripping the assertion.
+  metric_name: null
+  higher_is_better: false
+  keep_top_k: null
   save_period: 100
   checkpoint_must_save_by: null
   model_save_format: "safetensors"
   save_consolidated: false
-  save_optimizer: true
+  save_optimizer: false   # match m5_1_research_paper.yaml (disk-budget driven; see prod yaml for rationale)
 
 # =============================================================================
 # Policy (model + training + generation)
