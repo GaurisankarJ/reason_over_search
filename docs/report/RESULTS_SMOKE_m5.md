@@ -3,7 +3,7 @@ title: Results M5 — smoke iteration log (Qwen3.5-0.8B GRPO training, NeMo-RL)
 tags: [report, training, m5, m5.1, qwen3.5, smoke]
 source: internal
 created: 2026-05-09
-updated: 2026-05-10
+updated: 2026-05-11
 ---
 
 # Results M5 smoke — iteration log
@@ -190,6 +190,62 @@ The one lever that would meaningfully change the answer — patching NeMo-RL `mo
 
 ---
 
+## 6. M5.1 production training — LIVE
+
+### 6.1 Launch state (2026-05-11 ~01:05 UTC, pid 178440)
+
+- Config: [m5_1_research_paper.yaml @ db0852b](../../training_m5_1/configs/m5_1_research_paper.yaml) — paper-faithful + M5.2 system gains (O1 fused AdamW, R2 vLLM async_engine) + validation disabled (no MuSiQue dev split; eval out-of-band).
+- Schedule: `max_num_steps=622`, `max_num_epochs=2`. Display shows `Step N/311` (per-epoch); transition to epoch 2 at step 311.
+- Checkpoint: every 50 steps to `results/grpo/m5_prod/seed42/`. First save at step 50. `train/loss/mean` metric, `keep_top_k=0` (keep all).
+- W&B run: `qwen3.5-0.8b-musique-m5_prod-seed42` on project `reason_over_search_m5_1`.
+
+### 6.2 Per-step trajectory (live, refresh as steps land)
+
+| Step | Wall (min) | r_mean (F1) | r=0% | r=1% | tok_mean | trunc% | Loss | KL err |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 57.9 | 0.020 | 95.6% | 1.6% | 7038 | **68.4%** | 0.013 | 0.0006 |
+| 2 | 55.9 | 0.071 | 90.0% | 5.3% | 6738 | 62.2% | 0.025 | 0.0006 |
+| 3 | 55.8 | 0.023 | 95.0% | 1.2% | 6830 | 62.5% | 0.007 | 0.0006 |
+| 4 | 52.9 | 0.073 | 86.6% | 4.1% | 6439 | 52.8% | 0.025 | 0.0006 |
+| 5 | 47.4 | 0.077 | 87.8% | 4.7% | 5911 | 46.2% | -0.019 | 0.0006 |
+| 6 | 38.2 | 0.095 | 80.6% | 5.3% | 5069 | 27.2% | 0.027 | 0.0006 |
+| 7 | 37.3 | 0.060 | 86.6% | 2.2% | 4900 | 25.0% | 0.018 | 0.0006 |
+| 8 | 32.8 | 0.075 | 86.9% | 5.0% | 4478 | **15.9%** | 0.012 | 0.0006 |
+
+### 6.3 Health signals (steps 1-8)
+
+- **Reward**: trending up (0.02 → 0.09 peak; noisy step-to-step at 320 traj/step).
+- **r=0% (no reward)**: dropping 95.6% → 86.9%. Model finding rewards more often.
+- **r=1% (perfect F1)**: climbing 1.6% → 5.0%.
+- **Mean generation length**: 7038 → 4478 tokens. Model learning to **answer faster, stop sooner**.
+- **Truncation rate**: 68.4% → 15.9%. The strongest learning signal — most rollouts now finish before hitting the 8192 cap. Confirms the model is escaping the "search forever" failure mode.
+- **KL error to reference**: stable at 0.0006 (β=0.001 KL penalty doing its job — no policy collapse).
+- **Loss**: oscillating in [-0.019, 0.027]. Normal for clipped-PG with γ=ε=0.2.
+- **Per-step time**: trending faster (57.9 → 32.8 min). vLLM async engine + dropping gen length compound. **Steady-state estimate now ~33-38 min/step.**
+
+### 6.4 ETA — revised
+
+| Estimate vintage | Per-step | Full run (622 steps) |
+|---|---:|---:|
+| Pre-measurement (smoke v6 × scale) | ~29 min | ~12.5 d |
+| v7 baseline measured (steps 1-2) | ~58 min | **~25 d** |
+| **Live (steps 6-8 trend)** | **~33-38 min** | **~14-16 d** |
+
+The improvement vs v7 baseline projection (which used only 2 steady-state samples) comes from: model learning to produce shorter rollouts → vLLM gen phase shrinks; vLLM async batching settling in; possibly some warmup amortization.
+
+### 6.5 Live timing breakdown (step 8)
+
+| Phase | Time | Share |
+|---|---:|---:|
+| `policy_training` | 23.5 min | **71.6%** |
+| `policy_and_reference_logprobs` | 6.7 min | 20.5% |
+| `generation` (vLLM async) | 2.3 min | 6.9% |
+| `prepare_for_generation/total` | 0.1 min | 0.3% |
+
+Training is still the dominant cost; vLLM async + multi-turn + chunked prefill keeps generation under 7%. The deferred `model_utils.py:1378` chunking patch (would unlock micro=2) is still the biggest available speedup if pursued in M5.3.
+
+---
+
 ## 7. Decision log
 
 | Date | Decision | Rationale |
@@ -203,6 +259,10 @@ The one lever that would meaningfully change the answer — patching NeMo-RL `mo
 | 2026-05-10 | num_prompts_per_step = 64 for production | Memory ceiling on 1× A100-80GB at seq=8192; 256 OOMs, 32 over-pessimistic, 128 risky. 64 keeps GRPO baseline well-conditioned. |
 | 2026-05-10 | M5.2 system gains restricted to non-paper levers | User directive: paper-faithful config locked, only orthogonal throughput levers. |
 | 2026-05-10 | `research_v2_a` branch cut from M5.1 paper-faithful baseline (no system gains) | Preserves clean reproducer of paper-faithful state regardless of how M5.2 evolves. |
+| 2026-05-11 | `train_micro_batch_size: 2 → 1` | v7 step-2 OOM at production seq=8192. NeMo-RL TP=1 path casts full [B,S,V] logits to fp32 before any chunking (model_utils.py:1378). 0.62 GiB short. |
+| 2026-05-11 | Phase-2 iteration plan (v7→v8→…) truncated to bundled O1+R2 commit | Each iteration ~5h at production shape; user-headed-to-bed budget couldn't fit five iterations AND launch full training. O1/R2 are textbook-safe shipped features; no measurement needed. |
+| 2026-05-11 | Validation disabled at runtime | First launch crashed: `val_at_end: true` + `data.validation: null`. No MuSiQue dev parquet (`prep_musique.py` only emits train split). Eval final ckpt out-of-band via evaluation_qwen35. |
+| 2026-05-11 | Checkpoint metric switched to `train/loss/mean` | Was `val:accuracy`; needed a value to compare for `keep_top_k`. With val disabled, switched to a training metric + `keep_top_k=0` (keep all 12 saves). |
 
 ---
 

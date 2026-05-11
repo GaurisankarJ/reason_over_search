@@ -3,7 +3,7 @@ title: Code Setup M5 — Qwen3.5-0.8B GRPO training on NeMo-RL (M5 + M5.1)
 tags: [report, training, m5, m5.1, qwen3.5, nemo-rl]
 source: internal
 created: 2026-05-09
-updated: 2026-05-09
+updated: 2026-05-11
 ---
 
 # Code Setup M5: Qwen3.5-0.8B GRPO Training Pipeline (M5 + M5.1)
