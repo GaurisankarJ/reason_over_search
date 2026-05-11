@@ -233,42 +233,54 @@ The one lever that would meaningfully change the answer — patching NeMo-RL `mo
 
 ### 6.2 Per-step trajectory (live, refresh as steps land)
 
-| Step | Wall (min) | r_mean (F1) | r=0% | r=1% | tok_mean | trunc% | Loss | KL err |
-|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| 1 | 57.9 | 0.020 | 95.6% | 1.6% | 7038 | **68.4%** | 0.013 | 0.0006 |
-| 2 | 55.9 | 0.071 | 90.0% | 5.3% | 6738 | 62.2% | 0.025 | 0.0006 |
-| 3 | 55.8 | 0.023 | 95.0% | 1.2% | 6830 | 62.5% | 0.007 | 0.0006 |
-| 4 | 52.9 | 0.073 | 86.6% | 4.1% | 6439 | 52.8% | 0.025 | 0.0006 |
-| 5 | 47.4 | 0.077 | 87.8% | 4.7% | 5911 | 46.2% | -0.019 | 0.0006 |
-| 6 | 38.2 | 0.095 | 80.6% | 5.3% | 5069 | 27.2% | 0.027 | 0.0006 |
-| 7 | 37.3 | 0.060 | 86.6% | 2.2% | 4900 | 25.0% | 0.018 | 0.0006 |
-| 8 | 32.8 | 0.075 | 86.9% | 5.0% | 4478 | **15.9%** | 0.012 | 0.0006 |
-| 9 | 29.1 | 0.123 | 77.2% | 7.8% | — | — | 0.027 | 0.0006 |
-| 10 | 21.3 | 0.083 | 82.2% | 3.1% | — | — | 0.006 | 0.0006 |
+| Step | Wall (min) | r_mean (F1) | r=0% | r=1% | tc_mean | tok_mean | trunc% |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 57.9 | 0.020 | 95.6% | 1.6% | 8.96 | 7038 | **68.4%** |
+| 2 | 55.9 | 0.071 | 90.0% | 5.3% | 8.65 | 6738 | 62.2% |
+| 3 | 55.8 | 0.023 | 95.0% | 1.2% | 8.49 | 6830 | 62.5% |
+| 4 | 52.9 | 0.073 | 86.6% | 4.1% | 8.05 | 6439 | 52.8% |
+| 5 | 47.4 | 0.077 | 87.8% | 4.7% | 7.53 | 5911 | 46.2% |
+| 6 | 38.2 | 0.095 | 80.6% | 5.3% | 6.37 | 5068 | 27.2% |
+| 7 | 37.3 | 0.060 | 86.6% | 2.2% | 6.14 | 4900 | 25.0% |
+| 8 | 32.8 | 0.075 | 86.9% | 5.0% | 5.72 | 4478 | 15.9% |
+| 9 | 29.1 | 0.123 | 77.2% | 7.8% | 5.17 | 4066 | 10.3% |
+| 10 | 21.3 | 0.083 | 82.2% | 3.1% | 4.57 | 3344 | 2.8% |
+| 11 | 19.4 | 0.078 | 83.1% | 3.1% | 4.31 | 3143 | 2.2% |
+| 12 | 15.7 | 0.068 | 85.9% | 4.1% | 3.97 | 2796 | 0.9% |
+| 13 | 14.7 | **0.118** | 79.7% | 7.5% | 3.81 | 2557 | 0.3% |
+| 14 | 12.2 | 0.115 | 79.7% | 6.6% | 3.72 | 2441 | 0.3% |
+| 15 | 11.4 | **0.132** | **73.1%** | 5.0% | 3.60 | 2337 | **0.0%** |
+| 16 | 10.1 | 0.114 | 80.3% | 7.2% | 3.47 | 2183 | 0.0% |
 
-> Snapshot refresh time: 2026-05-11 ~08:30 UTC (step 11 in progress). Rows 1–8 sourced from W&B summary; rows 9–10 from local log + `train_data_step{N}.jsonl` parse — `tok_mean` and `trunc%` columns for these rows pending W&B export (different aggregation than log's `Mean Generation Length`). Log-side gen length on steps 8/9/10: 1200 / 1164 / 947 tokens — clear continued downward trend.
+> Snapshot refresh: 2026-05-11 ~10:30 UTC (step 17 in progress). All columns from `train_data_step{N}.jsonl` parse (consistent aggregation). Truncation rate hit 0% by step 15.
 
-### 6.3 Health signals (steps 1-10)
+### 6.3 Health signals (steps 1-16)
 
-- **Reward**: trending up (0.02 → 0.12 peak at step 9; noisy step-to-step at 320 traj/step). Step-10 dip to 0.083 is within noise band.
-- **r=0% (no reward)**: dropped 95.6% → 77.2% at step 9; oscillating near 80% as rollouts shorten and the long-tail "search forever" failure mode goes away.
-- **r=1% (perfect F1)**: peaked at 7.8% (step 9), tracking with reward mean.
-- **Mean generation length** (log): 7038 (step 1, W&B) → 4478 (step 8, W&B) → 1199 / 1164 / 947 (steps 8/9/10, log). Model is **answering faster, stopping sooner**.
-- **Truncation rate** (W&B, steps 1–8): 68.4% → 15.9%. The strongest learning signal — most rollouts now finish before hitting the 8192 cap. Confirms the model is escaping the "search forever" failure mode.
+- **Reward**: real learning visible. 3-step rolling mean: steps 1-3 = 0.039, steps 4-6 = 0.082, steps 14-16 = **0.120**. Step 15 peaked at **0.132** with the cleanest distribution yet (r=0% = 73.1%, lowest seen).
+- **r=0% (no reward)**: 95.6% → **73.1%** (step 15). 22 percentage points of floor improvement.
+- **r=1% (perfect F1)**: 1.6% → 7.5%/6.6%/5.0%/7.2% (sustained 5-7% — 4× the initial rate).
+- **Truncation rate**: **68.4% → 0%** by step 15. The "search forever" failure mode is gone.
+- **Mean generation length**: 7038 → 2183 tokens (3.2× compression). Combined with reward growth, the model is becoming both more precise and more efficient.
+- **Mean tool calls**: 8.96 → 3.47. Converging on ~3-4 calls per rollout, which matches MuSiQue's 2-4 hop complexity.
 - **KL error to reference**: stable at 0.0006 (β=0.001 KL penalty doing its job — no policy collapse).
 - **Loss**: oscillating in [-0.019, 0.027]. Normal for clipped-PG with γ=ε=0.2.
-- **Per-step time**: continues trending faster (57.9 → 21.3 min over 10 steps; step 10 is the fastest yet). vLLM async engine + dropping gen length compound. **Steady-state estimate now ~21–29 min/step.**
+- **Per-step time**: 57.9 → **10.1 min** over 16 steps. vLLM async engine + dropping gen length compound. **Live trend points at ~10 min/step steady state.**
 
 ### 6.4 ETA — revised
 
 | Estimate vintage | Per-step | Full run (622 steps) |
 |---|---:|---:|
 | Pre-measurement (smoke v6 × scale) | ~29 min | ~12.5 d |
-| v7 baseline measured (steps 1-2) | ~58 min | **~25 d** |
-| Live (steps 6-8 trend, 2026-05-11 02:30 UTC) | ~33-38 min | ~14-16 d |
-| **Live (steps 8-10 trend, 2026-05-11 08:30 UTC)** | **~21-29 min** | **~10-13 d** |
+| v7 baseline measured (steps 1-2) | ~58 min | ~25 d |
+| Live (steps 6-8 trend) | ~33-38 min | ~14-16 d |
+| Live (steps 8-10 trend) | ~21-29 min | ~10-13 d |
+| **Live (steps 14-16 trend)** | **~10-12 min** | **~5-6 d** |
 
-The improvement vs v7 baseline projection (which used only 2 steady-state samples) comes from: model learning to produce shorter rollouts → vLLM gen phase shrinks; vLLM async batching settling in; possibly some warmup amortization. The trend is **still pointing down** at step 10 — if it stabilizes near ~20 min/step, total wall-clock drops to ~9–10 d.
+Per-step has collapsed because gen length collapsed (7038 → 2183 tokens, 3.2×). Once gen-length plateaus near ~600 tokens (model's "minimum viable rollout" for a 2-4 hop question), step time should stabilize. **At ~10 min/step the run finishes in ~4-5 days.**
+
+### 6.4.1 Training dynamic — observed shrink-and-improve pattern
+
+Steps 1-16 show a clean "efficient-agent" regime: gen length shrinking 7038 → 2183 tokens, tool calls 8.96 → 3.47, reward 0.020 → 0.132. Detailed analysis + comparison to the long-CoT regime (DeepSeek-R1 style) lives in [`RESULTS_m5.md` §4.1](RESULTS_m5.md#41-transferable-observation--rl-training-dynamic-regimes) as a transferable observation.
 
 ### 6.5 Live timing breakdown — steps 8 and 10
 
