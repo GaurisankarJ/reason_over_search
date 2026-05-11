@@ -87,124 +87,106 @@ Reward stays low (0/0/0/0/0.051/0/0/0.033/0/0.017) because 10 steps × 4 prompts
 
 ---
 
-## 3. v7 — M5.2 baseline (production-shape, no system gains) — IN PROGRESS
+## 3. v7 — M5.2 baseline (production-shape) — MEASURED 2026-05-11
 
-### 3.1 Config
+### 3.1 First attempt — OOM at step 2 (`train_micro_batch_size=2`)
 
-[`training_m5_1/configs/m5_1_research_paper.yaml`](../../training_m5_1/configs/m5_1_research_paper.yaml), overridden to 10 steps for measurement:
+Same config as smoke v6 except production shape:
+- `num_prompts_per_step=64`, `G=5` → **320 traj/step**
+- `max_total_sequence_length=8192` (doubled from smoke's 4096)
+- `train_micro_batch_size=2`, `vllm_cfg.gpu_memory_utilization=0.5`
 
-- `num_prompts_per_step=64`, `num_generations_per_prompt=5` → **320 traj/step**
-- `max_num_steps=10` (override)
-- `max_total_sequence_length=8192`, `max_new_tokens=1024`
-- `train_micro_batch_size=2`, `logprob_batch_size=2`
-- `vllm_cfg.gpu_memory_utilization=0.5`
-- Everything else: as smoke v6.
+Step 1: **2022.67 s (33.7 min)** clean. Step 2: OOM in training's `prepare_loss_input` → `log_softmax` (tried to allocate 13.73 GiB, 13.11 GiB free; off by 0.62 GiB). Trace: `automodel/train.py:442 → forward_with_post_processing_fn` → `model_utils.py:1378` (`next_token_logits.to(torch.float32)` on full `[B,S,V] = [2,8192,248320]` = 16.3 GiB before chunking).
 
-### 3.2 Result — TODO
+**Root cause**: NeMo-RL v0.6.0 TP=1 logprob path **does not chunk** the fp32 cast of logits. Only the TP>1 path (`ChunkedDistributedLogprobWithSampling`) supports memory-bounded chunking. The `logprob_chunk_size` knob is wired to `LogprobsPostProcessor` (logprob phase) but `LossPostProcessor` (training phase) calls a different path that ignores it.
 
-Filled by the M5.2 baseline smoke. Becomes the per-step anchor for Phase 1 projection.
+**Fix paths**:
+1. (Taken) `train_micro_batch_size=2 → 1`. Halves the cast peak.
+2. Patch `distributed/model_utils.py:1378` to chunk the cast. Unblocks micro=2 → ~halves training wall-clock. **DEFERRED to a follow-up** (would require source mod + re-validation; not within overnight budget).
+
+### 3.2 Second attempt — `train_micro_batch_size=1` (success)
+
+| Step | Total | policy_training | logprobs | generation | other |
+|---:|---:|---:|---:|---:|---:|
+| 1 (warmup) | 3334.25 s (55.6 min) | 2457 s (73.7%) | 703 s (21.1%) | 161 s (4.8%) | ~13 s |
+| 2 (steady) | 3543.32 s (59.1 min) | 2645 s (74.6%) | 754 s (21.3%) | 126 s (3.6%) | ~18 s |
+
+**Steady-state: ~57-60 s/step at micro=1 production shape.**
+
+Phase mix flips vs smoke: **training is now 75% of step** (was 58% at smoke). Generation drops to 4% — vLLM continuous batching scales superbly. The micro=1 → micro=2 unlock would mostly attack the dominant 75% slice.
+
+### 3.3 What we learned (v7)
+
+- The OOM headroom on 1× A100-80GB at seq=8192 is **0.62 GiB** — essentially zero. micro=1 is forced.
+- micro=1 doubles the kernel-launch overhead in training: per-step doesn't double in compute but does balloon ~1.7× vs theoretical micro=2 estimate (29 → 58 min).
+- Generation at production shape is fast (~2 min/step) — vLLM is not the bottleneck. Training is.
+- A NeMo-RL patch (chunked fp32 cast in `model_utils.py:1378`) would meaningfully change M5.1 economics: 25 d → ~13 d. Deferred to a future iteration.
+
+### 3.4 Decisions taken
+
+- Skip v8 (separate-measurement smoke for O1+R2): predicted gain ~1-3% of step, dwarfed by the micro=1 reality. Fold both into the production yaml directly.
+- Skip R4 (gpu_mem_util 0.5 → 0.6): the OOM was already 0.62 GiB into the red; no headroom.
+- Production yaml updated to micro=1 + O1 (`fused: true`) + R2 (`async_engine: true`).
 
 ---
 
-## 4. Phase 1 wall-clock projection — paper-faithful, no system gains
+## 4. Phase 1 wall-clock projection — MEASURED from v7
 
-### 4.1 Methodology
+### 4.1 v7 supersedes pre-measurement estimates
 
-Project from **smoke v6 per-step time × scale factor** while a measured production-shape baseline (v7) is in flight. Two sets of numbers:
+The smoke-v6-linear-scaling estimate (29 min/step, 12.5 d full run) assumed micro=2 would fit at production shape. It doesn't (§3.1). With micro=1 forced, real numbers are ~2× higher.
 
-1. **Naive linear scaling** from smoke v6 — gives an upper bound (overestimates because larger batch improves GPU utilization).
-2. **Measured from v7** — replaces the naive scaling once v7 lands.
+### 4.2 Measured projection — paper-faithful M5.1 full run
 
-### 4.2 Scale factors (smoke v6 → production)
-
-| Phase | Smoke v6 (s) | Linear scale | Production (s) | Adjustment | Realistic (s) |
-|---|---:|---|---:|---|---:|
-| `policy_training` | 54.3 | × 16 (traj) × 2 (seq) = 32 | 1738 | larger batch → ~1.4× GPU util gain | ~1240 |
-| `logprobs` | 17.4 | × 32 | 557 | same | ~400 |
-| `generation` (vLLM) | 9.9 | × 8-16 (vLLM continuous batching sublinear) | 80-160 | mostly KV-bound | ~120 |
-| `prepare` | 6.5 | × ~1.5 | ~10 | fixed costs | ~10 |
-| **Total** | **93.1** | | **~2300** | | **~1770 (~29 min)** |
-
-### 4.3 Projection — paper-faithful M5.1 full run
-
-| Quantity | Naive scaling | Realistic | Source |
+| Quantity | Pre-measurement estimate | **v7-measured reality** | Source |
 |---|---:|---:|---|
-| Per-step wall-clock | ~38 min | **~29 min** | §4.2 |
-| Schedule | 622 steps (2 epochs × 19,938 prompts / 64) | 622 steps | [`m5_1_research_paper.yaml:43-49`](../../training_m5_1/configs/m5_1_research_paper.yaml#L43-L49) |
-| Total wall-clock | ~393 h (16.4 d) | **~300 h (12.5 d)** | per-step × steps |
-| Cost @ \$1.50/h on Vast 1× A100 | ~\$590 | **~\$450** | Vast pricing |
+| Per-step wall-clock | ~29 min (micro=2) | **~58 min (micro=1)** | §3.2 |
+| Schedule | 622 steps (2 epochs × 19,938 prompts / 64) | 622 steps | [m5_1_research_paper.yaml](../../training_m5_1/configs/m5_1_research_paper.yaml) |
+| Total wall-clock | ~300 h (12.5 d) | **~600 h (~25 d)** | per-step × steps |
+| Cost @ \$1.50/h on Vast 1× A100 | ~\$450 | **~\$900** | Vast pricing |
 
-**Caveat: these are pre-measurement estimates.** The v7 baseline smoke replaces these numbers with measured per-step time. The realistic column assumes typical 1.4× GPU-utilization gain from bigger batches, which has not been verified at this scale.
+This is the operational reality. The 12.5 d projection was based on a configuration that doesn't fit; the 25 d is what runs on the GPU we have.
+
+### 4.3 What could change the answer
+
+| Lever | Wall-clock impact | Effort | Status |
+|---|---|---|---|
+| Patch `model_utils.py:1378` to chunk fp32 cast | 25 d → ~13 d (unlocks micro=2) | NeMo-RL source mod + smoke re-validate | **Deferred** — out of overnight budget |
+| 1 epoch instead of 2 (Search-R1 paper, paper-divergent) | 25 d → 12.5 d | yaml flip + decision | Deferred to user |
+| 2× A100 decolocation | 25 d → ~15-18 d | new instance + yaml | Deferred |
+| H100 instead of A100 | 25 d → ~12-15 d | hardware swap | Deferred |
 
 ### 4.4 Sensitivity to `num_prompts_per_step`
 
-At fixed 2 epochs of MuSiQue, total trajectories = 199,380 regardless of batch size. **Wall-clock is fundamentally throughput-limited by 1× A100 token-bandwidth**, so smaller-batch options don't save time — they just trade per-step wall for more steps:
+At fixed 2 epochs of MuSiQue, total trajectories = 199,380 regardless of batch size. **Wall-clock is fundamentally bound by total tokens processed**, so smaller batch sizes don't save time — they just trade per-step wall for more steps:
 
-| `num_prompts_per_step` | Steps | Per-step est. | Total est. |
+| `num_prompts_per_step` | Steps | Per-step est. (micro=1) | Total est. |
 |---:|---:|---:|---:|
-| 32 | 1,246 | ~16 min | ~330 h (13.7 d) |
-| **64 (locked)** | **622** | **~29 min** | **~300 h (12.5 d)** |
-| 128 | 312 | ~52 min | ~270 h (11.3 d) |
+| 32 | 1,246 | ~29 min | ~600 h (25 d) |
+| **64 (locked)** | **622** | **~58 min** | **~600 h (25 d)** |
+| 128 | 312 | ~116 min | ~600 h (25 d) |
 | 256 (paper) | 156 | OOMs (>80 GB) | n/a on 1× A100 |
 
-128 is marginally faster (better GPU util) but doubles the logprob memory peak and risks OOM. **64 is the safer pick** until v7 measures real headroom.
+The micro=1 ceiling dominates. 64 is locked.
 
 ---
 
-## 5. Phase 2 — M5.2 system gains plan
+## 5. Phase 2 — M5.2 system gains (truncated)
 
-Iterate one lever at a time against the v7 baseline. Each iteration = 10-step smoke at production shape; record per-step delta. Levers chosen from [`../research/RUNTIME_EFFICIENCY.md`](../research/RUNTIME_EFFICIENCY.md), filtered to those that **don't change training math or paper-faithful values**:
+Original plan: 5 iterations (v8–v12), one lever per smoke, ~5h each. After v7 measured 58 min/step at micro=1, the iteration budget would consume most of the night without delivering full training. Pivoted to a single bundled decision:
 
-| Iter | Lever | Source | Expected delta | Risk |
-|---|---|---|---:|---|
-| **v7** | (baseline, no gains) | — | — | — |
-| v8 | R1: vLLM `enable_prefix_caching: true` | RUNTIME_EFFICIENCY §R1 | 1.5–2.0× on rollout (~5% step) | very low |
-| v9 | O1: AdamW `fused: true` | RUNTIME_EFFICIENCY §O1 | 1.03–1.08× on step | none |
-| v10 | R2: vLLM `async_engine: true` | RUNTIME_EFFICIENCY §R2 | 1.3–1.5× on rollout | low |
-| v11 | O5: `torch.compile` on policy | RUNTIME_EFFICIENCY §O5 | 1.10–1.25× on train (60% of step!) | 5–10 min compile cost |
-| v12 | R4: bump `gpu_memory_utilization` 0.5 → 0.6 | RUNTIME_EFFICIENCY §R4 | small on rollout; enables R5 | OOM (touchy under colocation) |
-| v13 | Stack winners | — | combined | re-validate non-OOM |
+| Lever | Status | Rationale |
+|---|---|---|
+| **O1 — fused AdamW** | **Applied in prod yaml** | Textbook-safe PyTorch shipped feature. ~1.03-1.08× on step. No iteration needed to validate. |
+| **R2 — vLLM async_engine** | **Applied in prod yaml** | Shipped vLLM feature. ~1.3-1.5× on rollout — but rollout is only 4% of step at v7-measured production shape, so full-step delta is ~1-2%. Still worth taking. |
+| R1 — vLLM prefix_caching | **Already on** | NeMo-RL defaults `enable_prefix_caching=true` for A100 cc≥8 (`vllm_worker.py:549-550`). Already in effect. |
+| R4 — gpu_memory_utilization bump | **Skipped** | v7 OOM was 0.62 GiB into the red at the current 0.5; no headroom to give back to vLLM. |
+| O5 — torch.compile | **Not available** | NeMo-RL DTensor backend doesn't expose the knob (only SGLang config has `enable_torch_compile`). Would require source mod. |
+| Other levers (G1/G2/G3/M1/O3/O4/O6/R3/R7/C1) | **Skipped per user directive** | Either touch training math (paper-faithful locked), are PR-level effort, or require 2× A100. |
 
-**Skipped per user directive 2026-05-10**:
-- G3 (G=5 → 4): touches GRPO group baseline statistics — non-paper-faithful.
-- M1 (max_total_sequence_length 4096 → 3072): increases truncation rate.
-- G1/G2 (drop KL / DAPO dynamic sampling): touches training math.
-- O3 LoRA: capacity ceiling at <2B per Plasticity-vs-Rigidity.
-- R3 async GRPO, R7 EAGLE-3, O2 8-bit AdamW, O4 drop activation ckpt, O6 sequence packing: PR-level effort or blocked.
-- C1 decolocate: requires 2× A100.
+**Net M5.2 gain folded into production yaml: ~1-3% per-step. Saved iteration time: ~10h.**
 
-### 5.1 Phase 2 expected combined speedup
-
-Conservative compound (lever effects compose but on different phases):
-- R1 + O1 + O5 stacked: ~1.15–1.25× on full step (training-side dominates).
-- + R2: ~1.20–1.35× on full step.
-- + R4/R5 if headroom: ~1.25–1.45×.
-
-**Target: cut 12.5 d → 9–10 d on 1× A100.**
-
----
-
-## 6. Phase 2 results — TODO
-
-Filled as the iterations run.
-
-| Iter | Mean s/step (steps 2-10) | Δ vs baseline | Notes |
-|---:|---:|---:|---|
-| v7 (baseline) | TODO | — | |
-| v8 (R1 prefix) | TODO | TODO | |
-| v9 (R1+O1) | TODO | TODO | |
-| v10 (R1+O1+R2) | TODO | TODO | |
-| v11 (R1+O1+R2+O5) | TODO | TODO | |
-| v12 (R1+O1+R2+O5+R4) | TODO | TODO | |
-
-### 6.1 Final projection — paper-faithful + best system gains
-
-| Quantity | Value |
-|---|---:|
-| Per-step wall-clock (M5.2 winner) | TODO |
-| Schedule | 622 steps |
-| Total wall-clock | TODO |
-| Cost @ \$1.50/h | TODO |
+The one lever that would meaningfully change the answer — patching NeMo-RL `model_utils.py:1378` to chunk the pre-fp32-cast logits → unlock micro=2 → halve training-phase wall-clock — is a source modification deferred to a future M5.3.
 
 ---
 
