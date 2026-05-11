@@ -19,7 +19,7 @@
 #SBATCH --job-name=m5_1_grpo_2xa100
 #SBATCH --partition=gpu-a100-80g
 #SBATCH --gres=gpu:a100:2
-#SBATCH --cpus-per-task=24
+#SBATCH --cpus-per-task=48
 #SBATCH --mem=200g
 #SBATCH --time=7-00:00:00
 #SBATCH --output=logs/m5_1_%j_%x.out
@@ -84,7 +84,7 @@ echo "[$(ts)] host=$(hostname) gpus=$(nvidia-smi --query-gpu=name --format=csv,n
 
 # ---- start retriever (background apptainer exec) ---------------------------
 echo "[$(ts)] Starting retriever (port=${RETRIEVER_PORT}, workers=${RETRIEVER_NUM_WORKERS}, index=${RETRIEVER_INDEX})"
-apptainer exec --nv --bind "$BIND" --env "HF_HOME=/workspace/hf_cache" "$SIF_PATH" \
+apptainer exec --nv --bind "$BIND" --env "HF_HOME=/workspace/hf_cache" --env "OMP_NUM_THREADS=4" "$SIF_PATH" \
   bash -lc "
     source /opt/miniforge3/etc/profile.d/conda.sh && conda activate retriever
     cd /workspace/reason_over_search/local_retriever

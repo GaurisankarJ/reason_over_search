@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# M5.1 GRPO training launcher for ALICE (Apptainer SIF + 1x A100-80GB).
+# M5.6 GRPO (EM-only reward variant) training launcher for ALICE (Apptainer SIF + 1x A100-80GB).
 #
 # Dual-use design: the SBATCH headers below are bash comments, so the same
 # file runs in two modes:
@@ -10,22 +10,22 @@
 #
 # Examples:
 #   # Production (1x A100-80GB, 7-day walltime, prod config + seed 42):
-#   sbatch training_m5_1/scripts/sbatch_m5_1.sh
+#   sbatch training_m5_6/scripts/sbatch_m5_6.sh
 #
 #   # Production with a different seed:
-#   sbatch training_m5_1/scripts/sbatch_m5_1.sh --seed 7
+#   sbatch training_m5_6/scripts/sbatch_m5_6.sh --seed 7
 #
 #   # In-srun smoke verification (must already be in an srun shell):
-#   bash training_m5_1/scripts/sbatch_m5_1.sh --mode smoke
+#   bash training_m5_6/scripts/sbatch_m5_6.sh --mode smoke
 #
-# Pre-requisites (idempotent; mirror what training_m5_1/scripts/bootstrap_alice.sh
+# Pre-requisites (idempotent; mirror what training_m5_6/scripts/bootstrap_alice.sh
 # does, with the ALICE-side symlink layout):
 #   1. Apptainer SIF present at $SIF_PATH
 #   2. training/nemo_rl/.venv built (or symlinked from a sibling clone)
 #   3. data/training/musique/train.parquet present (real, not LFS stub;
-#      training_m5_1/scripts/prep_musique.py rebuilds it)
+#      training_m5_6/scripts/prep_musique.py rebuilds it)
 #   4. local_retriever/{indexes,models,corpus}/ populated (symlinks are fine)
-#   5. training_m5_1/.env with WANDB_API_KEY (+ optional ENTITY/PROJECT)
+#   5. training_m5_6/.env with WANDB_API_KEY (+ optional ENTITY/PROJECT)
 #
 # Apptainer / networking notes:
 #   - apptainer exec uses the host's network namespace by default. The
@@ -35,14 +35,14 @@
 #     faiss-cpu) cleanly separated from the trainer's uv venv at
 #     training/nemo_rl/.venv (torch 2.10 + vllm 0.17).
 
-#SBATCH --job-name=m5_1_grpo_1xa100
+#SBATCH --job-name=m5_6_grpo
 #SBATCH --partition=gpu-a100-80g
 #SBATCH --gres=gpu:a100:1
 #SBATCH --cpus-per-task=40
 #SBATCH --mem=160g
 #SBATCH --time=7-00:00:00
-#SBATCH --output=logs/m5_1_%j_%x.out
-#SBATCH --error=logs/m5_1_%j_%x.err
+#SBATCH --output=logs/m5_6_%j_%x.out
+#SBATCH --error=logs/m5_6_%j_%x.err
 
 set -euo pipefail
 
@@ -70,11 +70,15 @@ RETRIEVER_INDEX="${RETRIEVER_INDEX:-./indexes/wiki18_100w_e5_ivf4096_sq8.index}"
 RETRIEVER_NUM_WORKERS="${RETRIEVER_NUM_WORKERS:-8}"
 RETRIEVER_HEALTH_TIMEOUT_S="${RETRIEVER_HEALTH_TIMEOUT_S:-1800}"
 
+# Differentiate checkpoint dir from M5.1 baseline so the reward-ablation
+# triad does not collide on results/grpo/m5_prod/seed42/.
+export CHECKPOINT_DIR_BASE="${CHECKPOINT_DIR_BASE:-results/grpo_m5_6}"
+
 [ -f "$SIF_PATH" ]                                 || { echo "SIF not found: $SIF_PATH" >&2; exit 1; }
 [ -e "local_retriever/${RETRIEVER_INDEX#./}" ] || [ -e "local_retriever/$RETRIEVER_INDEX" ] \
   || { echo "Retriever index missing: local_retriever/${RETRIEVER_INDEX#./}" >&2; exit 1; }
-[ -s "data/training/musique/train.parquet" ]        || { echo "MuSiQue parquet missing/empty (run training_m5_1/scripts/prep_musique.py)" >&2; exit 1; }
-[ -f "training_m5_1/.env" ]                         || { echo "training_m5_1/.env missing (WANDB_API_KEY)" >&2; exit 1; }
+[ -s "data/training/musique/train.parquet" ]        || { echo "MuSiQue parquet missing/empty (run training_m5_6/scripts/prep_musique.py)" >&2; exit 1; }
+[ -f "training_m5_6/.env" ]                         || { echo "training_m5_6/.env missing (WANDB_API_KEY)" >&2; exit 1; }
 [ -x "training/nemo_rl/.venv/bin/python" ]          || { echo "training venv missing at training/nemo_rl/.venv (bootstrap_alice.sh or setup.sh)" >&2; exit 1; }
 
 mkdir -p logs
@@ -86,8 +90,8 @@ ZFS_USER_ROOT="${ZFS_USER_ROOT:-/zfsstore/user/$(id -un)}"
 BIND="${REPO_ROOT}:/workspace/reason_over_search,${HF_HOME_HOST}:/workspace/hf_cache,${UV_CACHE_HOST}:/.uv/cache,${ZFS_USER_ROOT}:${ZFS_USER_ROOT}"
 
 RUN_ID="${SLURM_JOB_ID:-local-$(date -u +%Y%m%dT%H%M%SZ)}"
-RETRIEVER_LOG="logs/m5_1_${RUN_ID}_retriever.log"
-TRAIN_LOG="logs/m5_1_${RUN_ID}_train.log"
+RETRIEVER_LOG="logs/m5_6_${RUN_ID}_retriever.log"
+TRAIN_LOG="logs/m5_6_${RUN_ID}_train.log"
 
 ts() { date -u +%FT%TZ; }
 
@@ -148,10 +152,10 @@ echo
 # ---- launch training (foreground apptainer exec) ---------------------------
 echo "[$(ts)] Launching training (mode=${MODE} seed=${SEED})"
 set +e
-apptainer exec --nv --bind "$BIND" --env "HF_HOME=/workspace/hf_cache" "$SIF_PATH" \
+apptainer exec --nv --bind "$BIND" --env "HF_HOME=/workspace/hf_cache" --env "CHECKPOINT_DIR_BASE=${CHECKPOINT_DIR_BASE}" "$SIF_PATH" \
   bash -lc "
     cd /workspace/reason_over_search
-    bash training_m5_1/scripts/run.sh --mode '${MODE}' --seed '${SEED}'
+    bash training_m5_6/scripts/run.sh --mode '${MODE}' --seed '${SEED}'
   " 2>&1 | tee "$TRAIN_LOG"
 TRAIN_EXIT=${PIPESTATUS[0]}
 set -e
