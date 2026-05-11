@@ -273,11 +273,12 @@ The one lever that would meaningfully change the answer — patching NeMo-RL `mo
 |---|---:|---:|
 | Pre-measurement (smoke v6 × scale) | ~29 min | ~12.5 d |
 | v7 baseline measured (steps 1-2) | ~58 min | ~25 d |
-| Live (steps 6-8 trend) | ~33-38 min | ~14-16 d |
+| Live (steps 6-8 trend, AM) | ~33-38 min | ~14-16 d |
 | Live (steps 8-10 trend) | ~21-29 min | ~10-13 d |
-| **Live (steps 14-16 trend)** | **~10-12 min** | **~5-6 d** |
+| Live (steps 14-16 trend, midday) | ~10-12 min | ~5-6 d |
+| **Live (steps 38-42 trend, PM)** | **~23.7 min** | **~10.2 d (245 h)** |
 
-Per-step has collapsed because gen length collapsed (7038 → 2183 tokens, 3.2×). Once gen-length plateaus near ~600 tokens (model's "minimum viable rollout" for a 2-4 hop question), step time should stabilize. **At ~10 min/step the run finishes in ~4-5 days.**
+**The trough was a U-shape minimum, not a plateau.** Per-step time bottomed at step 17 (~10.4 min) and then climbed back as the model entered an "improve-and-grow" regime — rollout length re-expanded from 636 → ~1000 tokens (steps 17→42), and reward kept climbing in lock-step (0.10 → 0.19). The 23.7 min/step anchor at step 42 is **2.3× higher** than the midday estimate, and the full-run cost on A100 doubles from ~$130 to **~$294**. Hardware-comparison and recommendation **revised** in [`../setup/HARDWARE_COMPARISON.md`](../setup/HARDWARE_COMPARISON.md) (v2 at the new anchor; v1 archived at `../archive/HARDWARE_COMPARISON_v1.md`). Sunk cost on A100 to step 42: ~15.7 h ≈ $19. Switching to B200 or 2× H100 TP=2 now is the new Pareto pick (saves ~$70-120 AND ~8.5 days vs letting A100 finish).
 
 ### 6.4.1 Training dynamic — observed shrink-and-improve pattern
 
