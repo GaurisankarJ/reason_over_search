@@ -1,36 +1,61 @@
-"""M5.5 F1+format reward — ReSearch paper's 3-tier shaping ported to Qwen3.5-0.8B.
+"""M5.5 F1+format reward — ReSearch's 3-tier shaping, Qwen3.5 nested-XML schema.
 
 Reward formula:
 
     reward(rollout) =
-        0.0            if not is_valid_sequence(rollout)            # format broken
-        FORMAT_BONUS   if extract_solution(rollout) is None         # format ok, no <answer>
-        FORMAT_BONUS   if f1(answer, gold) == 0                     # format ok, answer wrong
-        f1             if f1(answer, gold) > 0                      # format ok, partial / full
+        0.0            if not is_valid_format(rollout)               # format broken
+        FORMAT_BONUS   if extract_solution(rollout) is None          # format ok, no <answer>
+        FORMAT_BONUS   if f1(answer, gold) == 0                      # format ok, answer wrong
+        f1             if f1(answer, gold) > 0                       # format ok, partial / full
 
-`FORMAT_BONUS = 0.1` matches the ReSearch paper's choice and the Phase-1 v0
-observation that this floor masks the tool-use signal. The floor is NOT
-additive (F1=0.5 -> reward=0.5, not 0.6); it only applies when F1==0.
+`FORMAT_BONUS = 0.1` matches the ReSearch paper's 3-tier choice and the
+Phase-1 v0 observation that this floor masks the tool-use signal. The floor
+is NOT additive (F1=0.5 -> reward=0.5, not 0.6); it only applies when F1==0.
 
-Format validation reuses `is_valid_sequence` from
-`training/src/rewards/search_r1.py` (the M2 paper-faithful module),
-which is the canonical state-machine format walker for the
-<think>/<search>/<information>/<answer> tag schema. F1 and `extract_solution`
-are re-exported from the M4 eval pipeline so the M5 train-time reward and the
-M4 eval-time scorer share the same code path (same precedent as M5.1).
+The format validator ports ReSearch's `validate_template_format`
+(Agent-RL/ReSearch:src/verl/utils/reward_score/re_call.py:101) to the schema
+M5 actually emits: Qwen3.5 nested-XML tool-calls (M4.1 canonical form) +
+`<answer>...</answer>` instead of `\\boxed{...}`.
 
-API kept stable for `training_m5_5/src/environments/search_r1_env.py`:
-`compute_search_r1_reward(solution_str, gold)`, `em_check`, `extract_solution`
-exported under the same names as M5.1's F1-only reward.
+ReSearch source-of-truth -> M5.5 mapping:
+
+    ReSearch (math, ReCall arm)         | M5.5 (search-tool, Qwen3.5-0.8B)
+    ------------------------------------|-----------------------------------------------
+    rollout ends with EOS               | rollout ends with </answer>  (vLLM stop string)
+    paired <think> + at least one       | same
+    paired <tool_call>                  | same
+    <tool_call> content = JSON          | <tool_call> content = nested XML:
+      with "name" + "arguments" keys    |   <function=NAME>...<parameter=ARG>VAL</parameter>...</function>
+    last response contains \\boxed       | last assistant turn ends with </answer>
+    answer = inside \\boxed{...}         | answer = inside the LAST <answer>...</answer>
+
+The Qwen3.5 nested-XML form is what `tools=[QWEN35_SEARCH_TOOL]` auto-injects
+into the chat template (the format the model was post-trained on). JSON-in-
+<tool_call> would be off-distribution. Cross-reference:
+- evaluation_qwen35/flashrag/search_r1/templates.py:54-61 (auto-inject form)
+- evaluation_qwen35/flashrag/search_r1/parser.py:39 (extractor regex)
+
+The walker treats the joined assistant+tool content as one document (the M5
+env passes `solution_str = "".join(m["content"] for m in log if m["role"] != "user")`,
+so chat-template role markers are stripped before reaching us). That means
+ReSearch's per-turn checks become total-count checks across the joined text;
+the structural invariants we care about (balance, terminal answer, JSON-vs-XML
+validity per tool-call) are preserved.
+
+Answer scaffold: `<answer>...</answer>`, NOT `\\boxed{...}`. This is an
+intentional carry from M4 (CLAUDE.md "two intentional divergences"). Keeping
+it avoids an M3-style train/eval scoring drift with the M4 eval pipeline,
+which extracts `<answer>` content via the same `extract_solution` re-export.
 
 Companion doc: docs/milestone_5/MILESTONE_5_5.md.
 """
 from __future__ import annotations
 
-import importlib.util
+import re
 import sys
 from collections import Counter
 from pathlib import Path
+from typing import Tuple
 
 # Re-use the M4 eval's extract_solution + normalize_answer. Same precedent as
 # M5.1: train and eval code paths must share string normalisation to avoid
@@ -45,27 +70,6 @@ from flashrag.search_r1.reward import (  # noqa: E402
     normalize_answer,
 )
 
-
-def _load_m2_reward_module():
-    """Load training/src/rewards/search_r1.py by absolute path.
-
-    Bypass sys.path / package machinery to avoid a name collision: this very
-    file IS `rewards.search_r1` under PYTHONPATH=training_m5_5/src, so a plain
-    `from rewards.search_r1 import is_valid_sequence` resolves to ourselves
-    (circular import).
-    """
-    m2_path = _REPO_ROOT / "training" / "src" / "rewards" / "search_r1.py"
-    spec = importlib.util.spec_from_file_location("_m2_search_r1", str(m2_path))
-    if spec is None or spec.loader is None:
-        raise ImportError(f"could not load M2 reward module from {m2_path}")
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-
-_m2 = _load_m2_reward_module()
-is_valid_sequence = _m2.is_valid_sequence
-
 # 0.1 partial-credit floor from the ReSearch paper / Phase-1 v0 observation.
 # This is the load-bearing knob the ablation targets.
 FORMAT_BONUS: float = 0.1
@@ -75,10 +79,85 @@ __all__ = [
     "em_check",
     "extract_solution",
     "f1_check",
-    "is_valid_sequence",
+    "is_valid_format",
     "normalize_answer",
     "FORMAT_BONUS",
 ]
+
+
+# Pattern for one Qwen3.5 nested-XML tool-call block content. Inside a
+# <tool_call>...</tool_call> wrap, the model emits:
+#     <function=NAME>
+#     <parameter=ARG_NAME>
+#     ARG_VALUE
+#     </parameter>
+#     ...optional more <parameter=...>...
+#     </function>
+# Optional surrounding whitespace; one or more <parameter=...> required.
+_RE_FUNCTION_BLOCK = re.compile(
+    r"<function=[A-Za-z_][A-Za-z0-9_]*>"        # opening <function=name>
+    r"(?:\s*<parameter=[A-Za-z_][A-Za-z0-9_]*>.*?</parameter>\s*)+"  # >=1 parameters
+    r"</function>",                              # closing </function>
+    re.DOTALL,
+)
+
+_RE_TOOL_CALL_BLOCK = re.compile(r"<tool_call>(.*?)</tool_call>", re.DOTALL)
+_RE_ANSWER_BLOCK = re.compile(r"<answer>(.*?)</answer>", re.DOTALL)
+
+
+def is_valid_format(solution_str: str) -> Tuple[bool, str]:
+    """Return `(is_valid, reason)`. Qwen3.5 nested-XML schema with <answer>.
+
+    Checks (mirrors ReSearch's `validate_template_format`, ported to our schema):
+      1. <think> open-count == close-count AND count >= 1.
+      2. <tool_call> open-count == close-count.
+      3. Each <tool_call>...</tool_call> block content matches the Qwen3.5
+         nested-XML function-call shape (at least one <function=...> with at
+         least one <parameter=...>).
+      4. <answer> open-count == close-count AND >= 1 closed block.
+      5. The rollout, stripped of trailing whitespace, ends with </answer>
+         (terminal answer; corresponds to ReSearch's "last response contains
+         \\boxed" + EOS gate, adapted to our `</answer>`-as-vLLM-stop-string
+         convention).
+    """
+    text = solution_str
+    stripped = text.rstrip()
+
+    # 1. <think> pairing + presence
+    think_open = text.count("<think>")
+    think_close = text.count("</think>")
+    if think_open != think_close:
+        return False, f"think tags unbalanced: open={think_open} close={think_close}"
+    if think_open == 0:
+        return False, "no <think> block present"
+
+    # 2. <tool_call> pairing
+    tc_open = text.count("<tool_call>")
+    tc_close = text.count("</tool_call>")
+    if tc_open != tc_close:
+        return False, f"tool_call tags unbalanced: open={tc_open} close={tc_close}"
+
+    # 3. Each <tool_call> block content matches nested-XML function-call shape
+    for idx, m in enumerate(_RE_TOOL_CALL_BLOCK.finditer(text)):
+        body = m.group(1).strip()
+        if not body:
+            return False, f"tool_call[{idx}] body is empty"
+        if not _RE_FUNCTION_BLOCK.search(body):
+            return False, f"tool_call[{idx}] does not contain a valid <function=NAME>...<parameter=...>...</function> block"
+
+    # 4. <answer> pairing + at least one closed block
+    a_open = text.count("<answer>")
+    a_close = text.count("</answer>")
+    if a_open != a_close:
+        return False, f"answer tags unbalanced: open={a_open} close={a_close}"
+    if a_close == 0:
+        return False, "no closed <answer> block"
+
+    # 5. terminal-answer check: stripped rollout ends with </answer>
+    if not stripped.endswith("</answer>"):
+        return False, "rollout does not terminate on </answer>"
+
+    return True, "ok"
 
 
 def em_check(prediction: str, golden_answers) -> float:
@@ -122,14 +201,8 @@ def f1_check(prediction: str, golden_answers) -> float:
 
 
 def compute_search_r1_reward(solution_str: str, golden_answers) -> dict:
-    """M5.5 F1+format reward. Return shape matches M5.1's contract.
-
-    `extracted_answer`, `f1`, `em` populated for telemetry; `format_valid`
-    populated for the W&B trajectory plot (the headline signal of the
-    ablation is whether format-valid rollouts cluster above the 0.1 floor
-    or stay pinned to it).
-    """
-    is_valid, _ = is_valid_sequence(solution_str)
+    """M5.5 F1+format reward. Return shape matches M5.1's contract."""
+    is_valid, reason = is_valid_format(solution_str)
     if not is_valid:
         return {
             "reward": 0.0,
@@ -137,6 +210,7 @@ def compute_search_r1_reward(solution_str: str, golden_answers) -> dict:
             "f1": 0.0,
             "em": 0.0,
             "format_valid": False,
+            "format_reason": reason,
         }
     answer = extract_solution(solution_str)
     if answer is None:
@@ -146,6 +220,7 @@ def compute_search_r1_reward(solution_str: str, golden_answers) -> dict:
             "f1": 0.0,
             "em": 0.0,
             "format_valid": True,
+            "format_reason": reason,
         }
     f1 = f1_check(answer, golden_answers)
     em = em_check(answer, golden_answers)
@@ -156,4 +231,5 @@ def compute_search_r1_reward(solution_str: str, golden_answers) -> dict:
         "f1": float(f1),
         "em": float(em),
         "format_valid": True,
+        "format_reason": reason,
     }
