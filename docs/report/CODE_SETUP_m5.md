@@ -8,8 +8,8 @@ updated: 2026-05-11
 
 # Code Setup M5: Qwen3.5-0.8B GRPO Training Pipeline (M5 + M5.1)
 
-**Status**: spine only; sections marked **TODO** populate as the work lands.
-**Date**: 2026-05-09 (M5 + M5.1 launch).
+**Status**: §1-§4 populated from the live `configs/m5_1_research_paper.yaml` (M5.1 production launched 2026-05-11 01:05 UTC; exp_010). Remaining TODOs flagged inline.
+**Date**: 2026-05-09 (M5 + M5.1 first launch); 2026-05-11 (spine populated from live yaml).
 **Scope**: documents what changed from the M2 NeMo-RL training scaffold ([`training/`](../../training/), Qwen3.5-2B target, paper-default reward + tag scheme) to the M5 / M5.1 pipeline ([`training_m5_1/`](../../training_m5_1/)) for **Qwen3.5-0.8B** training with the **ReSearch-paper recipe** modulo two intentional divergences (F1-only reward, no `\boxed{}` answer wrapper). Train rollout is byte-aligned to the [M4 eval pipeline](../milestone_4/MILESTONE_4.md) so the trained checkpoint is directly evaluable without re-aligning.
 **Cluster**: 1× A100-80GB on Vast.ai.
 **Source paths**: [`training_m5_1/`](../../training_m5_1/) (M5 + M5.1), [`training_m5_1/configs/m5_smoke.yaml`](../../training_m5_1/configs/m5_smoke.yaml) (M5 smoke), [`training_m5_1/configs/m5_1_research_paper.yaml`](../../training_m5_1/configs/m5_1_research_paper.yaml) (M5.1 production), [`training_m5_1/scripts/`](../../training_m5_1/scripts/), milestone narrative at [`../milestone_5/MILESTONE_5.md`](../milestone_5/MILESTONE_5.md).
@@ -105,24 +105,45 @@ training_m5_1/
 | `registry.py` | `from training.src...` imports | `from training_m5_1.src...` (14 import sites renamed across src/, tests/, scripts/) | **done** | Package isolation between sibling experiments |
 | **Tests** | M2 byte-parity assertions | rewritten `test_reward_parity.py` with re-export identity checks + F1 semantics + 5 hand-picked rollouts (milestone doc M5.1 step 6 requirement) | **done** (23 pure-Python tests pass) | M5.1 invariants |
 
-### 3.3 Smoke config (`configs/m5_smoke.yaml`) — TODO
+### 3.3 Smoke config (`configs/m5_smoke.yaml`) vs production (`configs/m5_1_research_paper.yaml`)
 
-Smoke goal: validate the pipeline end-to-end and produce a per-step time number on 1× A100-80GB.
+Smoke validates the pipeline end-to-end and produces a per-step time number on 1× A100-80GB. Production is paper-faithful + M5.2 system gains.
 
-| Knob | Smoke value | Production (M5.1) | Notes |
+| Knob | Smoke (v6, locked) | Production (M5.1, live) | Notes |
 |---|---|---|---|
-| `policy.model_name` | `Qwen/Qwen3.5-0.8B` | same | hybrid; base variant is a separate sub-run |
-| `policy.train_global_batch_size` | TODO | TODO | M5.1 paper-aligned |
-| `policy.train_micro_batch_size` | TODO (likely 4 — bigger than M2's 2 since 0.8B is smaller) | TODO | OOM check at smoke |
-| `grpo.num_prompts_per_step` | 20 (smoke) | TODO M5.1 | paper: 512 prompts × 5 generations = 2560 traj/step; ours target ≤ 510 / step (per `BATCH_MATH.md`) |
-| `grpo.num_generations_per_prompt` | 5 | 5 | paper-aligned |
-| `grpo.max_num_steps` | 50 (smoke) | TODO M5.1 | from paper schedule |
-| `policy.generation.vllm_cfg.max_model_len` | 4096 | TODO | smoke matches M4 |
-| `policy.generation.max_response_length` | 4096 | TODO M5.1 | paper: 500 |
-| `data.dataset_name` | `musique` | `musique` | single-dataset training |
-| `data.train_dataset.subsample` | 200 (smoke) | full | smoke is fast |
+| `policy.model_name` | `Qwen/Qwen3.5-0.8B` | same | hybrid; base variant would be a separate sub-run |
+| `policy.train_global_batch_size` | 20 | **320** | smoke 4×5; prod 64×5 |
+| `policy.train_micro_batch_size` | 2 (v6 lock; v4 OOM'd at 4) | **1** (v7 OOM at 2; seq=8192 doubles log_softmax peak) | NeMo-RL `model_utils.py:1378` doesn't chunk fp32 cast on TP=1 path → deferred patch (M5.3) would unlock micro=2 |
+| `policy.max_total_sequence_length` | 4096 | **8192** | paper budget; doubles training memory peak vs smoke |
+| `policy.generation.max_new_tokens` | 1024 | 1024 | Group-C lock 2026-05-10 (paper budget is 8192 total ≈ 5 turns × 1024) |
+| `policy.generation.vllm_cfg.gpu_memory_utilization` | 0.5 | 0.5 | v5 OOM forced 0.7 → 0.5; v7 stayed 0.5 (no headroom to give back) |
+| `policy.generation.vllm_cfg.async_engine` | false | **true** | M5.2 R2 lever (vLLM continuous batching); ~1.3–1.5× on rollout phase |
+| `policy.optimizer.kwargs.fused` | false | **true** | M5.2 O1 lever (fused AdamW); ~1.03–1.08× on full step |
+| `policy.dynamic_batching.enabled` | true | true | Qwen3.5 hybrid arch can't use sequence_packing |
+| `policy.sequence_packing.enabled` | false | false | crashes GatedDeltaNet kernel (training/fix/CHANGES.md §5) |
+| `policy.dtensor_cfg._v2` | true | true | v1 hard-codes `model.model.layers`; Qwen3.5 hides them behind nemo_automodel |
+| `grpo.num_prompts_per_step` | 4 | **64** | paper bs=256; ours = 256/4 chunked smaller (epoch-count preserved) |
+| `grpo.num_generations_per_prompt` | 5 | 5 | paper G=5 |
+| `grpo.max_num_steps` | 10 (Group-C lock) | **622** | prod: 2 epochs × ⌊19,938 / 64⌋ = 2 × 311 |
+| `grpo.use_leave_one_out_baseline` | false (Group-C) | false (Group-C) | paper uses group-mean, not LOO |
+| `grpo.max_rollout_turns` | 10 | 10 | bounded by 8192-token budget anyway |
+| `loss_fn.reference_policy_kl_penalty` | 0.001 | **0.001** | verl `kl_loss_coef` (paper) |
+| `loss_fn.reference_policy_kl_type` | k3 | **k3** | NeMo-RL `k3` ≡ verl `low_var_kl` |
+| `loss_fn.ratio_clip_{min,max}` | 0.2 / 0.2 | **0.2 / 0.2** | PPO clip ε=0.2 (paper) |
+| `policy.optimizer.kwargs.lr` | 1.0e-6 | **1.0e-6** | verl `lr=1e-6` (paper) |
+| `policy.optimizer.kwargs.weight_decay` | 0.01 | **0.01** | paper |
+| LR schedule | constant (Group-C) | **constant** | paper `lr_warmup_steps_ratio=0.0` |
+| `policy.generation.temperature` / `top_p` | 1.0 / 1.0 | **1.0 / 1.0** | verl rollout (paper) |
+| `data.dataset_name` | `search_r1` (MuSiQue parquet) | same | single-dataset |
+| `data.train.data_path` | `data/training/musique/train.parquet` | same | MuSiQue train, 19,938 rows |
+| `env.search_r1.top_n` | 5 | 5 | paper `retrieval_topk=5` |
+| `env.search_r1.max_obs_chars` | 1024 (Group-C) | 1024 | paper has no cap; we keep safety net |
+| `checkpointing.enabled` | false (smoke) | true; `save_period: 50`, `keep_top_k: 0` | first ckpt at step 50 |
+| `checkpointing.metric_name` | n/a | `train/loss/mean` | val disabled → train metric for `keep_top_k` |
+| `grpo.val_period` / `val_at_*` | 0 / false | 0 / false | val disabled (MuSiQue dev parquet not generated; eval out-of-band via `evaluation_qwen35`) |
 | `logger.wandb.project` | `reason_over_search_m5_1_smoke` | `reason_over_search_m5_1` | per-experiment isolation |
-| `validation.enabled` | False (smoke) | True (M5.1, `val_period: 50` per [`docs/training/VALIDATION.md`](../training/VALIDATION.md)) | wire validation before M5.1 launches |
+
+The smoke result anchor (v6, 10 steps, mean 93.1 s/step ex-warmup) and the v7 production OOM postmortem are in [`RESULTS_SMOKE_m5.md` §2-§3](RESULTS_SMOKE_m5.md#2-v6--m5-smoke-pipeline-validation-smoke-shape--success).
 
 ### 3.4 Verification (M5)
 
@@ -164,35 +185,47 @@ Two byte-level checks before declaring M5 smoke green:
 
 ---
 
-## 4. M5.1 Critical Changes (ReSearch-paper-aligned config) — TODO
+## 4. M5.1 Critical Changes (ReSearch-paper-aligned config) — LIVE
 
-This section populates from the paper-vs-ours mapping work; spine here.
+`configs/m5_1_research_paper.yaml` is **committed and running** (exp_010, launched 2026-05-11 01:05 UTC; live trajectory in [`RESULTS_SMOKE_m5.md` §6](RESULTS_SMOKE_m5.md#6-m51-production-training--live)). Spine populated from the live config + the paper-vs-ours audit.
 
-### 4.1 Paper-vs-ours mapping (PAPER_VS_OURS_M5.md) — TODO
+### 4.1 Paper-vs-ours mapping (PAPER_VS_OURS_M5.md)
 
-Companion file at [`../milestone_5/PAPER_VS_OURS_M5.md`](../milestone_5/PAPER_VS_OURS_M5.md) (to be written): clause-by-clause mapping of every concrete number in the [ReSearch paper](https://arxiv.org/abs/2503.19470) and every concrete config value in [`Agent-RL/ReSearch`](https://github.com/Agent-RL/ReSearch) to our `configs/m5_1_research_paper.yaml`. Two divergences flagged in red:
+Companion at [`../milestone_5/PAPER_VS_OURS_M5.md`](../milestone_5/PAPER_VS_OURS_M5.md): clause-by-clause mapping of every concrete number in the [ReSearch paper](https://arxiv.org/abs/2503.19470) and every concrete config value in [`Agent-RL/ReSearch`](https://github.com/Agent-RL/ReSearch) to our `configs/m5_1_research_paper.yaml`. Group-A/B/C decisions catalogued there; Group-C decisions also surfaced inline in the smoke yaml. **Divergences kept** (flagged in red in PAPER_VS_OURS_M5):
 
-- **Reward**: paper = format reward + EM partial credit; ours = F1-only on `<answer>…</answer>` content.
-- **Answer wrap**: paper = `<answer>The final answer is \[ \boxed{X} \]</answer>`; ours = `<answer>X</answer>`.
+- **Reward**: paper = F1 + 0.1 floor for non-empty + format gate; ours = F1-only on `<answer>…</answer>` content (matches M4 eval, simpler reward surface).
+- **Answer wrap**: paper = `<answer>The final answer is \[ \boxed{X} \]</answer>`; ours = `<answer>X</answer>` (M4 already drops `\boxed{}`; eval scorer accepts both).
+- **`num_prompts_per_step`**: paper 256; ours 64 (1× A100-80GB OOMs at 256). Same per-epoch trajectory count; just more optimizer steps with smaller advantage chunks.
+- **`train_micro_batch_size`**: paper doesn't specify; ours 1 (v7 OOM at 2 — NeMo-RL TP=1 fp32-cast path; deferred patch in M5.3 would unlock 2).
+- **`max_obs_chars`**: paper no cap; ours 1024 char safety net (~256 tokens) for retrieval-blowup protection.
 
-### 4.2 Hyperparameters — TODO (after paper read)
+### 4.2 Hyperparameters (live `m5_1_research_paper.yaml`)
 
-| Knob | Paper | Ours (`m5_1_research_paper.yaml`) | Note |
+| Knob | Paper / verl | Ours (yaml) | Match? |
 |---|---|---|---|
-| Algorithm | GRPO | GRPO | identical |
-| KL type | k1 / k2 / k3 — TBD from paper | k3 (NeMo-RL default; matches verl `low_var_kl`) | confirm paper choice |
-| KL coefficient | TBD | TBD | confirm paper |
-| Group size G | TBD (likely 5) | TBD | from `Agent-RL/ReSearch` config |
-| Prompts per step | TBD | TBD (≤ 510 / step on 1× A100; see [`docs/edu/BATCH_MATH.md`](../edu/BATCH_MATH.md)) | rollout-shape decision |
-| Mini-batch / micro-batch | TBD | TBD | OOM-check at smoke |
-| Max response length | TBD (paper: 500 in main script) | TBD | M4 eval has 4096 cap; mismatch is acceptable on the rollout side if response truncation is rare |
-| Learning rate | TBD | TBD | from paper |
-| Warmup | TBD | TBD | from paper |
-| Schedule | TBD steps | TBD | paper-faithful |
+| Algorithm | GRPO | GRPO | ✓ |
+| KL type | verl `low_var_kl` | `k3` (NeMo-RL equivalent) | ✓ |
+| KL coefficient | `kl_loss_coef = 0.001` | `reference_policy_kl_penalty: 0.001` | ✓ |
+| Group size G | `n_agent = 5` | `num_generations_per_prompt: 5` | ✓ |
+| Prompts per step | 256 (paper bs) | **64** | ⚠ hardware divergence |
+| Train micro-batch | unspecified | **1** | ⚠ v7 OOM at 2 |
+| Max response length / total seq | `max_prompt_length = 8192` | `max_total_sequence_length: 8192` | ✓ |
+| Generation max-new-tokens | (per-turn implicit; paper budget 8192 total) | `max_new_tokens: 1024` × ~5 turns | ✓ |
+| PPO clip ε | 0.2 | `ratio_clip_{min,max}: 0.2` | ✓ |
+| Learning rate | `lr = 1e-6` | `lr: 1.0e-6` | ✓ |
+| Weight decay | (verl default 0.01) | `weight_decay: 0.01` | ✓ |
+| Optimizer | AdamW | `torch.optim.AdamW` (`fused: true` — M5.2 O1) | ✓ |
+| Warmup | `lr_warmup_steps_ratio = 0.0` | LinearLR start=end=1.0 (no-op) + ConstantLR | ✓ |
+| Schedule | ~156 steps at bs=256 | **622 steps at bs=64** | ✓ (same trajectory count) |
+| Epochs | 2 | `max_num_epochs: 2` | ✓ |
+| Generation temperature / top_p | 1.0 / 1.0 | `temperature: 1.0`, `top_p: 1.0` | ✓ |
+| Retrieval `top_n` | 5 | 5 | ✓ |
+| Dataset | NQ + HotpotQA (paper mix) | **MuSiQue only** | M5.1 dataset divergence (hardest single benchmark) |
+| Reward | F1 + format + EM partial | **F1 only on `<answer>...</answer>`** | M5.1 divergence #1 |
 
-### 4.3 Reward implementation — TODO
+### 4.3 Reward implementation
 
-`training_m5_1/src/reward.py` exposes `compute_reward(rollout: dict) -> float`. Sketch:
+`training_m5_1/src/rewards/search_r1.py` (overlay; replaces `training/src/reward.py`). Re-exports `normalize_answer` + `extract_solution` from `evaluation_qwen35.flashrag.search_r1.{answer_utils,reward}` so train and eval use the **same scorer code path** (M3-style train/eval drift impossible by construction):
 
 ```python
 def compute_reward(rollout):
@@ -202,13 +235,16 @@ def compute_reward(rollout):
     return f1_score(pred, rollout["gold_answer"])   # token-level F1, lowercase + strip + punct-norm
 ```
 
-`extract_solution` and `f1_score` re-export from `evaluation_qwen35/flashrag/search_r1/answer_utils.py` so train and eval use the **same scorer code path**. Sanity-check on 5 hand-picked rollouts (§3.4 above).
+Tests live in `training_m5_1/tests/test_reward_parity.py` (re-export identity checks + F1 semantics + 5 hand-picked rollouts: right-exact / right-extra-words / wrong / empty / format-broken).
 
-### 4.4 Verification (M5.1) — TODO
+### 4.4 Verification (M5.1)
 
-Repeat §3.4 after the M5.1 config lands. Add:
+Two byte-level checks (both deliverables of the M5.1 launch); the first is automated in the test suite, the second is the 5-rollout sanity check.
 
-3. **Wall-clock projection**: per-step time × paper schedule → total hours. Compare to [`docs/TODO_2026-05-04.md`](../todo/TODO_2026-05-04.md) ≤10 h target. If over, identify the cheapest knob to cut (typically `max_response_length` or `num_prompts_per_step`) and re-smoke.
+1. **Rendered prompt parity**: `training_m5_1/src/processors/search_r1.py`'s first-turn output must equal `evaluation_qwen35.flashrag.pipeline.active_pipeline` qwen35-branch first-turn prompt byte-for-byte. `diff -u` must be empty.
+2. **Reward path on 5 hand-picked rollouts** — see §3.4 categories.
+
+**Wall-clock projection (revised live)**: ~10.6 min/step steady-state × 622 steps = **~4.5 d on 1× A100-80GB** (~$130 on Vast). Per-GPU alternative estimates in [`../setup/HARDWARE_COMPARISON.md` §3](../setup/HARDWARE_COMPARISON.md#3-m51-wall-clock--cost-estimates-by-hardware): 1× H100 SXM ~2 d / $90, 1× B200 ~14–16 h / $90. Per-step trajectory (collapsed 58 → 10 min over steps 1–17) in [`RESULTS_SMOKE_m5.md` §6.2](RESULTS_SMOKE_m5.md#62-per-step-trajectory-live-refresh-as-steps-land).
 
 ---
 

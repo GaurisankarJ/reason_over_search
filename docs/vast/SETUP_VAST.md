@@ -359,17 +359,41 @@ Then destroy from the Vast UI; persistent-volume billing stops on destroy.
 
 ## Time + cost expectations (level-set the user)
 
+### Bootstrap + smoke (any milestone)
+
 | Phase | Wall-clock | Cost @ $1.20/h on 1× A100 |
 |---|---|---|
 | Bootstrap, fresh box, HF fast path | ~25 min | ~$0.50 |
 | Bootstrap, fresh box, compile fallback | ~50 min | ~$1.00 |
 | Bootstrap, re-used box | <1 min | ~$0.02 |
 | Smoke combo (2 steps × 4 prompts) | ~5 min | ~$0.10 |
-| Full Phase-2 GRPO run (1005 steps × 510 trajectories) on 1× A100 | ~11 to 17 d | ~$300 to $490 |
-| Same on 1× H100 80 GB SXM | ~5 to 8.5 d | ~$240 to $410 |
-| Same on 1× H200 141 GB SXM | ~4 to 7 d | ~$270 to $470 |
 
-Recommended hardware for full training runs: **1× H100 80 GB SXM** for best $/run. See [`docs/training/SMOKE_RESULTS_2026-05-06.md` "Full-training wall-clock + cost"](../training/SMOKE_RESULTS_2026-05-06.md#full-training-wall-clock--cost-phase-2-real-config).
+### M5.1 production training (current live experiment)
+
+Qwen3.5-0.8B GRPO on MuSiQue, ReSearch paper recipe, 622 steps × 320 trajectories. Anchored on the live run at step 17 (`exp_010`, see [`../report/RESULTS_SMOKE_m5.md` §6](../report/RESULTS_SMOKE_m5.md#6-m51-production-training--live)).
+
+| Hardware | Wall-clock | Cost |
+|---|---|---|
+| **1× A100-80GB (live)** | **~4.5 d (~109 h)** | **~$130** (Vast @ $1.20/h) |
+| 1× H100-80GB SXM | ~2 d (~48 h) | ~$90 (Vast @ $1.87/h) |
+| 1× H200-141GB | ~1.2 d (~29 h) | ~$104 (RunPod spot @ $3.59/h) |
+| 2× H100-80GB SXM (TP=2) | ~22 h | ~$82 (Vast 2× $1.87/h) |
+| **1× B200-192GB** | **~14–16 h** | **~$90** (RunPod spot @ $5.98/h) |
+
+Full per-config table + the choice criteria (Pareto pick: 1× H100 SXM on Vast at ~2 d/$90; fastest single-GPU: 1× B200 on RunPod) live in [`../setup/HARDWARE_COMPARISON.md` §3-§6](../setup/HARDWARE_COMPARISON.md#3-m51-wall-clock--cost-estimates-by-hardware). The M5.1-specific per-step trajectory (which dropped from 58 min/step at step 1 to 10 min/step at step 17 as the model learned shorter rollouts) is in [`../report/RESULTS_SMOKE_m5.md` §6.2](../report/RESULTS_SMOKE_m5.md#62-per-step-trajectory-live-refresh-as-steps-land).
+
+### M2 Phase-2 reference (historical)
+
+The earlier M2 sketch (Qwen3.5-2B, NQ+HotpotQA, 1005 steps × 510 trajectories) projected **~11–17 d** on 1× A100 / **~5–8.5 d** on H100. Those numbers are M2-shape, not M5.1, and predate the per-step time collapse observed in M5.1. Source: [`docs/training/SMOKE_RESULTS_2026-05-06.md`](../training/SMOKE_RESULTS_2026-05-06.md). For any new M5-derived experiment, scale from the [HARDWARE_COMPARISON anchor](../setup/HARDWARE_COMPARISON.md#1-live-anchor--what-were-measuring-against), not from the M2 numbers.
+
+### Porting this runbook to a non-Vast host (e.g. RunPod)
+
+This doc hardcodes `/workspace` as the persistent-volume mount (line 108: `cd /workspace`; bootstrap.sh's `HF_HOME=/workspace/hf_cache` and disk-check paths). RunPod's default container mount is also `/workspace`, so the doc works as-is on RunPod with two caveats:
+
+1. **Image tag stays the same** (`pantomiman/reason-over-search-v1:v2`) but **Blackwell sm_100 (B200) is untested** — the v2 worker venv was built against Hopper-era CUDA. Run a v6-equivalent 10-step smoke ([`docs/report/RESULTS_SMOKE_m5.md` §2](../report/RESULTS_SMOKE_m5.md#2-v6--m5-smoke-pipeline-validation-smoke-shape--success)) before committing a multi-day run on a B200.
+2. **On a host with a different persistent mount path** (not `/workspace`), override before bootstrap: `export HF_HOME=<your-mount>/hf_cache && export TMPDIR=<your-mount>/tmp_build` then `cd <your-mount>/reason_over_search && bash training/scripts/bootstrap.sh`. Verify the disk-free check in `bootstrap.sh:50` against the actual mount.
+
+Generic (non-Vast) bootstrap delegates to this doc plus the wrapper in [`../setup/BOOTSTRAP_NEW_INSTANCE.md`](../setup/BOOTSTRAP_NEW_INSTANCE.md).
 
 ---
 

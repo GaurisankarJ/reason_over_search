@@ -63,15 +63,19 @@ cp training_m5_1/.env.example training_m5_1/.env
 bash scripts/smoke.sh
 bash scripts/smoke.sh --seed 7
 
-# Production run (M5.1 paper-faithful recipe). Requires
-# configs/m5_1_research_paper.yaml (M5.1 step 6 deliverable, TBD).
+# Production run (M5.1 paper-faithful recipe).
+# configs/m5_1_research_paper.yaml is committed (paper-faithful + M5.2
+# system gains O1 fused AdamW + R2 vLLM async_engine). Schedule: 622 steps
+# × 320 trajectories. Live anchor: ~10-11 min/step steady-state on 1x A100-80GB
+# (= ~4.5 d, ~$130 on Vast). See docs/report/RESULTS_SMOKE_m5.md §6 for the
+# live trajectory and docs/setup/HARDWARE_COMPARISON.md for per-GPU estimates.
 bash scripts/run.sh --mode prod --seed 42
 
 # Hydra overrides:
 bash scripts/smoke.sh -- policy.train_micro_batch_size=8 grpo.max_num_steps=20
 ```
 
-W&B run name: `qwen3.5-0.8b-musique-m5_<mode>-seed<N>-<TS>`. Checkpoints land under `${CHECKPOINT_DIR_BASE:-results/grpo}/m5_<mode>/seed<N>/` (not timestamped, so resumes work).
+W&B run name: `qwen3.5-0.8b-musique-m5_<mode>-seed<N>-<TS>`. Checkpoints land under `${CHECKPOINT_DIR_BASE:-results/grpo}/m5_<mode>/seed<N>/` every 50 steps (not timestamped, so resumes work).
 
 ## Folder layout
 
@@ -93,7 +97,7 @@ training_m5_1/
 │   └── registry.py                 # `training_m5_1.src.*` import paths
 ├── configs/
 │   ├── m5_smoke.yaml               # M5 pipeline-validation smoke (20 traj/step × 50 steps)
-│   ├── m5_1_research_paper.yaml    # TODO (M5.1 step 6)
+│   ├── m5_1_research_paper.yaml    # M5.1 paper-faithful + M5.2 gains (LIVE; 622 steps, 320 traj/step)
 │   └── _archive_m2/                # M2 2B configs
 ├── scripts/
 │   ├── run.sh                      # --mode smoke|prod --seed N

@@ -88,7 +88,7 @@ Paper targets we compare against (Qwen2.5-3B EM, Search-R1 v5 Table 3):
 - [`scripts/`](../scripts/) — `run_one.sh`, `manage_sglang.sh`, `subsample.sh`, `aggregate.py`, the three sweep scripts.
 - [`docker/reason-over-search-v1/`](../docker/) — image used on Vast.ai (`pantomiman/reason-over-search-v1`).
 - [`docs/VAST_AI_PLAN_A.md`](../docs/setup/VAST_AI_PLAN_A.md) — Vast.ai GPU cost/throughput analysis for finishing Plan A in ≤24 h. Three concrete fleet configs.
-- [`docs/HARDWARE.md`](../docs/setup/HARDWARE.md) — this box's specs + accelerator comparison.
+- [`docs/setup/HARDWARE_COMPARISON.md`](../docs/setup/HARDWARE_COMPARISON.md) — current accelerator + provider comparison (anchored on live M5.1 step-15-17 trend; reads as the "should I port to a faster box" decision doc). [`docs/setup/HARDWARE_4090.md`](../docs/setup/HARDWARE_4090.md) is the historical 4090 dev-box snapshot. v0 of HARDWARE_COMPARISON (step-8 anchor, superseded) at [`docs/archive/HARDWARE_COMPARISON_v0.md`](../docs/archive/HARDWARE_COMPARISON_v0.md).
 - [`data/`](../data/) — full eval datasets (jsonl, per benchmark).
 - [`data_subsample/`](../data_subsample/) — deterministic 1k subsamples for the fast Plan B sweep.
 - [`docs/archive/DISCARDED_ABLATIONS.md`](../docs/archive/DISCARDED_ABLATIONS.md) — record of the autoresearch loop's 10 discarded ablations on `experiment_ros/<tag>` (the loop's working files `program.md` and `results.tsv` are no longer tracked).
