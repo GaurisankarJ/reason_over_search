@@ -47,7 +47,7 @@ SIF_PATH="${SIF_PATH:-/zfsstore/user/s4374886/apptainer/reason-over-search-v1.si
 HF_HOME_HOST="${HF_HOME_HOST:-/zfsstore/user/s4374886/hf_cache}"
 UV_CACHE_HOST="${UV_CACHE_HOST:-/zfsstore/user/s4374886/uv_cache}"
 RETRIEVER_PORT="${RETRIEVER_PORT:-3005}"
-RETRIEVER_INDEX="${RETRIEVER_INDEX:-local_retriever/indexes/wiki18_100w_e5_ivf4096_sq8.index}"
+RETRIEVER_INDEX="${RETRIEVER_INDEX:-./indexes/wiki18_100w_e5_ivf4096_sq8.index}"
 RETRIEVER_NUM_WORKERS="${RETRIEVER_NUM_WORKERS:-8}"
 RETRIEVER_HEALTH_TIMEOUT_S="${RETRIEVER_HEALTH_TIMEOUT_S:-1800}"
 
@@ -55,7 +55,8 @@ RETRIEVER_HEALTH_TIMEOUT_S="${RETRIEVER_HEALTH_TIMEOUT_S:-1800}"
 export CHECKPOINT_DIR_BASE="${CHECKPOINT_DIR_BASE:-results/grpo_2xa100}"
 
 [ -f "$SIF_PATH" ]                                 || { echo "SIF not found: $SIF_PATH" >&2; exit 1; }
-[ -e "$RETRIEVER_INDEX" ]                           || { echo "Retriever index missing: $RETRIEVER_INDEX" >&2; exit 1; }
+[ -e "local_retriever/${RETRIEVER_INDEX#./}" ] || [ -e "local_retriever/$RETRIEVER_INDEX" ] \
+  || { echo "Retriever index missing: local_retriever/${RETRIEVER_INDEX#./}" >&2; exit 1; }
 [ -s "data/training/musique/train.parquet" ]        || { echo "MuSiQue parquet missing/empty (run training_m5_1/scripts/prep_musique.py)" >&2; exit 1; }
 [ -f "training_m5_1/.env" ]                         || { echo "training_m5_1/.env missing (WANDB_API_KEY)" >&2; exit 1; }
 [ -x "training/nemo_rl/.venv/bin/python" ]          || { echo "training venv missing at training/nemo_rl/.venv" >&2; exit 1; }
@@ -82,9 +83,9 @@ echo "[$(ts)] Starting retriever (port=${RETRIEVER_PORT}, workers=${RETRIEVER_NU
 apptainer exec --nv --bind "$BIND" --env "HF_HOME=/workspace/hf_cache" "$SIF_PATH" \
   bash -lc "
     source /opt/miniforge3/etc/profile.d/conda.sh && conda activate retriever
-    cd /workspace/reason_over_search
-    exec python -u local_retriever/retriever_serving.py \
-      --config local_retriever/retriever_config.yaml \
+    cd /workspace/reason_over_search/local_retriever
+    exec python -u retriever_serving.py \
+      --config retriever_config.yaml \
       --num_retriever ${RETRIEVER_NUM_WORKERS} \
       --index ${RETRIEVER_INDEX} \
       --port ${RETRIEVER_PORT}
