@@ -44,10 +44,11 @@ while [[ $# -gt 0 ]]; do
 done
 
 case "$MODE" in
-    smoke) CONFIG="training_m5_1/configs/m5_smoke.yaml" ;;
-    prod)  CONFIG="training_m5_1/configs/m5_1_research_paper.yaml" ;;
-    "")    echo "error: --mode is required (smoke|prod)" >&2; exit 2 ;;
-    *)     echo "error: --mode must be smoke or prod (got: $MODE)" >&2; exit 2 ;;
+    smoke)        CONFIG="training_m5_1/configs/m5_smoke.yaml" ;;
+    prod)         CONFIG="training_m5_1/configs/m5_1_research_paper.yaml" ;;
+    prod_2xa100)  CONFIG="training_m5_1/configs/m5_1_research_paper_2xa100.yaml" ;;
+    "")           echo "error: --mode is required (smoke|prod|prod_2xa100)" >&2; exit 2 ;;
+    *)            echo "error: --mode must be smoke|prod|prod_2xa100 (got: $MODE)" >&2; exit 2 ;;
 esac
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
