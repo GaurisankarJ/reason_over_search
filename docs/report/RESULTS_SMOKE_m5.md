@@ -251,8 +251,9 @@ The one lever that would meaningfully change the answer — patching NeMo-RL `mo
 | 14 | 12.2 | 0.115 | 79.7% | 6.6% | 3.72 | 2441 | 0.3% |
 | 15 | 11.4 | **0.132** | **73.1%** | 5.0% | 3.60 | 2337 | **0.0%** |
 | 16 | 10.1 | 0.114 | 80.3% | 7.2% | 3.47 | 2183 | 0.0% |
+| 17 | 10.4 | 0.096 | 82.8% | 6.2% | — | — | — |
 
-> Snapshot refresh: 2026-05-11 ~10:30 UTC (step 17 in progress). All columns from `train_data_step{N}.jsonl` parse (consistent aggregation). Truncation rate hit 0% by step 15.
+> Snapshot refresh: 2026-05-11 ~11:30 UTC (step 18 in progress). Rows 1–16 from `train_data_step{N}.jsonl` parse (consistent aggregation; truncation rate hit 0% by step 15). Row 17 partial — log-extracted wall/reward only; tc_mean/tok_mean/trunc% rerun on next refresh. **Steps 15–17 mean = 10.6 min/step** (steady-state anchor used in [`../setup/HARDWARE_COMPARISON.md`](../setup/HARDWARE_COMPARISON.md)).
 
 ### 6.3 Health signals (steps 1-16)
 
