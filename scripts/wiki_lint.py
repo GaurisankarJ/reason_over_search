@@ -48,6 +48,10 @@ INTENTIONAL_BROKEN = (
     "internship/",                      # gitignored, private
     "RESULTS_QWEN3_BASELINE.md",        # forward-reference, file not yet authored (Jose-owned)
     "PAPER_VS_OURS_M5.md",              # forward-reference, planned at M5 launch (2026-05-09 log); blocks M5.1 config
+    "LANDSCAPE_TABLE_2026-05.md",       # M6 Phase 1 output, pending (see milestone_6/MILESTONE_6.md)
+    "CANDIDATE_EXPERIMENTS.md",         # M6 Phase 2 output, pending
+    "PICKED_PAIR.md",                   # M6 Phase 3 output, pending
+    "PUBLICATION_FRAMING.md",           # M6 Phase 3 output, pending
 )
 
 
