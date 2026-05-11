@@ -8,7 +8,7 @@ updated: 2026-05-02
 
 # Evaluation Operations
 
-How to run the Search-R1 evaluation sweeps and where the wall-clock goes. For *what* the sweep validates and the per-dataset numbers, see [REPRODUCIBILITY.md](REPRODUCIBILITY.md) and [../report/RESULTS_m1.md](../report/RESULTS_m1.md). Hardware reference is in [../setup/HARDWARE.md](../setup/HARDWARE.md).
+How to run the Search-R1 evaluation sweeps and where the wall-clock goes. For *what* the sweep validates and the per-dataset numbers, see [REPRODUCIBILITY.md](REPRODUCIBILITY.md) and [../report/RESULTS_m1.md](../report/RESULTS_m1.md). Hardware reference is in [../setup/HARDWARE_COMPARISON.md](../setup/HARDWARE_COMPARISON.md) (4090 dev-box snapshot at [../setup/HARDWARE_4090.md](../setup/HARDWARE_4090.md)).
 
 ## Three sweep plans
 

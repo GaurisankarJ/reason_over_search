@@ -1,14 +1,16 @@
 ---
-title: HARDWARE
-tags: []
+title: HARDWARE — 4090 dev box (historical)
+tags: [hardware, 4090, historical]
 source: internal
 created: 2026-05-01
-updated: 2026-05-01
+updated: 2026-05-11
 ---
 
-# Hardware Constraints & Accelerator Comparison
+# Hardware — 4090 dev-box snapshot (historical)
 
-## This Machine (snapshot 2026-04-27)
+> **Scope**: This doc is the snapshot of the original 4090 development box used through M0–M1. As of M5 (2026-05) the active training surface is **1× A100-80GB on Vast.ai** (and we're evaluating H100 / H200 / B200 for M5.1). For the current accelerator comparison and per-run wall-clock / cost estimates, see [`HARDWARE_COMPARISON.md`](HARDWARE_COMPARISON.md). The accelerator-comparison table below is kept here for historical reference only; the live version lives in `HARDWARE_COMPARISON.md`.
+
+## The 4090 dev box (snapshot 2026-04-27)
 
 | Resource | Spec |
 |----------|------|

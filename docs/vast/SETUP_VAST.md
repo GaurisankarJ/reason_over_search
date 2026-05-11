@@ -57,7 +57,7 @@ Have ready:
 - (Optional) A `WANDB_API_KEY` for live training curves
 - (Optional) A `HF_TOKEN` if you plan to push artifacts back to HF (downloads are public)
 
-See [`docs/setup/HARDWARE.md`](../setup/HARDWARE.md) for the full accelerator comparison.
+See [`docs/setup/HARDWARE_COMPARISON.md`](../setup/HARDWARE_COMPARISON.md) for the full accelerator comparison (and [`docs/setup/HARDWARE_4090.md`](../setup/HARDWARE_4090.md) for the historical 4090 dev-box snapshot).
 
 ---
 
@@ -427,6 +427,6 @@ $HF_HOME = /workspace/hf_cache                     # Qwen3.5-2B + Qwen3.5-2B-Bas
 - [`docs/milestone_4/MILESTONE_4.md`](../milestone_4/MILESTONE_4.md) — M4 Qwen3.5-0.8B eval design + runbook
 - [`docs/milestone_2/PHASE_2_RUNBOOK.md`](../milestone_2/PHASE_2_RUNBOOK.md) — operational runbook for Phase-2 training
 - [`docs/setup/BOOTSTRAP_NEW_INSTANCE.md`](../setup/BOOTSTRAP_NEW_INSTANCE.md) — generic bootstrap (any host, not Vast-specific); leans more on docker pull / docker run
-- [`docs/setup/HARDWARE.md`](../setup/HARDWARE.md) — accelerator comparison
+- [`docs/setup/HARDWARE_COMPARISON.md`](../setup/HARDWARE_COMPARISON.md) — accelerator comparison
 - [`docs/training/CONVERSATION_CONTEXT.md`](../training/CONVERSATION_CONTEXT.md) — current state of training-side work
 - [`docs/training/NEMO_RL_KNOBS.md`](../training/NEMO_RL_KNOBS.md) — every NeMo-RL knob and our recommended values

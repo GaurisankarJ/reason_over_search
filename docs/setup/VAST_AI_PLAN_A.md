@@ -12,7 +12,7 @@ Goal: run **Plan A** (5 seeds × 7 datasets × 2 variants = 70 runs, ~517 K exam
 
 Source docs:
 - [../eval/EVAL_OPS.md](../eval/EVAL_OPS.md) — wall-clock budgets, where time goes, speedup ranking
-- [HARDWARE.md](HARDWARE.md) — accelerator comparison
+- [HARDWARE_COMPARISON.md](HARDWARE_COMPARISON.md) — accelerator comparison
 - [../milestone_1/../archive/COMPARISON_PLAN_B_v0.md](../milestone_1/../archive/COMPARISON_PLAN_B_v0.md) — current state of the reproduction; gap-closing work that **must finish before launching Plan A**.
 
 Snapshot: 2026-04-28. Vast.ai is a marketplace; prices float — re-check before booking.
@@ -31,7 +31,7 @@ For 24 h finish: need **M × k ≥ 10** 4090-equivalents.
 
 ## Throughput / cost table
 
-Bandwidth ratios from [HARDWARE.md](HARDWARE.md). Vast.ai $/h are marketplace lows seen on 2026-04-28 (sources at end).
+Bandwidth ratios from [HARDWARE_COMPARISON.md](HARDWARE_COMPARISON.md). Vast.ai $/h are marketplace lows seen on 2026-04-28 (sources at end).
 
 | GPU         | Mem BW   | k = BW vs 4090 | Vast $/h (low end)  | $ / 4090-equiv-h |
 |---          |---       |---:            |---:                 |---:              |

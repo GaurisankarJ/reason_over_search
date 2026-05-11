@@ -187,7 +187,7 @@ Subsamples are deterministic and live at `data_subsample/<dataset>/<split>.jsonl
 
 ### 6.4 Hardware
 
-Single RTX 4090 (24 GB), AMD EPYC 7642 (48 c / 96 t), 503 GB RAM, no NVLink. Full table: [`../setup/HARDWARE.md`](../setup/HARDWARE.md). Implications:
+Single RTX 4090 (24 GB), AMD EPYC 7642 (48 c / 96 t), 503 GB RAM, no NVLink. Full table: [`../setup/HARDWARE_4090.md`](../setup/HARDWARE_4090.md). Implications:
 
 - Qwen2.5-3B in bf16 fits in ~22 GB on the 4090.
 - Flat-IP FAISS lives in host RAM (~65 GB).
@@ -260,7 +260,7 @@ Anything you might be tempted to change: see if it's listed in [`../archive/DISC
 - 10 earlier audit fixes: [`../eval/REPRODUCIBILITY.md`](../eval/REPRODUCIBILITY.md).
 - Paper-vs-ours full audit: [`../eval/PAPER_VS_OURS_AUDIT.md`](../eval/PAPER_VS_OURS_AUDIT.md).
 - Vast.ai cost analysis (for Plan A scale-up): [`../setup/VAST_AI_PLAN_A.md`](../setup/VAST_AI_PLAN_A.md).
-- Hardware: [`../setup/HARDWARE.md`](../setup/HARDWARE.md).
+- Hardware: [`../setup/HARDWARE_4090.md`](../setup/HARDWARE_4090.md) (4090 dev-box, where M1 ran); see [`../setup/HARDWARE_COMPARISON.md`](../setup/HARDWARE_COMPARISON.md) for current M5 accelerator comparison.
 - Discarded ablations: [`../archive/DISCARDED_ABLATIONS.md`](../archive/DISCARDED_ABLATIONS.md).
 - Temperature post-mortem: [`../archive/TEMPERATURE_HYPOTHESIS_WRONG.md`](../archive/TEMPERATURE_HYPOTHESIS_WRONG.md).
 - Sister milestone code-setups: [`CODE_SETUP_m0.md`](CODE_SETUP_m0.md), [`CODE_SETUP_m2.md`](CODE_SETUP_m2.md), [`CODE_SETUP_m3.md`](CODE_SETUP_m3.md), [`CODE_SETUP_m4.md`](CODE_SETUP_m4.md).

@@ -243,17 +243,21 @@ The one lever that would meaningfully change the answer — patching NeMo-RL `mo
 | 6 | 38.2 | 0.095 | 80.6% | 5.3% | 5069 | 27.2% | 0.027 | 0.0006 |
 | 7 | 37.3 | 0.060 | 86.6% | 2.2% | 4900 | 25.0% | 0.018 | 0.0006 |
 | 8 | 32.8 | 0.075 | 86.9% | 5.0% | 4478 | **15.9%** | 0.012 | 0.0006 |
+| 9 | 29.1 | 0.123 | 77.2% | 7.8% | — | — | 0.027 | 0.0006 |
+| 10 | 21.3 | 0.083 | 82.2% | 3.1% | — | — | 0.006 | 0.0006 |
 
-### 6.3 Health signals (steps 1-8)
+> Snapshot refresh time: 2026-05-11 ~08:30 UTC (step 11 in progress). Rows 1–8 sourced from W&B summary; rows 9–10 from local log + `train_data_step{N}.jsonl` parse — `tok_mean` and `trunc%` columns for these rows pending W&B export (different aggregation than log's `Mean Generation Length`). Log-side gen length on steps 8/9/10: 1200 / 1164 / 947 tokens — clear continued downward trend.
 
-- **Reward**: trending up (0.02 → 0.09 peak; noisy step-to-step at 320 traj/step).
-- **r=0% (no reward)**: dropping 95.6% → 86.9%. Model finding rewards more often.
-- **r=1% (perfect F1)**: climbing 1.6% → 5.0%.
-- **Mean generation length**: 7038 → 4478 tokens. Model learning to **answer faster, stop sooner**.
-- **Truncation rate**: 68.4% → 15.9%. The strongest learning signal — most rollouts now finish before hitting the 8192 cap. Confirms the model is escaping the "search forever" failure mode.
+### 6.3 Health signals (steps 1-10)
+
+- **Reward**: trending up (0.02 → 0.12 peak at step 9; noisy step-to-step at 320 traj/step). Step-10 dip to 0.083 is within noise band.
+- **r=0% (no reward)**: dropped 95.6% → 77.2% at step 9; oscillating near 80% as rollouts shorten and the long-tail "search forever" failure mode goes away.
+- **r=1% (perfect F1)**: peaked at 7.8% (step 9), tracking with reward mean.
+- **Mean generation length** (log): 7038 (step 1, W&B) → 4478 (step 8, W&B) → 1199 / 1164 / 947 (steps 8/9/10, log). Model is **answering faster, stopping sooner**.
+- **Truncation rate** (W&B, steps 1–8): 68.4% → 15.9%. The strongest learning signal — most rollouts now finish before hitting the 8192 cap. Confirms the model is escaping the "search forever" failure mode.
 - **KL error to reference**: stable at 0.0006 (β=0.001 KL penalty doing its job — no policy collapse).
 - **Loss**: oscillating in [-0.019, 0.027]. Normal for clipped-PG with γ=ε=0.2.
-- **Per-step time**: trending faster (57.9 → 32.8 min). vLLM async engine + dropping gen length compound. **Steady-state estimate now ~33-38 min/step.**
+- **Per-step time**: continues trending faster (57.9 → 21.3 min over 10 steps; step 10 is the fastest yet). vLLM async engine + dropping gen length compound. **Steady-state estimate now ~21–29 min/step.**
 
 ### 6.4 ETA — revised
 
@@ -261,11 +265,14 @@ The one lever that would meaningfully change the answer — patching NeMo-RL `mo
 |---|---:|---:|
 | Pre-measurement (smoke v6 × scale) | ~29 min | ~12.5 d |
 | v7 baseline measured (steps 1-2) | ~58 min | **~25 d** |
-| **Live (steps 6-8 trend)** | **~33-38 min** | **~14-16 d** |
+| Live (steps 6-8 trend, 2026-05-11 02:30 UTC) | ~33-38 min | ~14-16 d |
+| **Live (steps 8-10 trend, 2026-05-11 08:30 UTC)** | **~21-29 min** | **~10-13 d** |
 
-The improvement vs v7 baseline projection (which used only 2 steady-state samples) comes from: model learning to produce shorter rollouts → vLLM gen phase shrinks; vLLM async batching settling in; possibly some warmup amortization.
+The improvement vs v7 baseline projection (which used only 2 steady-state samples) comes from: model learning to produce shorter rollouts → vLLM gen phase shrinks; vLLM async batching settling in; possibly some warmup amortization. The trend is **still pointing down** at step 10 — if it stabilizes near ~20 min/step, total wall-clock drops to ~9–10 d.
 
-### 6.5 Live timing breakdown (step 8)
+### 6.5 Live timing breakdown — steps 8 and 10
+
+Step 8 (snapshot 02:30 UTC):
 
 | Phase | Time | Share |
 |---|---:|---:|
@@ -274,7 +281,16 @@ The improvement vs v7 baseline projection (which used only 2 steady-state sample
 | `generation` (vLLM async) | 2.3 min | 6.9% |
 | `prepare_for_generation/total` | 0.1 min | 0.3% |
 
-Training is still the dominant cost; vLLM async + multi-turn + chunked prefill keeps generation under 7%. The deferred `model_utils.py:1378` chunking patch (would unlock micro=2) is still the biggest available speedup if pursued in M5.3.
+Step 10 (snapshot 08:30 UTC, fastest step yet):
+
+| Phase | Time | Share |
+|---|---:|---:|
+| `policy_training` | 15.0 min | **70.1%** |
+| `policy_and_reference_logprobs` | 4.3 min | 20.1% |
+| `generation` (vLLM async) | 1.8 min | 8.4% |
+| `prepare_for_generation/total` | 0.1 min | 0.5% |
+
+Phase shares are stable (training ~70%, logprobs ~20%, generation ~8%); the absolute wall-clock drop comes proportionally from each phase as gen length collapses. Training is still the dominant cost; vLLM async + multi-turn + chunked prefill keeps generation under 9%. The deferred `model_utils.py:1378` chunking patch (would unlock micro=2) is still the biggest available speedup if pursued in M5.3.
 
 ---
 

@@ -100,6 +100,6 @@ After bootstrap finishes the box is ready. Launch your actual experiments per th
 - [`training/scripts/bootstrap.sh`](../../training/scripts/bootstrap.sh) — the bootstrap script
 - [`training/scripts/bootstrap_alice.sh`](../../training/scripts/bootstrap_alice.sh) — ALICE HPC equivalent (Apptainer-based)
 - [`local_retriever/README.md`](../../local_retriever/README.md) — retriever asset download steps + index choices (bootstrap.sh mirrors these)
-- [`docs/setup/HARDWARE.md`](HARDWARE.md) — accelerator comparison
+- [`docs/setup/HARDWARE_COMPARISON.md`](HARDWARE_COMPARISON.md) — accelerator comparison
 - [`docker/reason-over-search-v1/README.md`](../../docker/reason-over-search-v1/README.md) — image rebuild instructions
 - [`docs/archive/BOOTSTRAP_NEW_INSTANCE_v0.md`](../archive/BOOTSTRAP_NEW_INSTANCE_v0.md) — original M1-era manual-download walkthrough (archived 2026-05-09)
