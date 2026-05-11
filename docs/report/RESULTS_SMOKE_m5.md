@@ -23,6 +23,38 @@ Live record of smoke iterations on `training_m5_1/`. Pipeline: [`training_m5_1/`
 
 All runs: 1× A100-80GB on Vast (`pantomiman/reason-over-search-v1:v1`), `Qwen/Qwen3.5-0.8B`, MuSiQue train, IVF-SQ8 retriever × 8 workers, vLLM bf16, seed 42.
 
+### 1.1 Log-artifact map
+
+NeMo-RL auto-numbers `logs/exp_NNN/` per launch. Mapping → smoke version (so anyone navigating the artifact tree can find the right one):
+
+| `logs/exp_NNN` | Smoke ver | When (UTC) | Status | Disk-on-instance |
+|---|---|---|---|---:|
+| exp_001 | v1 | 2026-05-10 20:48 | nv-grouped-gemm CUDA init fail | local-only (W&B deleted) |
+| exp_002 | v2 | 20:50 | `/tmp` exhaustion (mamba-ssm + flash-attn + causal-conv1d compile temps blew 30 GB) | local-only (W&B deleted) |
+| exp_003 | v3 | 21:12 | v1 DTensor hardcoded `model.model.layers` — Qwen3.5 doesn't expose | local-only (W&B deleted) |
+| exp_004 | v4 | 21:24 | step 1 OK (145.58 s), step 2 OOM at `train_micro_batch_size=4` | local-only (W&B deleted) |
+| exp_005 | v5 | 21:30 | `PYTORCH_ALLOC_CONF=expandable_segments` broke CUDA-IPC weight share (`pidfd_getfd: Operation not permitted`); reverted | local-only (W&B deleted) |
+| **exp_006** | **v6** | **21:50** | **smoke success — 10 steps, mean 93.1 s/step ex-warmup. Committed in `b5f5eaa` → `accf98c`** | **kept (tracked in git)** |
+| exp_007 | v7-a1 | 22:14 | M5.2 v7 attempt 1 (production shape, micro=2): step 2 OOM. Root cause: NeMo-RL TP=1 path casts full [B,S,V] logits to fp32 before chunk (`model_utils.py:1378`); 16.3 GiB allocation; ours 13.11 GiB free. | local-only (W&B deleted) |
+| exp_008 | v7-a2 | 23:00 | M5.2 v7 attempt 2 (micro=1): step 1 = 55.6 min, step 2 = 59.1 min. Established the 25-d ETA basis before live data revised down. | local-only (W&B deleted) |
+| exp_009 | M5.1-a1 | 2026-05-11 01:03 | First M5.1 prod launch: crashed at boot with `Validation dataset is required if validation is enabled` (`data.validation: null`, but `val_at_end: true`) | local-only (W&B deleted) |
+| **exp_010** | **M5.1-prod** | **01:05** | **Live production run (pid 178440). Per-step trace in §6** | **kept (live; don't touch)** |
+
+Failure-mode summary (what each smoke taught us, in order):
+
+1. **v1**: NeMo-RL's lazy `_env_builder` actor isn't GPU-allocated by Ray, so any extension whose `setup.py` calls `torch.cuda.init()` (nv-grouped-gemm did) crashes the actor. Fix: pre-extract the `dtensor_policy_worker_v2` venv tarball before launch so the actor doesn't compile.
+2. **v2**: `/tmp` is small on the Vast image and `mamba-ssm`/`flash-attn`/`causal-conv1d` will fill 30 GB compiling. Fix: export `TMPDIR=/workspace/tmp_build RAY_TMPDIR=/workspace/ray_tmp TORCHINDUCTOR_CACHE_DIR=/workspace/torchinductor_cache`.
+3. **v3**: v1 DTensor backend hardcodes `model.model.layers` in `parallelize.py:661`. Qwen3.5's hybrid arch hides layers behind nemo_automodel discovery. Fix: `dtensor_cfg._v2: true` (requires the pre-built v2 venv).
+4. **v4**: Memory peak at micro=4 + seq=4096 + vocab=248,320 = 8.14 GB just for `log_softmax`. OOM. Fix: micro=2.
+5. **v5**: `PYTORCH_ALLOC_CONF=expandable_segments:True` was tried to reduce fragmentation. Broke NeMo-RL's CUDA-IPC weight share (`pidfd_getfd: Operation not permitted` because Ray actors don't share user namespace by default). Fix: stay on the default allocator.
+6. **v6**: All fixes from v1-v5 stacked + Group-C paper-faithful flips applied. 10 steps clean. **Baseline established.**
+7. **v7-a1**: At production seq=8192, the `log_softmax` peak doubles to 16.3 GB at micro=2. OOM by 0.62 GiB. The NeMo-RL TP=1 path skips the chunked cast — `logprob_chunk_size` only wires to `LogprobsPostProcessor`, not `LossPostProcessor`. Fix: micro=1 (slow but works) or patch upstream (deferred).
+8. **v7-a2**: micro=1 production shape — established the 25-d projection. Confirms the loop is solid; just slow.
+9. **M5.1-a1**: `val_at_end: true` + `data.validation: null` is an at-boot assertion in NeMo-RL. Fix: disable val + switch ckpt metric to `train/loss/mean` + `keep_top_k: 0`.
+10. **M5.1-prod (exp_010, live)**: All learnings folded in. Running.
+
+The 10 iterations weren't redundant — each one fixed a different layer of the stack (Ray actor lifecycle → disk → DTensor backend → memory → allocator → config-completeness → memory again → config). Every step is captured in the docs above.
+
 ## 2. v6 — M5 smoke (pipeline validation, smoke shape) — SUCCESS
 
 ### 2.1 Config
