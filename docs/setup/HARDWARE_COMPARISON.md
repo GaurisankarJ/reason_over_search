@@ -13,7 +13,7 @@ supersedes: ../archive/HARDWARE_COMPARISON_v1.md
 >
 > **Supersedes** [`../archive/HARDWARE_COMPARISON_v1.md`](../archive/HARDWARE_COMPARISON_v1.md), which was anchored on the steps 15-17 trough (10.6 min/step). That trough turned out to be the *minimum* of a U-shape: per-step time climbed back as the model learned to write longer (better) rollouts. v0 (step-8 anchor, 33 min/step) is at [`../archive/HARDWARE_COMPARISON_v0.md`](../archive/HARDWARE_COMPARISON_v0.md).
 >
-> **TL;DR (live trend, step 42, 2026-05-11 PM)**: at the **new ~24 min/step anchor** (steps 38-42 mean), the 1× A100 path lands at **~10.2 d / ~$294** (not ~4.5 d / $130 as v1 said). The cost-spread between configs has re-opened: **1× B200 ≈ 34 h / ~$201** (fastest), **2× H100 SXM TP=2 ≈ 1.7 d / ~$153** (cheapest absolute), **1× H100 SXM ≈ 4.6 d / ~$206** (cleanest swap). Sunk cost on A100 is ~$19 (15.7 h elapsed); **porting to B200 now would save ~8.8 days AND ~$74 vs letting A100 finish**.
+> **TL;DR (after exhaustive provider scan, 2026-05-11 PM)**: at the ~24 min/step A100 anchor, the full run is **~10.2 d / ~$294 on A100**. After surveying 20+ verified providers (§4), the **single right call** is **1× B200 on Lambda Labs at $3.49/h** → ~$138 / ~34 h (saves $156 + 8.8 d vs A100-finish). Spheron B200 spot at $2.12/h is ~$91 if you can babysit preemption. **Skip**: Vast m:71029 ($8.209/h, dominated), RTX PRO 6000 ($1.89/h trap — mem-BW worse than A100, workstation thermals), Thundercompute (PCIe-only beta, no B200). Sunk cost on A100 = $19 (15.7 h to step 42).
 
 ## 0. What changed since v1 — cost-shift table
 
@@ -109,69 +109,172 @@ Math anchored on **live 23.7 min/step** (§1, steps 38-42 mean), with three mult
 
 These are **steady-state extrapolations from the current "improve-and-grow" phase**. The model is at step 42; if rollout length continues climbing toward the 1024-tok/turn cap (currently 927 → 1031 oscillating), step time could rise further. If it plateaus around 1000 tokens, the 23.7 min/step anchor holds.
 
-## 4. Provider pricing snapshot (May 2026)
+## 4. Provider pricing — exhaustive verified scan (May 2026)
 
-Spot/marketplace lows from each provider's pricing page. **Verify before launch — prices move weekly.**
+Sourced from each provider's public pricing page + third-party comparison sites ([getdeploying.com B200](https://getdeploying.com/gpus/nvidia-b200) lists 22+ providers, [getdeploying.com H200](https://getdeploying.com/gpus/nvidia-h200) lists 30+, [getdeploying.com H100](https://getdeploying.com/gpus/nvidia-h100) lists 42+). **Verify before launch — prices move weekly.** Live screenshots checked this session marked ⓘ.
 
-| GPU | Vast.ai | RunPod (spot) | RunPod (Secure) | Thundercompute | Notes |
-|---|---:|---:|---:|---:|---|
-| A100-80GB SXM | ~$0.79-1.20/h | $1.39/h | ~$1.89/h | **$0.78/h** (proto) | Thundercompute cheapest, but PCIe-only & beta |
-| H100-80GB PCIe | $2.00/h | ~$2.39/h | ~$3.39/h | **$1.38/h** (proto) | Thundercompute cheapest PCIe |
-| H100-80GB SXM | **$1.87/h** | $2.69/h | ~$3.89/h | not offered | Vast cheapest SXM |
-| H100 NVL (94 GB) | rare | rare | ~$3.50/h | not offered | Limited inventory |
-| H200-141GB | inconsistent | **$3.59/h** | ~$4.99/h | not offered | RunPod cleanest H200 source |
-| B200-192GB | spotty (queue) | **$5.98/h** | ~$7.99/h | not offered | Very limited; expect queue on RunPod |
-| MI300X-192GB | rare | ~$2.49/h some | — | not offered | Skip for this run (ROCm risk) |
+### B200 (192 GB) — verified providers
+
+| Provider | Spot | On-demand | Reserved | Tier | Notes |
+|---|---:|---:|---:|---|---|
+| **Spheron** | **$2.12/h** | $6.02/h | — | T3 marketplace | Decentralized; per-minute, no egress fees; preemption risk on spot |
+| CoreWeave | — | $5.50/h | $2.65/h (1-yr) | T1 enterprise | NASDAQ:CRWV; reserved irrelevant for 34 h run |
+| **Lambda Labs** | — | **$3.49/h** | — | T1 established | Dropped from $3.79 → $3.49 in April 2026 |
+| RunPod (Secure) | — | $7.99/h | — | T2 | Enterprise SLA tier |
+| RunPod (Community) ⓘ | $3.59-5.49/h | $5.98/h | — | T2 marketplace | Live screenshot 2026-05-11: **$5.49/h, 1 max, Low** availability |
+| Jarvislabs | — | $5.50/h | — | T2 | India HQ; per-minute |
+| FluidStack | — | $4.50-5.80/h | — | T2 EU | B200 + B300 inventory |
+| Modal | — | $6.25/h | — | T2 serverless | $0.001736/s; overkill for continuous run |
+| DataCrunch | — | competitive | — | T2 EU | Finland; renewable energy |
+| Crusoe | spot/OD/reserved | contact sales | available | T1 enterprise | Energy-focused; no public B200 price |
+| Vast.ai ⓘ | varies | varies | — | T3 marketplace | Live listing m:71029 (Ohio): **$8.209/h** plus bandwidth |
+| Market floor | **$2.25/h** | — | — | — | [SDB200RT index](https://www.silicondata.com/blog/b200-rental-price-march-2026-update) (April 2026) |
+
+### H200 (141 GB) — verified providers
+
+| Provider | Spot | On-demand | Reserved | Tier | Notes |
+|---|---:|---:|---:|---|---|
+| **Jarvislabs** | — | **$3.80/h** | — | T2 | Cheapest H200 on-demand ([Jarvislabs H200](https://jarvislabs.ai/blog/h200-price)) |
+| CoreWeave | — | $3.89/h | — | T1 | Close second |
+| **RunPod (Community)** ⓘ | **$3.59/h** | $4.99/h | — | T2 | Live screenshot 2026-05-11: **$3.99/h, 4 max, Low** availability |
+| RunPod (Secure) | — | $4.99/h | — | T2 | |
+| Lambda Labs | — | $4.49/h | — | T1 | |
+| Spheron | — | $4.54/h | — | T3 | SXM |
+| Nebius | — | $3.50-4.80/h | up to 35% off | T2 | EU + US, NASDAQ-listed |
+| Hyperbolic | — | clusters | — | T3 | Pay-as-you-go |
+| Crusoe | spot/OD/reserved | contact sales | available | T1 | |
+| Market range | $3.50 floor | $3.72 → $10.60/h | — | | [30+ providers surveyed](https://getdeploying.com/gpus/nvidia-h200) |
+
+### H100 SXM (80 GB) — verified providers
+
+| Provider | Spot | On-demand | Reserved | Tier | Notes |
+|---|---:|---:|---:|---|---|
+| **Vast.ai** | **$1.49-1.87/h** | varies | — | T3 marketplace | Spot/marketplace lows; host quality varies |
+| Vast.ai ⓘ | — | $3.723/h | — | T3 | Live listing m:92731: 8-mo max duration, 98% reliability |
+| Spheron | — | $2.01/h (PCIe) | — | T3 | PCIe only |
+| **Lambda Labs** | — | **$2.49/h** | — | T1 | SXM; established |
+| Jarvislabs | — | $2.69/h | — | T2 | |
+| CoreWeave | — | $2.69-4.00/h | — | T1 | |
+| **RunPod (Community)** ⓘ | — | $2.99/h | — | T2 | Live screenshot 2026-05-11: **$2.99/h, 1 max, Low** availability |
+| RunPod (Community spot/OD) | — | $2.69/h | — | T2 | Posted rate |
+| Together.ai | — | $3.49/h | — | T2 | 42% premium over Spheron |
+| Thundercompute | — | $1.38/h (PCIe) | — | T3 beta | PCIe + virtualized; not for production |
+| Paperspace | — | $5.95/h | $2.24 (3-yr) | T2 | Expensive on-demand |
+| AWS p5 | spot avail | $4.49+/h | reserved | T1 hyperscaler | Premium |
+| Azure ND H100 v5 | — | $6.98/h | reserved | T1 hyperscaler | Highest of majors |
+
+### Why we're NOT recommending RTX PRO 6000 Blackwell (96 GB) despite the price
+
+RunPod listing shows **RTX PRO 6000 Blackwell at $1.89/h, 96 GB GDDR7, currently Unavailable**. On paper this looks like a great deal (cheapest >80 GB card by far). In practice it's **the wrong card for our workload**:
+
+- **Memory bandwidth is actually *lower* than A100**: GDDR7 at ~1.79 TB/s vs A100's HBM2e at 2.0 TB/s vs H100's HBM3 at 3.35 TB/s. Logprobs (20%) + generation (12%) = ~32% of our step is memory-bound; on this card those phases would be **slower per token than the A100 we're trying to leave**.
+- **Workstation silicon, not datacenter**: GB202 die family (same as RTX 5090), not the GB100/GB200 used in B200. NVIDIA's CUDA optimization focus is on datacenter SKUs; RL frameworks (NeMo-RL, vLLM) are tuned for H100/A100/B200.
+- **Sustained-load reliability unproven**: 600 W TDP on workstation thermals isn't designed for 80+ hours of 100% utilization. Thermal throttling or instability over multi-day runs is a real risk that won't show up in a short smoke.
+- **sm_120 architecture is uncharted for our v2 worker venv** — mamba-ssm, flash-attn, causal-conv1d, nv-grouped-gemm all need rebuild + validation. Same compat risk as B200 (sm_100), but with **none of the upside** since B200 has 4-5× more compute and HBM3e.
+- **96 GB unlocks `micro=2` but doesn't help**: the unlock is worth ~1.5× on the compute-bound training phase; doesn't help the memory-bound phases that are already worse than A100.
+
+**Realistic estimate** (not the optimistic $149/3.3d I first sketched): **~$190-220 / ~4-5 d, with multi-day stability risk + uncharted driver path**. Strictly worse than Lambda B200 ($138 / 34 h) on every axis. **Skip it.**
 
 ### Thundercompute caveat (unchanged from v1)
 
-Legit Cambridge-MA startup (founded 2024, in beta), most aggressive A100/H100-PCIe pricing in the market. PCIe-only (no SXM), virtualized-GPU stack (untested with NeMo-RL CUDA-IPC weight share), no H200/B200. Useful as the **cheapest A100 swap** if the live Vast A100 box flakes (~$170 for the remaining 580 steps × 24 min × $0.78/h vs $245 on Vast at $1.20/h). Smoke-required. Not a path to <2 d. Full pros/cons in v1 archive.
+Legit Cambridge-MA startup (founded 2024, beta), most aggressive A100/H100-PCIe pricing. PCIe only, virtualized stack (NeMo-RL CUDA-IPC untested), no H200/B200. Useful as the **cheapest A100 swap** if Vast box flakes. Not a path to <2 d.
+
+### Reliability tier legend
+
+- **T1** — established hyperscalers / enterprise GPU clouds (CoreWeave, Lambda, Crusoe, AWS, Azure, GCP). 1+ year track record, public uptime SLAs, premium pricing.
+- **T2** — well-funded mid-size (RunPod Secure, Jarvislabs, Nebius, DataCrunch, FluidStack, Modal). Transparent pricing, reliable for multi-day runs.
+- **T3** — newer / marketplace (Spheron, Vast.ai, Hyperbolic, Thundercompute). Cheapest, but **preemption real on spot tier**.
 
 ### Provider call (revised)
 
-- **Vast.ai** still cheapest H100 SXM; reliability host-by-host. Best for the 1× or 2× H100 SXM paths in §6.
-- **RunPod Secure Cloud** is the right call for B200 / H200 (multi-day reliability matters; Vast lottery doesn't).
-- **Thundercompute** out of frame for this revised picture (PCIe ceiling caps wall-clock at ~5 d, no faster option on the same provider).
+- **Lambda Labs** is the new top recommendation for B200 — clean on-demand at $3.49/h, T1 reliability, no preemption risk.
+- **Spheron B200 spot at $2.12/h** is the cost-min play if you're willing to babysit preemption (save_period=50 means ≤4 h lost if reclaimed; relaunch from ckpt).
+- **CoreWeave** is the enterprise-SLA pick if "this absolutely cannot fail" matters.
+- **RunPod (live screenshot)** — B200 at $5.49/h is mid-pack; H200 at $3.99/h is fine; H100 SXM at $2.99/h is on-demand, not their lowest. Convenient if already using RunPod.
+- **Vast.ai** still has the cheapest H100 SXM **at spot/marketplace lows**, but the on-demand listings (like m:92731 at $3.723) are *more* expensive than Lambda H100. Always sort by price.
 
-## 5. Cost-per-run table (all configs)
+## 5. Cost-per-run table — actual verified rates (May 2026)
 
-Cost = total wall × $/h. **A100 sunk cost so far: ~$19 (15.7 h × $1.20).** Compare to the "live A100" baseline (~$294 if we let it finish).
+Cost = total wall × $/h. **A100 sunk cost so far: ~$19 (15.7 h × $1.20).** Compare to the "let A100 finish" baseline (~$294). Ordered cheapest → most expensive total run.
 
-| Config | Wall | Provider | $/h | **Cost (run)** | Δ vs "let A100 finish" |
+| Config | Wall | Provider | $/h | **Cost (run)** | Δ vs A100-finish |
 |---|---:|---|---:|---:|---:|
-| **1× A100 *(let it finish)*** | 10.2 d | Vast | $1.20 | **~$294** | baseline |
-| 1× A100 (swap to Thundercompute) | ~9.6 d remaining | Thundercompute | $0.78 | $19 + ~$170 = ~$189 | -$105, same wall |
-| 1× H100 PCIe (Thundercompute) | 5.3 d | Thundercompute | $1.38 | $19 + ~$175 = ~$194 | -$100, save 5 d |
-| **1× H100 SXM (Vast)** | 4.6 d | Vast | $1.87 | $19 + ~$206 = **~$225** | **-$69, save 5.6 d** |
-| 1× H200 (RunPod spot) | 2.7 d | RunPod | $3.59 | $19 + ~$233 = ~$252 | -$42, save 7.5 d |
-| 2× A100 (TP=2, Vast) | 3.8 d | Vast | $2.40 | $19 + ~$219 = ~$238 | -$56, save 6.4 d |
-| **2× H100 SXM (TP=2, Vast)** | 1.7 d | Vast | $3.74 | $19 + ~$153 = **~$172** | **-$122, save 8.5 d** |
-| **1× B200 (RunPod spot)** | ~34 h | RunPod | $5.98 | $19 + ~$201 = **~$220** | **-$74, save 8.8 d** |
-| 1× B200 (RunPod Secure) | ~34 h | RunPod | $7.99 | $19 + ~$269 = ~$288 | -$6, save 8.8 d |
-| 2× H200 (TP=2, RunPod spot) | 36 h | RunPod | $7.18 | $19 + ~$258 = ~$277 | -$17, save 8.7 d |
-| 4× H100 SXM (TP=4, Vast) | 26 h | Vast | $7.48 | $19 + ~$195 = ~$214 | -$80, save 9.3 d |
+| **1× B200** | ~34 h | **Spheron** (spot) | $2.12 | $19 + ~$72 = **~$91** | **−$203, save 8.8 d** ⚠ preempt risk |
+| **1× B200** | ~34 h | **Lambda Labs** | $3.49 | $19 + ~$119 = **~$138** | **−$156, save 8.8 d** ⭐ |
+| 1× B200 | ~34 h | RunPod (Community) ⓘ | $5.49 | $19 + ~$187 = ~$206 | −$88, save 8.8 d |
+| 1× B200 | ~34 h | CoreWeave | $5.50 | $19 + ~$187 = ~$206 | −$88, save 8.8 d (T1 SLA) |
+| 1× B200 | ~34 h | Jarvislabs | $5.50 | $19 + ~$187 = ~$206 | −$88, save 8.8 d |
+| 1× B200 | ~34 h | RunPod (Secure) | $7.99 | $19 + ~$272 = ~$291 | −$3, save 8.8 d |
+| **1× B200** | ~34 h | Vast m:71029 | **$8.209** | $19 + ~$279 = ~$298 | +$4, save 8.8 d — **dominated** |
+| 1× H200 | ~65 h | **Jarvislabs** | **$3.80** | $19 + ~$247 = **~$266** | −$28, save 7.5 d |
+| 1× H200 | ~65 h | CoreWeave | $3.89 | $19 + ~$253 = ~$272 | −$22, save 7.5 d |
+| 1× H200 | ~65 h | RunPod (spot) | $3.59 | $19 + ~$233 = ~$252 | −$42, save 7.5 d |
+| 1× H200 | ~65 h | RunPod (Community) ⓘ | $3.99 | $19 + ~$259 = ~$278 | −$16, save 7.5 d |
+| RTX PRO 6000 (96 GB) ❌ | ~4-5 d realistic | RunPod (when avail.) | $1.89 | $19 + ~$190-220 = ~$210-240 | mem-BW < A100; workstation thermals; **don't pick** |
+| 1× H100 SXM | ~110 h | Vast (spot, if avail.) | $1.87 | $19 + ~$206 = ~$225 | −$69, save 5.6 d |
+| 1× H100 SXM | ~110 h | **Lambda Labs** | $2.49 | $19 + ~$274 = ~$293 | −$1, save 5.6 d |
+| 1× H100 SXM | ~110 h | RunPod (Community) ⓘ | $2.99 | $19 + ~$329 = ~$348 | +$54, save 5.6 d |
+| 1× H100 SXM | ~110 h | Vast m:92731 | $3.723 | $19 + ~$410 = ~$429 | +$135, save 5.6 d — **dominated** |
+| 2× H100 SXM (TP=2) | 41 h | Vast (2× spot) | $3.74 | $19 + ~$153 = ~$172 | −$122, save 8.5 d |
+| 2× H100 SXM (TP=2) | 41 h | Lambda (2× $2.49) | $4.98 | $19 + ~$204 = ~$223 | −$71, save 8.5 d |
+| 2× H200 (TP=2) | 36 h | Jarvislabs (2× $3.80) | $7.60 | $19 + ~$274 = ~$293 | −$1, save 8.7 d |
+| **1× A100 *(let it finish)*** | 245 h remaining | Vast | $1.20 | **~$294** | baseline |
+| 1× A100 (swap to Thundercompute) | ~9.6 d remaining | Thundercompute | $0.78 | $19 + ~$170 = ~$189 | −$105, same wall |
 
-**Three Pareto winners** vs the "let A100 finish" baseline:
-1. **2× H100 SXM (TP=2)** — ~$172, ~1.7 d. **Cheapest AND fast**; pays TP=2 config rewrite.
-2. **1× B200** — ~$220, ~34 h. **Fastest single-GPU**; pays Blackwell smoke + RunPod queue risk.
-3. **1× H100 SXM** — ~$225, ~4.6 d. **Cleanest swap**; no TP, no Blackwell, simplest.
+**Top 2 Pareto winners** (best ratio of $ saved + wall saved):
 
-## 6. Recommendation for the current decision (live, post-trend-reversal)
+1. **🥇 Lambda Labs B200 — ~$138, ~34 h**. Best risk-adjusted: T1 reliability, on-demand (no preempt), ~50% below the Vast listing. **My pick for production.**
+2. **🥈 Spheron B200 (spot) — ~$91, ~34 h**. Cheapest full-stop ($47 below Lambda). Preemption risk on T3 marketplace; mitigated by step-50 checkpoint resume. Worth the babysitting if cost-min matters.
 
-The right call shifted vs v1. Three viable archetypes; **doing nothing (let A100 finish) is now Pareto-dominated**:
+The Vast m:71029 B200 at $8.209/h is **dominated by 6 cheaper B200 options on the same wall-clock**. The "best" pick on Vast specifically is to sort their listings by `$/h` and re-evaluate; the m:71029 host is overpriced relative to the market.
 
-### A) Cheapest + fastest (2-GPU) — 2× H100 SXM (TP=2) on Vast (~$172, ~1.7 d)
-- **Why pick this**: cheapest absolute *and* sub-2-day. TP=2 unlocks the chunked-logprobs path so micro=2 comes for free. Vast H100 SXM inventory is reliable. Saves 8.5 days vs A100 path.
-- **Why not**: TP=2 yaml flip + smoke re-validate against M4 byte-exact prompt. Higher process risk than (C). Two-machine coordination if you've already split work across boxes.
-- **Pre-commit**: 30-min smoke at `policy.parallelism.tensor_model_parallel_size=2`; verify byte-exact prompt parity. ~$2.
+**Cheaper-on-paper traps we're avoiding**:
+- RTX PRO 6000 at $1.89/h: GDDR7 mem-BW is *worse than A100*, workstation thermals not built for multi-day sustained load — see §4 "Why we're NOT recommending RTX PRO 6000" for the full reasoning.
+- Vast on-demand listings: spot/marketplace lows ($1.49-1.87/h) only beat Lambda *if available*; on-demand listings can be 2× the Lambda price.
 
-### B) Same-day finish (1-GPU) — 1× B200 on RunPod (~$220, ~34 h)
-- **Why pick this**: fastest single-GPU; same-day-ish finish. Single-GPU = no multi-GPU rewrite; 192 GB easily fits micro=2.
-- **Why not**: Blackwell sm_100 compat for the v2 worker venv (mamba-ssm / flash-attn / nv-grouped-gemm) is **untested by us**. A 30-min B200 smoke (~$3) answers this. RunPod B200 inventory is queued.
-- **Pre-commit**: smoke first; if it fails fall back to (A) or (C).
+## 6. Recommendation for the current decision (live, post-exhaustive-survey)
 
-### C) Cleanest swap (1-GPU, ~half wall) — 1× H100 SXM on Vast (~$225, ~4.6 d)
-- **Why pick this**: simplest possible swap. yaml unchanged, image unchanged, no multi-GPU, no Blackwell risk. Saves ~5.6 days vs A100 path for a modest cost delta.
+Exhaustive provider scan (May 2026) changed the picture again. The best on-demand B200 rate is **Lambda Labs at $3.49/h**, not RunPod or Vast. New ranking with single-GPU paths winning across the board:
+
+### A) Best risk-adjusted — **1× B200 on Lambda Labs** (~$138, ~34 h) ⭐
+- **Why pick this**: cheapest on-demand B200 in the market; T1-reliability provider (a16z + NVIDIA backed; long-standing ML cloud); no preemption; single-GPU = no multi-GPU config rewrite; 192 GB unlocks `micro=2` trivially.
+- **Why not**: still need the 30-min Blackwell sm_100 smoke (~$2 on Lambda) to verify the v2 worker venv (mamba-ssm / flash-attn / nv-grouped-gemm) builds on sm_100.
+- **Cost vs A100-finish**: saves ~$156 AND ~8.8 d. Clear win.
+
+### B) Cost-min play — **1× B200 spot on Spheron** (~$91, ~34 h, preempt risk)
+- **Why pick this**: cheapest M5.1 run of any verified option ($91 total). Marketplace + per-minute billing, no egress fees. Save $47 vs Lambda.
+- **Why not**: Spheron is T3 (newer marketplace; preemption real). For our 34 h run, expected ≤4 h work lost per preemption (save_period=50 means a checkpoint every ~3.3 h at B200 steady state). 1-2 preemptions over 34 h is realistic; relaunch from ckpt each time. Net wall could stretch to 40-50 h with bad luck.
+- **Caveat**: smoke-required, same as (A); add preemption-handling logic to `run.sh` (auto-resume from latest ckpt on relaunch).
+
+### C) Same-day finish on screenshotted RunPod — **1× B200** at $5.49/h (~$206, ~34 h)
+- **Why pick this**: if you're already in the RunPod console with this listing in front of you, click-rent path. $68 more than Lambda but zero account-switching friction. Cheaper than the Vast m:71029 listing at $8.209.
+- **Why not**: $68 more than Lambda for the same outcome.
+
+### D) Cleanest 1-GPU swap if Blackwell smoke fails — **1× H100 SXM on Lambda** (~$293, ~4.6 d)
+- **Why pick this**: fallback path. T1 reliability, established Blackwell-free toolchain (mature on Hopper), no compat unknowns. ~$1 cheaper than letting A100 finish, saves 5.6 d.
+- **Why not**: $155 more than Lambda B200 for 4 d slower. Only makes sense if B200 smoke fails and you need to ship.
+
+### E) TP=2 multi-GPU plays (situational)
+
+- **2× H100 SXM on Vast (TP=2)**: ~$172, ~1.7 d. Cheapest *and* fast IF the Vast spot lows ($1.87/h) are available right now. Pays TP=2 config tax + M4 byte-exact prompt re-validate. Worth checking Vast inventory before committing.
+- **2× H200 on Jarvislabs (TP=2)**: ~$293, ~1.5 d. T2 reliability. Probably not worth the TP=2 tax over single-B200 paths.
+
+### Skipped: RTX PRO 6000 ($1.89/h)
+
+96 GB at $1.89/h looks like a bargain. It's not — see §4 "Why we're NOT recommending RTX PRO 6000". The headline reasons: (1) memory bandwidth is *worse than A100*; (2) workstation thermals aren't built for 80+ hours of 100% utilization; (3) sm_120 driver path uncharted; (4) the cheap hourly is more than wiped out by the slower wall-clock and stability risk. Skip.
+
+### Doing nothing (let A100 finish) — Pareto-dominated
+
+- 245 h remaining × $1.20 = ~$294 on A100. **Strictly worse than Lambda B200** ($138 / 8.8 d faster) and **strictly worse than Spheron B200 spot** ($91 / 8.8 d faster). Only stay on A100 if (a) Lambda B200 smoke fails AND (b) you can't afford H100 swap risk.
+
+### Recommended sequence
+
+1. **Wait until step 50 lands** on A100 (~6-7 more hours, ~$8) → first checkpoint = swap-insurance.
+2. **Rent 1× B200 on Lambda Labs** (~$3.49/h on-demand). Boot the standard image, clone repo, `bash training/scripts/bootstrap.sh`.
+3. **30-min compat smoke** (~$2): `cd training_m5_1 && bash scripts/smoke.sh`. Watch for sm_100 kernel errors in mamba-ssm / flash-attn / causal-conv1d / nv-grouped-gemm.
+4. **If smoke green** (most likely; Lambda has been running Blackwell since GA): flip `train_micro_batch_size: 1 → 2` in `m5_1_research_paper.yaml`, launch full run. ETA ~34 h, total cost ~$138 + ~$8 A100 wait = **~$146**.
+5. **If smoke red**: fall back to (E) Lambda H100 SXM (~$293, ~4.6 d) or wait for the chunked-fp32 patch (M5.3).
+6. **Once swap is healthy**: kill the A100 run on Vast.
 - **Why not**: ~4.6 d is still a meaningful wait. (A) and (B) are both ≤2 d and cheaper or comparable.
 
 ### Cost-only minimum — 1× A100 on Thundercompute (~$189, ~9.6 d remaining)
