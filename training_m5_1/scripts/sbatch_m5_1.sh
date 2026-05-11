@@ -79,7 +79,11 @@ RETRIEVER_HEALTH_TIMEOUT_S="${RETRIEVER_HEALTH_TIMEOUT_S:-1800}"
 
 mkdir -p logs
 
-BIND="${REPO_ROOT}:/workspace/reason_over_search,${HF_HOME_HOST}:/workspace/hf_cache,${UV_CACHE_HOST}:/.uv/cache"
+# Extra bind: expose /zfsstore/user/<uid> identically inside the container so
+# host-absolute symlinks (e.g. local_retriever/corpus -> /zfsstore/.../flash-rag/...,
+# local_retriever/indexes/...index -> /zfsstore/.../reason_over_search/...) resolve.
+ZFS_USER_ROOT="${ZFS_USER_ROOT:-/zfsstore/user/$(id -un)}"
+BIND="${REPO_ROOT}:/workspace/reason_over_search,${HF_HOME_HOST}:/workspace/hf_cache,${UV_CACHE_HOST}:/.uv/cache,${ZFS_USER_ROOT}:${ZFS_USER_ROOT}"
 
 RUN_ID="${SLURM_JOB_ID:-local-$(date -u +%Y%m%dT%H%M%SZ)}"
 RETRIEVER_LOG="logs/m5_1_${RUN_ID}_retriever.log"
