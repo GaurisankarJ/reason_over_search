@@ -1,84 +1,317 @@
-"""M5.1 reward semantics + train/eval shared-path parity.
+"""M5.5 F1+format reward — format-walker + reward semantics.
 
-Two flavors of assertion:
+The walker ports ReSearch's `validate_template_format` to our schema (Qwen3.5
+nested-XML + `<answer>...</answer>` answer scaffold; see the module docstring
+of `training_m5_5/src/rewards/search_r1.py` for the source-of-truth mapping).
+This file pins:
 
-1. Shared-path parity: `normalize_answer` / `extract_solution` / `em_check`
-   are re-exported from `evaluation_qwen35/flashrag/search_r1/reward.py`, so
-   train- and eval-time scoring share one code path. The tests below pin
-   that down so a future refactor that forgets the re-export trips here
-   rather than at smoke time.
-
-2. F1-only semantics: the milestone (docs/milestone_5/MILESTONE_5.md
-   §"Run sequence" M5.1 step 6) requires re-confirming the reward path on
-   5 hand-picked rollouts (correct, partial-overlap, wrong, empty,
-   format-broken; F1 should be 1.0 / 0<F1<1 / 0 / 0 / 0). Those live as the
-   `CASES_F1` table below.
+  1. Shared-path: `extract_solution` / `normalize_answer` re-exported from the
+     M4 eval pipeline (so train-time + eval-time scoring share the SAME
+     callable). Identity-tested where possible; behaviour-tested otherwise.
+  2. Format-walker: 5 green cases (incl. zero-tool-call answer, multi-hop
+     rollout, partial F1) and 6 red cases (one per failure mode).
+  3. Reward semantics: 0.0 / 0.1-floor / F1 / 1.0 transitions.
+  4. Telemetry shape: stable dict keys for the env.
 """
 from training_m5_5.src.rewards import search_r1 as ours
-from flashrag.search_r1 import reward as eval_side  # type: ignore[import-not-found]
 
-GOLD = ["Wilhelm Conrad Röntgen", "Röntgen"]
-
-
-# ----- 1. Shared-path parity (re-exports must not silently diverge) -----
-
-def test_normalize_answer_is_reexported():
-    """ours.normalize_answer is eval_side.normalize_answer (same callable)."""
-    assert ours.normalize_answer is eval_side.normalize_answer
-
-
-def test_extract_solution_is_reexported():
-    """ours.extract_solution is eval_side.extract_solution (same callable)."""
-    assert ours.extract_solution is eval_side.extract_solution
-
-
-def test_em_check_byte_parity():
-    """ours.em_check is a local re-implementation but produces identical output."""
-    for pred in ("Wilhelm Conrad Röntgen", "wilhelm conrad röntgen", "Marie Curie", ""):
-        assert ours.em_check(pred, GOLD) == eval_side.em_check(pred, GOLD)
-
-
-# ----- 2. F1-only semantics (the milestone's 5 hand-picked rollouts) -----
-
-# (case_name, rollout_text, gold, expected_f1_assertion)
-CASES_F1 = [
-    # 1. correct: exact match -> F1 = 1.0
-    ("correct", "<answer>Wilhelm Conrad Röntgen</answer>", GOLD, "eq_1"),
-    # 2. partial-overlap: shared tokens but not exact -> 0 < F1 < 1
-    ("partial", "<answer>Wilhelm Röntgen Wilhelm</answer>", GOLD, "between"),
-    # 3. wrong: zero token overlap -> F1 = 0
-    ("wrong", "<answer>Marie Curie</answer>", GOLD, "eq_0"),
-    # 4. empty: <answer></answer> -> F1 = 0
-    ("empty", "<answer></answer>", GOLD, "eq_0"),
-    # 5. format-broken: no <answer> tag at all -> F1 = 0
-    ("format_broken", "I think the answer is Wilhelm Conrad Röntgen", GOLD, "eq_0"),
-]
+# Canonical Qwen3.5 nested-XML tool-call (M4.1 form, what
+# `tools=[QWEN35_SEARCH_TOOL]` auto-injects).
+TC = (
+    "<tool_call>\n"
+    "<function=search>\n"
+    "<parameter=query>\n"
+    "author of Hamlet\n"
+    "</parameter>\n"
+    "</function>\n"
+    "</tool_call>"
+)
+TC2 = (
+    "<tool_call>\n"
+    "<function=search>\n"
+    "<parameter=query>\n"
+    "Shakespeare nationality\n"
+    "</parameter>\n"
+    "</function>\n"
+    "</tool_call>"
+)
+TR = "<tool_response>\nShakespeare wrote Hamlet.\n</tool_response>"
+TR2 = "<tool_response>\nShakespeare was English.\n</tool_response>"
 
 
-def test_f1_reward_semantics():
-    for name, text, gold, kind in CASES_F1:
-        out = ours.compute_search_r1_reward(text, gold)
-        f1 = out["reward"]
-        if kind == "eq_1":
-            assert f1 == 1.0, f"{name}: expected F1=1.0, got {f1}"
-        elif kind == "eq_0":
-            assert f1 == 0.0, f"{name}: expected F1=0.0, got {f1}"
-        elif kind == "between":
-            assert 0.0 < f1 < 1.0, f"{name}: expected 0<F1<1, got {f1}"
-        else:
-            raise AssertionError(f"unknown kind {kind!r}")
+# ----- 1. Shared-path with M4 eval pipeline ------------------------------
+#
+# Identity testing (`is`) is unreliable here: the M5.5 reward module inserts
+# `evaluation_qwen35/` into sys.path AT IMPORT TIME, then imports
+# `flashrag.search_r1.reward.{extract_solution,normalize_answer}`. Loading the
+# eval module a second time via importlib produces a DIFFERENT module object
+# (CPython caches by sys.modules key, not by file path; our absolute-path load
+# uses a fresh module name). So we test behavioural parity instead.
+
+def _load_eval_q35_reward():
+    import importlib.util
+    from pathlib import Path
+    p = Path(__file__).resolve().parents[2] / "evaluation_qwen35" / "flashrag" / "search_r1" / "reward.py"
+    spec = importlib.util.spec_from_file_location("_eval_q35_reward", str(p))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
 
 
-def test_f1_reward_dict_keys():
-    """Stable return shape; the env reads `reward`, telemetry reads `f1` / `em`."""
-    out = ours.compute_search_r1_reward("<answer>Röntgen</answer>", GOLD)
-    assert set(out.keys()) == {"reward", "extracted_answer", "f1", "em"}
-    # Reward IS F1 under M5.1 (no shaping).
+def test_extract_solution_behaviour_parity():
+    eval_mod = _load_eval_q35_reward()
+    cases = [
+        "<answer>X</answer>",
+        "<answer>X</answer> trailing junk",
+        "<answer>X</answer><answer>Y</answer>",  # last-wins
+        "no answer here",
+        "<answer></answer>",
+        "<answer>multi\nline</answer>",
+    ]
+    for s in cases:
+        assert ours.extract_solution(s) == eval_mod.extract_solution(s), s
+
+
+def test_normalize_answer_behaviour_parity():
+    eval_mod = _load_eval_q35_reward()
+    cases = [
+        "Wilhelm Conrad Röntgen",
+        "The Beatles",
+        "  whitespace  collapse  ",
+        "Punc?tu!ation.",
+        "MIXED case String",
+        "",
+    ]
+    for s in cases:
+        assert ours.normalize_answer(s) == eval_mod.normalize_answer(s), s
+
+
+# ----- 2. Format walker: green cases -------------------------------------
+
+def _full_rollout(answer: str) -> str:
+    """A two-hop qwen-native rollout, parameterised by final <answer>."""
+    return (
+        f"<think>plan: search for author</think>\n"
+        f"{TC}\n{TR}\n"
+        f"<think>need nationality</think>\n"
+        f"{TC2}\n{TR2}\n"
+        f"<think>got it</think>\n"
+        f"<answer>{answer}</answer>"
+    )
+
+
+def test_format_green_full_rollout():
+    is_valid, reason = ours.is_valid_format(_full_rollout("Shakespeare"))
+    assert is_valid, f"expected valid; got reason={reason!r}"
+
+
+def test_format_green_single_hop():
+    text = (
+        "<think>plan</think>"
+        f"{TC}{TR}"
+        "<think>got it</think>"
+        "<answer>Shakespeare</answer>"
+    )
+    assert ours.is_valid_format(text)[0]
+
+
+def test_format_green_zero_tool_calls():
+    """Model answered without searching — still valid (e.g., known fact)."""
+    text = "<think>I know this from training data</think><answer>Shakespeare</answer>"
+    assert ours.is_valid_format(text)[0]
+
+
+def test_format_green_multi_tool_call_in_one_block():
+    """Two <function=...> blocks inside one <tool_call> — atypical but valid."""
+    body = (
+        "<function=search>\n"
+        "<parameter=query>x</parameter>\n"
+        "</function>\n"
+        "<function=search>\n"
+        "<parameter=query>y</parameter>\n"
+        "</function>"
+    )
+    text = (
+        "<think>plan</think>"
+        f"<tool_call>{body}</tool_call>"
+        f"{TR}"
+        "<think>got it</think>"
+        "<answer>X</answer>"
+    )
+    assert ours.is_valid_format(text)[0]
+
+
+def test_format_green_trailing_whitespace_after_answer():
+    """Vllm's stop string strips trailing whitespace; tolerate it anyway."""
+    text = _full_rollout("Shakespeare") + "\n  \n"
+    assert ours.is_valid_format(text)[0]
+
+
+# ----- 3. Format walker: red cases (one per failure mode) ----------------
+
+def test_format_red_missing_think():
+    text = f"{TC}{TR}<answer>X</answer>"
+    is_valid, reason = ours.is_valid_format(text)
+    assert not is_valid
+    assert "think" in reason
+
+
+def test_format_red_think_unbalanced():
+    text = "<think>x<think>y</think><answer>X</answer>"
+    is_valid, reason = ours.is_valid_format(text)
+    assert not is_valid
+    assert "think" in reason and "unbalanced" in reason
+
+
+def test_format_red_tool_call_unbalanced():
+    text = f"<think>x</think><tool_call>raw<answer>X</answer>"
+    is_valid, reason = ours.is_valid_format(text)
+    assert not is_valid
+    assert "tool_call" in reason and "unbalanced" in reason
+
+
+def test_format_red_tool_call_no_function():
+    text = (
+        "<think>x</think>"
+        "<tool_call>raw search text</tool_call>"
+        f"{TR}<think>y</think><answer>X</answer>"
+    )
+    is_valid, reason = ours.is_valid_format(text)
+    assert not is_valid
+    assert "tool_call" in reason and "function" in reason
+
+
+def test_format_red_function_without_parameter():
+    text = (
+        "<think>x</think>"
+        "<tool_call><function=search></function></tool_call>"
+        f"{TR}<think>y</think><answer>X</answer>"
+    )
+    is_valid, reason = ours.is_valid_format(text)
+    assert not is_valid
+    assert "function" in reason or "parameter" in reason
+
+
+def test_format_red_tool_call_with_json_body():
+    """ReSearch reward uses JSON; ours rejects JSON (Qwen3.5 is XML-trained)."""
+    text = (
+        "<think>x</think>"
+        '<tool_call>{"name": "search", "arguments": {"query": "x"}}</tool_call>'
+        f"{TR}<think>y</think><answer>X</answer>"
+    )
+    assert not ours.is_valid_format(text)[0]
+
+
+def test_format_red_no_answer():
+    text = f"<think>x</think>{TC}{TR}"
+    is_valid, reason = ours.is_valid_format(text)
+    assert not is_valid
+    assert "answer" in reason
+
+
+def test_format_red_answer_not_terminal():
+    """Answer block emitted but not at the end — rollout didn't terminate cleanly."""
+    text = f"<think>x</think><answer>early guess</answer>{TC}{TR}"
+    is_valid, reason = ours.is_valid_format(text)
+    assert not is_valid
+    assert "terminate" in reason
+
+
+def test_format_red_answer_tags_unbalanced():
+    text = f"<think>x</think>{TC}{TR}<answer>X</answer><answer>Y"
+    is_valid, reason = ours.is_valid_format(text)
+    assert not is_valid
+    assert "answer" in reason
+
+
+# ----- 4. Reward semantics (0.0 / 0.1 / partial / 1.0) -------------------
+
+def test_reward_format_invalid_zero():
+    """Missing <think> -> format invalid -> reward = 0."""
+    out = ours.compute_search_r1_reward(f"{TC}{TR}<answer>Shakespeare</answer>", ["Shakespeare"])
+    assert out["reward"] == 0.0
+    assert out["format_valid"] is False
+
+
+def test_reward_format_valid_em_match_returns_one():
+    out = ours.compute_search_r1_reward(_full_rollout("Shakespeare"), ["Shakespeare"])
+    assert out["reward"] == 1.0
+    assert out["em"] == 1.0
+    assert out["f1"] == 1.0
+    assert out["format_valid"] is True
+
+
+def test_reward_format_valid_partial_f1_returns_f1():
+    out = ours.compute_search_r1_reward(
+        _full_rollout("the author Shakespeare"), ["Shakespeare"]
+    )
+    # F1: pred tokens={the, author, shakespeare} (the->space after article-strip)
+    # gold tokens={shakespeare}. Common=1. P=1/2 (after article strip 'the'->''),
+    # R=1. F1=2*0.5*1/1.5=0.667.
+    assert 0.0 < out["reward"] < 1.0
     assert out["reward"] == out["f1"]
+    assert out["em"] == 0.0
+    assert out["format_valid"] is True
 
 
-def test_f1_picks_best_over_multi_gold():
+def test_reward_format_valid_f1_zero_returns_floor():
+    out = ours.compute_search_r1_reward(_full_rollout("Bacon"), ["Shakespeare"])
+    assert out["reward"] == ours.FORMAT_BONUS
+    assert out["f1"] == 0.0
+    assert out["em"] == 0.0
+    assert out["format_valid"] is True
+
+
+def test_reward_format_valid_empty_answer_returns_floor():
+    """`<answer></answer>` extracts to empty string; f1=0 -> floor."""
+    text = _full_rollout("")
+    out = ours.compute_search_r1_reward(text, ["Shakespeare"])
+    assert out["reward"] == ours.FORMAT_BONUS
+    assert out["format_valid"] is True
+
+
+def test_reward_floor_value_is_0_1():
+    """The 0.1 floor is the load-bearing knob — pin its value."""
+    assert ours.FORMAT_BONUS == 0.1
+
+
+# ----- 5. Multi-gold and answer-extraction semantics ---------------------
+
+def test_reward_picks_best_f1_over_multi_gold():
     """Multi-answer gold: F1 = max over the list."""
-    multi_gold = ["Wilhelm Conrad Röntgen", "Röntgen"]
-    out = ours.compute_search_r1_reward("<answer>Röntgen</answer>", multi_gold)
-    assert out["reward"] == 1.0  # matches "Röntgen" exactly
+    text = _full_rollout("Röntgen")
+    out = ours.compute_search_r1_reward(text, ["Wilhelm Conrad Röntgen", "Röntgen"])
+    assert out["reward"] == 1.0  # exact match on "Röntgen"
+
+
+def test_reward_uses_last_answer_block():
+    """Two <answer> blocks (model self-corrects) — score the LAST."""
+    text = (
+        "<think>plan</think>"
+        f"{TC}{TR}"
+        "<think>wait</think>"
+        "<answer>Bacon</answer>"  # earlier (wrong) attempt
+        "<think>actually</think>"
+        f"{TC2}{TR2}"
+        "<think>now sure</think>"
+        "<answer>Shakespeare</answer>"  # final (correct)
+    )
+    out = ours.compute_search_r1_reward(text, ["Shakespeare"])
+    assert out["reward"] == 1.0
+    assert out["extracted_answer"] == "Shakespeare"
+
+
+# ----- 6. Telemetry shape ------------------------------------------------
+
+def test_reward_dict_keys_stable():
+    """Env reads `reward`; W&B logs read everything else. Pin the shape."""
+    out = ours.compute_search_r1_reward(_full_rollout("Shakespeare"), ["Shakespeare"])
+    expected = {"reward", "extracted_answer", "f1", "em", "format_valid", "format_reason"}
+    assert set(out.keys()) == expected
+
+
+def test_reward_dict_keys_stable_on_failure():
+    """Same dict shape on format-invalid rollouts (no surprise None / missing keys)."""
+    out = ours.compute_search_r1_reward("garbage", ["X"])
+    expected = {"reward", "extracted_answer", "f1", "em", "format_valid", "format_reason"}
+    assert set(out.keys()) == expected

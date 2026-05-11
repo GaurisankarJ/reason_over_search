@@ -1,84 +1,150 @@
-"""M5.1 reward semantics + train/eval shared-path parity.
+"""M5.6 EM-only reward — Search-R1 paper-faithful 0/1 reward.
 
-Two flavors of assertion:
+The module re-exports the M2 paper-faithful reward
+(`training/src/rewards/search_r1.py`) with all shaping coefficients defaulted
+to 0; that reduces the multi-tier reward to pure EM. This file pins:
 
-1. Shared-path parity: `normalize_answer` / `extract_solution` / `em_check`
-   are re-exported from `evaluation_qwen35/flashrag/search_r1/reward.py`, so
-   train- and eval-time scoring share one code path. The tests below pin
-   that down so a future refactor that forgets the re-export trips here
-   rather than at smoke time.
-
-2. F1-only semantics: the milestone (docs/milestone_5/MILESTONE_5.md
-   §"Run sequence" M5.1 step 6) requires re-confirming the reward path on
-   5 hand-picked rollouts (correct, partial-overlap, wrong, empty,
-   format-broken; F1 should be 1.0 / 0<F1<1 / 0 / 0 / 0). Those live as the
-   `CASES_F1` table below.
+  1. Reward semantics on Qwen3.5 nested-XML rollouts:
+       EM match -> 1.0
+       wrong / partial / empty / missing answer -> 0.0
+  2. `normalize_answer` behaviour parity with the M4 eval pipeline (so the
+     M5 train-time scoring and M4 eval-time scoring agree on string
+     equivalence even though M5.6 re-exports the M2 callable, not the M4 one).
+  3. Multi-gold extraction (any match -> 1.0).
+  4. Telemetry shape (env reads `reward`; pin the others).
 """
 from training_m5_6.src.rewards import search_r1 as ours
-from flashrag.search_r1 import reward as eval_side  # type: ignore[import-not-found]
 
-GOLD = ["Wilhelm Conrad Röntgen", "Röntgen"]
-
-
-# ----- 1. Shared-path parity (re-exports must not silently diverge) -----
-
-def test_normalize_answer_is_reexported():
-    """ours.normalize_answer is eval_side.normalize_answer (same callable)."""
-    assert ours.normalize_answer is eval_side.normalize_answer
-
-
-def test_extract_solution_is_reexported():
-    """ours.extract_solution is eval_side.extract_solution (same callable)."""
-    assert ours.extract_solution is eval_side.extract_solution
+TC = (
+    "<tool_call>\n"
+    "<function=search>\n"
+    "<parameter=query>\n"
+    "author of Hamlet\n"
+    "</parameter>\n"
+    "</function>\n"
+    "</tool_call>"
+)
+TR = "<tool_response>\nShakespeare wrote Hamlet.\n</tool_response>"
 
 
-def test_em_check_byte_parity():
-    """ours.em_check is a local re-implementation but produces identical output."""
-    for pred in ("Wilhelm Conrad Röntgen", "wilhelm conrad röntgen", "Marie Curie", ""):
-        assert ours.em_check(pred, GOLD) == eval_side.em_check(pred, GOLD)
+def _full_rollout(answer: str) -> str:
+    return (
+        f"<think>plan</think>\n"
+        f"{TC}\n{TR}\n"
+        f"<think>got it</think>\n"
+        f"<answer>{answer}</answer>"
+    )
 
 
-# ----- 2. F1-only semantics (the milestone's 5 hand-picked rollouts) -----
+# ----- 1. Reward semantics (pure 0/1 EM) ---------------------------------
 
-# (case_name, rollout_text, gold, expected_f1_assertion)
-CASES_F1 = [
-    # 1. correct: exact match -> F1 = 1.0
-    ("correct", "<answer>Wilhelm Conrad Röntgen</answer>", GOLD, "eq_1"),
-    # 2. partial-overlap: shared tokens but not exact -> 0 < F1 < 1
-    ("partial", "<answer>Wilhelm Röntgen Wilhelm</answer>", GOLD, "between"),
-    # 3. wrong: zero token overlap -> F1 = 0
-    ("wrong", "<answer>Marie Curie</answer>", GOLD, "eq_0"),
-    # 4. empty: <answer></answer> -> F1 = 0
-    ("empty", "<answer></answer>", GOLD, "eq_0"),
-    # 5. format-broken: no <answer> tag at all -> F1 = 0
-    ("format_broken", "I think the answer is Wilhelm Conrad Röntgen", GOLD, "eq_0"),
-]
+def test_reward_em_match_returns_one():
+    out = ours.compute_search_r1_reward(_full_rollout("Shakespeare"), ["Shakespeare"])
+    assert out["reward"] == 1.0
+    assert out["em"] == 1.0
 
 
-def test_f1_reward_semantics():
-    for name, text, gold, kind in CASES_F1:
-        out = ours.compute_search_r1_reward(text, gold)
-        f1 = out["reward"]
-        if kind == "eq_1":
-            assert f1 == 1.0, f"{name}: expected F1=1.0, got {f1}"
-        elif kind == "eq_0":
-            assert f1 == 0.0, f"{name}: expected F1=0.0, got {f1}"
-        elif kind == "between":
-            assert 0.0 < f1 < 1.0, f"{name}: expected 0<F1<1, got {f1}"
-        else:
-            raise AssertionError(f"unknown kind {kind!r}")
+def test_reward_em_match_after_normalize():
+    """EM is normalised (lowercase + strip articles + strip punct + collapse whitespace)."""
+    out = ours.compute_search_r1_reward(
+        _full_rollout("wilhelm conrad röntgen"), ["Wilhelm Conrad Röntgen"]
+    )
+    assert out["reward"] == 1.0
 
 
-def test_f1_reward_dict_keys():
-    """Stable return shape; the env reads `reward`, telemetry reads `f1` / `em`."""
-    out = ours.compute_search_r1_reward("<answer>Röntgen</answer>", GOLD)
-    assert set(out.keys()) == {"reward", "extracted_answer", "f1", "em"}
-    # Reward IS F1 under M5.1 (no shaping).
-    assert out["reward"] == out["f1"]
+def test_reward_wrong_answer_returns_zero():
+    out = ours.compute_search_r1_reward(_full_rollout("Bacon"), ["Shakespeare"])
+    assert out["reward"] == 0.0
+    assert out["em"] == 0.0
 
 
-def test_f1_picks_best_over_multi_gold():
-    """Multi-answer gold: F1 = max over the list."""
-    multi_gold = ["Wilhelm Conrad Röntgen", "Röntgen"]
-    out = ours.compute_search_r1_reward("<answer>Röntgen</answer>", multi_gold)
-    assert out["reward"] == 1.0  # matches "Röntgen" exactly
+def test_reward_partial_match_returns_zero():
+    """Strict EM rejects partial matches — even if token-overlap F1 would be > 0."""
+    out = ours.compute_search_r1_reward(
+        _full_rollout("William Shakespeare"), ["Shakespeare"]
+    )
+    assert out["reward"] == 0.0
+
+
+def test_reward_empty_answer_returns_zero():
+    """`<answer></answer>` extracts to empty string; em vs non-empty gold = 0."""
+    out = ours.compute_search_r1_reward(_full_rollout(""), ["Shakespeare"])
+    assert out["reward"] == 0.0
+
+
+def test_reward_missing_answer_returns_zero():
+    """No <answer> block in the rollout -> no extracted answer -> 0."""
+    text = f"<think>x</think>{TC}{TR}"
+    out = ours.compute_search_r1_reward(text, ["Shakespeare"])
+    assert out["reward"] == 0.0
+    assert out["extracted_answer"] is None
+
+
+# ----- 2. EM is format-walker-INDEPENDENT for qwen-native ----------------
+
+def test_reward_em_ok_even_when_m2_walker_rejects_qwen_native_tags():
+    """The inherited M2 walker rejects qwen-native rollouts (state machine
+    only knows <search>/<information>, not <tool_call>/<tool_response>), but
+    EM-only ignores format validity. So a qwen-native rollout with the right
+    answer still scores 1.0 — and the telemetry `format_valid=False` reflects
+    the walker mismatch but doesn't affect the gradient."""
+    out = ours.compute_search_r1_reward(_full_rollout("Shakespeare"), ["Shakespeare"])
+    assert out["reward"] == 1.0
+    # `format_valid` is dead telemetry for M5.6; assert its current behaviour
+    # for documentation, not as a contract:
+    assert out["format_valid"] in (True, False)
+
+
+# ----- 3. Multi-gold ------------------------------------------------------
+
+def test_reward_picks_any_match_over_multi_gold():
+    out = ours.compute_search_r1_reward(
+        _full_rollout("Röntgen"), ["Wilhelm Conrad Röntgen", "Röntgen"]
+    )
+    assert out["reward"] == 1.0
+
+
+def test_reward_multi_gold_no_match_returns_zero():
+    out = ours.compute_search_r1_reward(
+        _full_rollout("Marie Curie"), ["Wilhelm Conrad Röntgen", "Röntgen"]
+    )
+    assert out["reward"] == 0.0
+
+
+# ----- 4. normalize_answer parity with M4 eval ---------------------------
+
+def test_normalize_answer_byte_parity_with_eval_path():
+    """M5.6 re-exports normalize_answer from the M2 module (NOT from
+    evaluation_qwen35), so identity check is moot. Verify behavioural parity
+    instead: outputs must agree on a representative input set."""
+    import importlib.util
+    from pathlib import Path
+    p = Path(__file__).resolve().parents[2] / "evaluation_qwen35" / "flashrag" / "search_r1" / "reward.py"
+    spec = importlib.util.spec_from_file_location("_eval_q35_reward", str(p))
+    eval_mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(eval_mod)
+
+    cases = [
+        "Wilhelm Conrad Röntgen",
+        "The Beatles",  # article in front
+        "  whitespace  collapse  ",
+        "Punc?tu!ation.",
+        "MIXED case String",
+        "",
+    ]
+    for s in cases:
+        assert ours.normalize_answer(s) == eval_mod.normalize_answer(s), s
+
+
+# ----- 5. Telemetry shape -------------------------------------------------
+
+def test_reward_dict_keys_stable():
+    out = ours.compute_search_r1_reward(_full_rollout("Shakespeare"), ["Shakespeare"])
+    expected = {"reward", "extracted_answer", "f1", "em", "format_valid"}
+    assert set(out.keys()) == expected
+
+
+def test_reward_dict_keys_stable_on_failure():
+    out = ours.compute_search_r1_reward("garbage", ["X"])
+    expected = {"reward", "extracted_answer", "f1", "em", "format_valid"}
+    assert set(out.keys()) == expected
