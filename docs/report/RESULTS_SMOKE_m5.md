@@ -38,10 +38,10 @@ NeMo-RL auto-numbers `logs/exp_NNN/` per launch. Mapping → smoke version (so a
 | exp_007 | v7-a1 | 22:14 | M5.2 v7 attempt 1 (production shape, micro=2): step 2 OOM. Root cause: NeMo-RL TP=1 path casts full [B,S,V] logits to fp32 before chunk (`model_utils.py:1378`); 16.3 GiB allocation; ours 13.11 GiB free. | local-only (W&B deleted) |
 | exp_008 | v7-a2 | 23:00 | M5.2 v7 attempt 2 (micro=1): step 1 = 55.6 min, step 2 = 59.1 min. Established the 25-d ETA basis before live data revised down. | local-only (W&B deleted) |
 | exp_009 | M5.1-a1 | 2026-05-11 01:03 | First M5.1 prod launch: crashed at boot with `Validation dataset is required if validation is enabled` (`data.validation: null`, but `val_at_end: true`) | local-only (W&B deleted) |
-| exp_010 | M5.1-prod-a1 | 01:05 | **CRASHED at step 50 (19h35m of compute lost).** `AssertionError: metric_name=train/loss/mean must start with 'val:' or 'train:'`. Postmortem: §9. | retained for forensics |
-| exp_011 | smoke-ckpt-verify1 | 2026-05-11 21:15 | First fix verification: `metric_name: null` bypassed the assertion; step 2 saved 8.9 GB (weights + optim). Confirmed fix, exposed disk budget bug (12 × 8.9 GB = 107 GB > 120 GB partition). | deleted after verification |
-| exp_012 | smoke-ckpt-verify2 | 2026-05-11 22:05 | Second fix verification: `save_optimizer: false` → confirms ~1.6 GB-per-save footprint (12 × 1.6 GB ≈ 19 GB; fits comfortably). | deleted after verification |
-| TBD | M5.1-prod-a2 | TBD (user-authorized) | Production relaunch with `metric_name: null` + `keep_top_k: null` + `save_optimizer: false` from step 0. Not yet started. | — |
+| exp_010 | M5.1-prod-a1 | 01:05 | **CRASHED at step 50 (19h35m of compute lost).** `AssertionError: metric_name=train/loss/mean must start with 'val:' or 'train:'`. Postmortem: §7. | retained for forensics |
+| (deleted) | smoke-ckpt-verify1 | 2026-05-11 21:15 | First fix verification: `metric_name: null` bypassed the assertion; step 2 saved 8.9 GB (weights + optim). Confirmed fix, exposed disk budget bug. Log dir deleted to free disk. | — |
+| (deleted) | smoke-ckpt-verify2 | 2026-05-11 22:05 | Second fix verification: `save_optimizer: false` → 3.2 GB consolidated fp32 safetensors. Confirmed fix. Log dir deleted to free disk. | — |
+| **exp_011** | **M5.1-prod-a2** | **2026-05-11 22:23** | **Relaunch with full fix (`metric_name: null` + `keep_top_k: null` + `save_optimizer: false`). User intent: manual stop at step 100 to fit 6.4 GB on 17 GB free.** | **kept (live; don't touch)** |
 
 Failure-mode summary (what each smoke taught us, in order):
 
