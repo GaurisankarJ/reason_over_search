@@ -31,7 +31,7 @@ For *which* Vast configuration to pick for cost-optimal Plan A see [VAST_AI_PLAN
 | Resource | Minimum | Recommended | Why |
 |---|---|---|---|
 | GPU VRAM | 24 GB | 24–80 GB | SGLang 3B bf16 = ~22 GB |
-| GPU model | RTX 4090 / 5090 / A100 / H100 | H100 PCIe for Plan A speed | See [HARDWARE.md](../setup/HARDWARE.md) |
+| GPU model | RTX 4090 / 5090 / A100 / H100 | H100 PCIe for Plan A speed | See [HARDWARE_4090.md](../setup/HARDWARE_4090.md) |
 | Disk | 120 GB | **150 GB** | corpus 14 + indexes 76 + 2 GRPOs 27 + eval data ~1 + headroom |
 | Host RAM | 80 GB | 128 GB+ | Flat IP index alone needs ~65 GB resident; corpus mmap adds ~14 GB |
 | CPU | any modern x86_64 | 16+ vCPUs | Multi-worker FAISS scaling |

@@ -35,7 +35,7 @@ The fastest path is **the prebuilt docker image + HF re-fetch**. Everything belo
 | Disk | 60 GB (IVF-SQ8 only) | 150 GB (full setup) | 14 GB corpus + 16 or 60 GB index + 26 GB checkpoints + 2 GB encoder + headroom. |
 | GPU/host coexistence | — | — | GPU FAISS + SGLang **cannot share** a single 4090 (16 GB index + 22 GB SGLang > 24 GB VRAM). On 24 GB cards, run FAISS on CPU. On 80 GB H100, GPU FAISS + SGLang fit comfortably. |
 
-See [HARDWARE.md](../setup/HARDWARE.md) for the full accelerator comparison.
+See [HARDWARE_4090.md](../setup/HARDWARE_4090.md) for the full accelerator comparison (current comparison: [HARDWARE_COMPARISON.md](../setup/HARDWARE_COMPARISON.md)).
 
 ## Step 1 — get the image
 
