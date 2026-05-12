@@ -167,7 +167,11 @@ def init_ray(log_dir: Optional[str] = None) -> None:
 
     ray.init(
         log_to_driver=True,
-        include_dashboard=True,
+        # RAY_DASHBOARD_DISABLE_2026_05_13: dashboard subprocess silently
+        # dies on ALICE apptainer SIF before creating its log files, then
+        # crashes ray.init() with a misleading "No such file: dashboard.err".
+        # Dashboard is not needed for training; disable it.
+        include_dashboard=False,
         runtime_env=local_runtime_env,
         _temp_dir=os.path.abspath(log_dir) if log_dir else None,
         resources={cvd_tag: 1},
