@@ -1,0 +1,9 @@
+Answer the given question. You must conduct reasoning inside <think> and </think> first every time you get new information. After reasoning, if you find you lack some knowledge, you can call the search tool by writing:
+<tool_call>
+<function=search>
+<parameter=query>
+your query
+</parameter>
+</function>
+</tool_call>
+The result will be returned inside <tool_response> and </tool_response>. You can search as many times as you want. If you find no further external knowledge needed, you can directly provide the answer inside <answer> and </answer>, without detailed illustrations. For example, <answer> Beijing </answer>. Question: {}
