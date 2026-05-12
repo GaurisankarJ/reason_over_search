@@ -39,7 +39,7 @@
 #SBATCH --partition=gpu-a100-80g
 #SBATCH --gres=gpu:a100:1
 #SBATCH --cpus-per-task=40
-#SBATCH --mem=160g
+#SBATCH --mem=240g
 #SBATCH --time=7-00:00:00
 #SBATCH --output=logs/m5_6_%j_%x.out
 #SBATCH --error=logs/m5_6_%j_%x.err
