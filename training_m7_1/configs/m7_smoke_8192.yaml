@@ -156,7 +156,7 @@ policy:
   # footprint). micro=2 halves the logprob memory peak; combined with the
   # vLLM gpu_memory_utilization drop and expandable_segments env var, gives
   # ~8 GB additional headroom.
-  train_micro_batch_size: 2
+  train_micro_batch_size: 1   # [M7.0.7b OOM fix 2026-05-12 18:37] at seq=8192, micro=2 OOMs identical to M5.1 v7 (log_softmax [B,S,V]=[2,8192,248320] allocates 15.16 GB before chunking). micro=1 mirrors the production config.
   generation_batch_size: 32
   logprob_batch_size: ${policy.train_micro_batch_size}
   # [paper] verl max_prompt_length=4096. Matches M4 eval's generator_max_input_len.

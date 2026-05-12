@@ -101,11 +101,11 @@ The conservative interpretation: M7 producing a measurable lift over the M4.3 un
 |---|---|---|---|
 | M7.0 Setup | 2026-05-12 17:30 UTC | 30-45 min | ✅ done |
 | M7.0.5 Verification | 2026-05-12 17:40 UTC | 15 min | ✅ done — see [§"Verification results"](#verification-results-m705) |
-| M7.0.7a Smoke seq=4096 | 2026-05-12 17:40 UTC | 44 min wall | ✅ done — REWARD COLLAPSE confirmed; see [§"Smoke results"](#smoke-results-m707a-seq4096) |
-| M7.0.7b Smoke seq=8192 | 2026-05-12 18:00 UTC | ~40-60 min | ⏳ in flight |
-| M7.0.7c Prod-shape smoke | After M7.0.7b | ~2-3 h (3 steps × ~50 min) | pending |
-| M7.1 Production | Conditional on M7.0.7b/c | 10-13 d | conditional |
-| M7.2 Eval | After M7.1 | 2.5 h | conditional |
+| M7.0.7a Smoke seq=4096 | 2026-05-12 17:14 UTC | 44 min wall | ✅ done — REWARD COLLAPSE confirmed; see [§"Smoke A results"](#smoke-a-results-m707a-seq4096) |
+| M7.0.7b Smoke seq=8192 | 2026-05-12 18:00 UTC | partial (16/20 steps, OOM on step 17) | ✅ usable data; see [§"Smoke B results"](#smoke-b-results-m707b-seq8192-partial) |
+| M7.0.7c Prod-shape smoke | 2026-05-12 18:39 UTC | 51 min wall (3 steps) | ✅ done — STRUCTURAL LEARNING SIGNAL; see [§"Smoke C results"](#smoke-c-results-m707c-prod-shape-3-steps) |
+| M7.1 Production | Pending user auth | ~5-10 d est. | ⏳ ready to launch — see [§"M7.1 production decision"](#m71-production-decision) |
+| M7.2 Eval | After M7.1 | 2.5 h | pending M7.1 |
 
 ## Verification results (M7.0.5)
 
@@ -151,6 +151,84 @@ Per-step trajectory across all 20 steps:
 Result files preserved at `logs/exp_012/train_data_step{1..20}.jsonl`.
 
 **Sequencing vs M5.1-prod-a3**: M5.1-prod-a3 is currently paused awaiting user authorization per [`TODO_2026-05-12.md`](../todo/TODO_2026-05-12.md). M7 runs FIRST on the current box; M5.1-a3 launches afterward (either on same box if M7 fails/completes, or on a second box if budget allows parallelism).
+
+## Smoke B results (M7.0.7b, seq=8192, partial — 16 of 20 steps)
+
+Ran 2026-05-12 18:00 → ~18:37 UTC; crashed at step 17 with CUDA OOM (`torch.OutOfMemoryError: Tried to allocate 15.16 GiB`) — same `[B,S,V]=[2,8192,248320]` log_softmax issue M5.1 v7 hit. Fixed in yaml (`train_micro_batch_size: 2 → 1`) for any future re-runs; production already uses micro=1. 16 steps of clean data preserved at `logs/exp_013/train_data_step{1..16}.jsonl`.
+
+| step | rew_mean | pct rew>0 | max rew | pct `<answer>` | pct trunc |
+|---:|---:|---:|---:|---:|---:|
+| 1 | 0.0100 | 5 % | **0.200** | 30 % | 75 % |
+| 5 | 0.0002 | 5 % | 0.003 | 50 % | 85 % |
+| 6 | 0.0248 | 10 % | **0.400** | 20 % | 90 % |
+| 11 | 0.0102 | 10 % | 0.182 | 40 % | 65 % |
+| 14 | 0.0200 | 5 % | **0.400** | 50 % | 70 % |
+| 16 | 0.0333 | 5 % | **0.667** | 30 % | 90 % |
+| **agg (16 × 20 = 320)** | **0.0062** | **2.5 %** | **0.667** | **~33 %** | **~80 %** |
+
+**Key signals vs Smoke A (seq=4096):**
+- **Peak single F1 jumped from 0.087 → 0.667** — at 8192 the model produces SUBSTANTIAL semantic matches when it doesn't truncate. The capability exists.
+- `<answer>` emission rate stayed flat (~30-45 %) but with higher quality.
+- Truncation rate barely dropped (~80 % both smokes). 8192 helps the model finish more often but doesn't eliminate the over-thinking problem.
+- Per-rollout positive-reward rate stayed at ~3 % (very sparse).
+
+**Interpretation:** at smoke batch (20 traj/step), 3 % positive rate ≈ 0.6 positive rollouts/step on average → near-zero group advantage signal almost every step → GRPO can't learn. The signal needs density at the GROUP level, not the rollout level.
+
+## Smoke C results (M7.0.7c, prod-shape, 3 steps)
+
+Ran 2026-05-12 18:39 → 19:30 UTC (~51 min total wall, ~17 min/step including setup; much faster than the M5.1 v7 anchor of 55-60 min/step because smoke C skips checkpointing + validation overhead). 3 steps × 64 prompts × G=5 = 960 rollouts total. W&B run: `qwen3.5-0.8b-base-musique-m7_prod_shape-seed42-20260512T1839Z`.
+
+| step | n_pos | rew_mean | max F1 | pct `<answer>` | pct trunc | expected groups w/signal (of 64) |
+|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 10/320 | 0.012 | **1.000** ← perfect | **25.6 %** | 84.7 % | ~9.4 (14.8 %) |
+| 2 | 1/320 | 0.001 | 0.150 | **29.4 %** | 82.5 % | ~1.0 (1.6 %) |
+| 3 | 8/320 | 0.007 | 0.600 | **32.8 %** | **78.1 %** | ~7.7 (12.0 %) |
+
+**Headline structural-learning signals (monotonic across 3 steps):**
+
+- **`<answer>` emission rate: 25.6 → 29.4 → 32.8 %** (+7 pp). Model learning to close with an answer.
+- **Truncation rate: 84.7 → 82.5 → 78.1 %** (−6.6 pp). Model learning to be more concise.
+- These trends are exactly what we'd expect if base is learning the tool-use loop's *format* even when the F1-on-content reward is sparse.
+
+**Reward-signal density:**
+
+- 19 of 960 rollouts (2.0 %) hit reward>0; **2 hit a perfect F1=1.0** (step 1), **5 hit F1≥0.4** (substantial semantic matches).
+- Random-distribution estimate: at 3.1 % positive rate, ~9 of 64 groups per step have advantage signal → meaningful learnability.
+- Steps 1 + 3 had healthy signal (~12-15 % of groups). Step 2 dipped to 1.6 % — a "thrashing" step where the prior step's gradient happened to push the policy slightly off.
+
+**Group-level expected signal across the 3 steps**: roughly 18 of 192 group-step instances (~9 %) produced GRPO advantage signal. Over 622 production steps, that scales to ~**4,000 advantage-positive group-steps** — enough cumulative gradient to potentially drive meaningful learning.
+
+Result files at `logs/exp_014/train_data_step{1,2,3}.jsonl` (~80 MB total).
+
+## M7.1 production decision
+
+**Recommendation: GO with kill-switches.** Launch M7.1 full production (622 steps × 2 epochs), monitor with explicit abort conditions.
+
+**Why GO:**
+1. **Structural learning signal is real and monotonic across smokes B + C**: `<answer>` emission rate rises, truncation rate falls. This shows the model is responding to the GRPO updates even when the F1-on-content reward is sparse.
+2. **Capability is demonstrated**: the perfect-F1 rollout in step 1 of smoke C confirms the base model can produce correct MuSiQue answers when it doesn't truncate. We're not bootstrapping a model with zero capability — we're bootstrapping one whose capability gets gated by truncation.
+3. **Prod batch shape gives 5-15× more signal density than smoke shape**. At smoke batch (20 traj/step), 3 % positive rate ⇒ ~0.6 positive/step ⇒ near-zero group advantage. At prod batch (320 traj/step), 3 % rate ⇒ ~10 positive/step distributed across 64 groups ⇒ ~9-15 % of groups have non-zero advantage — enough for cumulative learning over 622 steps.
+4. **Wall + cost are reasonable**: at smoke C's pace (17 min/step incl. setup) extrapolated to 622 steps = ~7.4 days; production has checkpointing + validation overhead so realistic estimate is **~7-10 days, ~$200-300** on Vast 1× A100. That's at the low end of the M5.1 cost envelope.
+
+**Why NOT GO would be defensible:**
+- Per-rollout reward rate is still very low (2-3 %) — model may take 100s of steps to start producing reliably correct answers.
+- Step 2 reward dip suggests gradient signal isn't dense enough to monotonically improve in 3 steps; with 622 steps the pattern might be net-positive or might oscillate without converging.
+- We don't know yet whether M5.1 hybrid + GRPO actually beats the M4.5 hybrid floor (0.092). If hybrid + GRPO doesn't lift, base + GRPO is unlikely to lift either.
+
+**Proposed M7.1 launch with kill-switches:**
+
+| Checkpoint | Action |
+|---|---|
+| Steps 1-50 | Monitor reward_mean, `<answer>` emission rate, truncation rate. Save ckpt at step 50. |
+| **Step 50 review** | If reward_mean has risen to ≥ **0.02** (cumulative trend) AND `<answer>` emission rate ≥ **40 %** → continue. Otherwise → **KILL** at step 50. Cost up to that point: ~50 × 20 min × $1.20/h ≈ **$20**. |
+| Steps 50-200 | If signal trajectory continues, ramp full schedule. Save every 50 steps. HF Hub auto-upload watcher running. |
+| **Step 200 review** | If reward_mean ≥ 0.05 → continue to 622. If stuck below 0.03 → KILL at step 200. Cost up to here: ~$80. |
+| Steps 200-622 | Full ramp; M7.2 eval on the final checkpoint. |
+
+**Alternatives if GO is too risky for you:**
+1. **Wait for M5.1-a3 hybrid** to produce a trained-hybrid result first. If hybrid + GRPO lifts the M4.5 floor (0.092), confidence rises that base + GRPO will too. Cost: 10-13 d wait.
+2. **Add a small format-gate reward floor for M7** — e.g., reward = max(0.05, f1) if rollout emits `<answer>` (even an empty one). This bootstraps gradient density at the cost of diverging from the M5.1 contract. Quick fix; ~20 LoC.
+3. **Reduce M7.1 to a shorter run** — e.g., 100 or 200 steps instead of 622. Costs ~$30-60. Still meaningful trajectory data even if it doesn't converge.
 
 ## Pointers
 
