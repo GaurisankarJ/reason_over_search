@@ -159,7 +159,7 @@ echo
 if grep -Eq '^HF_TOKEN=[^[:space:]]+' "training_m5_6/.env" 2>/dev/null; then
   echo "[$(ts)] Starting HF Hub upload watcher (mode=${MODE} seed=${SEED})"
   HF_UPLOADER_LOG="logs/m5_6_${RUN_ID}_hf_uploader.log"
-  apptainer exec --bind "$BIND" --env "HF_HOME=/workspace/hf_cache" "$SIF_PATH" \
+  apptainer exec --bind "$BIND" --env "HF_HOME=/workspace/hf_cache" --env "CHECKPOINT_DIR_BASE=${CHECKPOINT_DIR_BASE}" "$SIF_PATH" \
     bash -lc "
       cd /workspace/reason_over_search
       bash training_m5_6/scripts/upload_ckpts_watcher.sh --mode '${MODE}' --seed '${SEED}'
