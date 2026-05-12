@@ -474,4 +474,3 @@ logger:
 cluster:
   gpus_per_node: 2
   num_nodes: 1
-  num_nodes: 1
