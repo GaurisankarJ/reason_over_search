@@ -49,37 +49,77 @@ Mechanism: the auto-inject `<IMPORTANT>` reminder is in-distribution for hybrid'
 
 ## 4. Full sweep (51,713 items / variant)
 
-Vast.ai 1× A100-SXM4 (instance `36465611`); orchestrator [`scripts/orchestrate_C_then_A.sh`](../../scripts/orchestrate_C_then_A.sh) (Phase 4 = base FULL × 7; Phase 6 = hybrid FULL × 7). Wall-clock: base 2 h 26 min (17:12 → 19:07 UTC); hybrid 5 / 7 cells in the original 2026-05-09 run (19:17 → 21:15 UTC), then 2wikimultihopqa + musique re-ran on 2026-05-10 (14:40 → 17:01 UTC) after the original run hit a transformers-4.57.1 → 5.7.0 venv revert. Greedy decode, single seed.
+### 4.1 M4.5 hybrid full sweep with `qwen35_terse` (2026-05-12)
 
-| Dataset | N | hybrid EM | base EM | hybrid ACC | base ACC | hybrid F1 | base F1 |
+Vast 1× A100-80GB; greedy decode, `seed=1`; optimised stack (multi-block `<tool_response>` per chunk, per-chunk cap 120 tok, `generator_max_input_len=8192`, retriever IVF-SQ8 × 16 + `asyncio.to_thread` + `INFERENCE_MAX_WORKERS=128`); SGLang `qwen3.5_0.8b` (hybrid), `enable_thinking=True`, `prompt_mode=qwen35_terse` (Phase 1b winner; auto-inject ON, terse user message). Wall-clock: **3 h 36 min** (13:14 → 16:50 UTC on 2026-05-12, single contiguous run).
+
+| Dataset | N | M4.5 hybrid EM (`qwen35_terse`) | hybrid ACC | hybrid F1 | M4.2 EM (prior lock) | Δ vs M4.2 |
+|---|---:|---:|---:|---:|---:|---:|
+| bamboogle (test) | 125 | **0.072** | 0.112 | 0.113 | 0.048 | +0.024 |
+| nq (test) | 3,610 | **0.100** | 0.204 | 0.144 | 0.063 | +0.037 |
+| triviaqa (test) | 11,313 | **0.202** | 0.299 | 0.250 | 0.124 | **+0.078** |
+| popqa (test) | 14,267 | **0.124** | 0.183 | 0.151 | 0.075 | +0.049 |
+| hotpotqa (dev) | 7,405 | **0.083** | 0.129 | 0.120 | 0.064 | +0.019 |
+| 2wikimultihopqa (dev) | 12,576 | **0.046** | 0.067 | 0.058 | 0.040 | +0.006 |
+| musique (dev) | 2,417 | **0.018** | 0.029 | 0.027 | 0.008 | +0.010 |
+| **mean (simple)** | **51,713** | **0.092** | **0.146** | **0.123** | **0.060** | **+0.032** |
+
+**Headline: M4.5 lifts hybrid mean EM from 0.060 (M4.2 lock) → 0.092 (terse). Δ +0.032 absolute, +53 % relative.** The lift is concentrated in open-domain entity-recall datasets where M4.2's bypass-and-fabricate failure mode was costliest: triviaqa **+0.078** (+63 % rel.), popqa +0.049 (+65 % rel.), nq +0.037 (+59 % rel.). Multi-hop datasets (hotpotqa +0.019, 2wiki +0.006, musique +0.010) show smaller absolute lifts but musique's +0.010 represents a **2.2× relative improvement** — first measurable multi-hop signal at scale for untrained Qwen3.5-0.8B.
+
+**Phase 1b prediction calibration**: n=300 anchor was mean EM 0.103; full-sweep landed at 0.092. Δ −0.011 vs prediction (slight n-scale shrinkage, well within Wilson 95 % CI half-width at n=300 of ~2.7 pp). All 7 datasets directionally positive at full scale, matching n=300.
+
+### 4.2 Combined hybrid + base (final M4 locks)
+
+Base row carried forward from §4.3 below (M4.3 lock `qwen35_minimal_no_system`; M4.4 Phase 4 produced no winner, see §5.5).
+
+| Dataset | N | hybrid EM (M4.5 terse) | base EM (M4.3 minimal_no_system) | hybrid ACC | base ACC | hybrid F1 | base F1 |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| bamboogle (test) | 125 | 0.048 | 0.000 | 0.048 | 0.000 | 0.063 | 0.009 |
-| nq (test) | 3,610 | 0.063 | 0.004 | 0.113 | 0.020 | 0.087 | 0.010 |
-| triviaqa (test) | 11,313 | 0.124 | 0.012 | 0.174 | 0.031 | 0.153 | 0.029 |
-| popqa (test) | 14,267 | 0.075 | 0.008 | 0.110 | 0.024 | 0.092 | 0.014 |
-| hotpotqa (dev) | 7,405 | 0.064 | 0.011 | 0.089 | 0.028 | 0.087 | 0.022 |
-| 2wikimultihopqa (dev) | 12,576 | 0.040 | 0.032 | 0.056 | 0.076 | 0.050 | 0.043 |
-| musique (dev) | 2,417 | 0.008 | 0.000 | 0.013 | 0.005 | 0.017 | 0.006 |
-| **mean (simple)** | **51,713** | **0.060** | **0.010** | **0.086** | **0.026** | **0.078** | **0.019** |
+| bamboogle (test) | 125 | 0.072 | 0.000 | 0.112 | 0.000 | 0.113 | 0.009 |
+| nq (test) | 3,610 | 0.100 | 0.004 | 0.204 | 0.020 | 0.144 | 0.010 |
+| triviaqa (test) | 11,313 | 0.202 | 0.012 | 0.299 | 0.031 | 0.250 | 0.029 |
+| popqa (test) | 14,267 | 0.124 | 0.008 | 0.183 | 0.024 | 0.151 | 0.014 |
+| hotpotqa (dev) | 7,405 | 0.083 | 0.011 | 0.129 | 0.028 | 0.120 | 0.022 |
+| 2wikimultihopqa (dev) | 12,576 | 0.046 | 0.032 | 0.067 | 0.076 | 0.058 | 0.043 |
+| musique (dev) | 2,417 | 0.018 | 0.000 | 0.029 | 0.005 | 0.027 | 0.006 |
+| **mean (simple)** | **51,713** | **0.092** | **0.010** | **0.146** | **0.026** | **0.123** | **0.019** |
 
-Hybrid is **6× over base** on EM (0.060 vs 0.010). Base only matches hybrid on 2wiki (0.032 vs 0.040) and undershoots elsewhere. Base produces an answer at all on most datasets (non-zero ACC) but rarely a correct one (low EM/F1).
+Hybrid is now **9.2× over base** on EM (0.092 vs 0.010), up from 6× at M4.2 lock. Base 2wiki (0.032) still narrowly beats hybrid 2wiki at M4.2 (0.040 → 0.046 with terse; gap now 0.014); on every other dataset hybrid dominates by ≥ 4×.
+
+### 4.3 Prior full sweep — M4.2 hybrid / M4.3 base (2026-05-09)
+
+Original full sweep on the M4.2/M4.3 locked prompts. Vast.ai 1× A100-SXM4 (instance `36465611`); orchestrator [`scripts/orchestrate_C_then_A.sh`](../../scripts/orchestrate_C_then_A.sh) (Phase 4 = base FULL × 7; Phase 6 = hybrid FULL × 7). Wall-clock: base 2 h 26 min (17:12 → 19:07 UTC); hybrid 5 / 7 cells in the original 2026-05-09 run (19:17 → 21:15 UTC), then 2wikimultihopqa + musique re-ran on 2026-05-10 (14:40 → 17:01 UTC) after the original run hit a transformers-4.57.1 → 5.7.0 venv revert. Greedy decode, single seed.
+
+| Dataset | N | hybrid EM (M4.2 minimal) | base EM (M4.3 minimal_no_system) |
+|---|---:|---:|---:|
+| bamboogle (test) | 125 | 0.048 | 0.000 |
+| nq (test) | 3,610 | 0.063 | 0.004 |
+| triviaqa (test) | 11,313 | 0.124 | 0.012 |
+| popqa (test) | 14,267 | 0.075 | 0.008 |
+| hotpotqa (dev) | 7,405 | 0.064 | 0.011 |
+| 2wikimultihopqa (dev) | 12,576 | 0.040 | 0.032 |
+| musique (dev) | 2,417 | 0.008 | 0.000 |
+| **mean (simple)** | **51,713** | **0.060** | **0.010** |
+
+M4.2 hybrid row superseded by §4.1 (M4.5 terse). M4.3 base row retained as the canonical base number (no Phase 4 winner; see §5.5).
 
 ## 5. Cross-family comparison (M3 vs M4)
 
-Untrained-floor comparison. M3 reference is the pre-GRPO Qwen3-0.6B hybrid (`qwen_3_0.6b`, [`RESULTS_m3.md`](RESULTS_m3.md) §6). All values are EM at full Plan A (51,713 items / variant), greedy decode.
+Untrained-floor comparison. M3 reference is the pre-GRPO Qwen3-0.6B hybrid (`qwen_3_0.6b`, [`RESULTS_m3.md`](RESULTS_m3.md) §6). All values are EM at full Plan A (51,713 items / variant), greedy decode. Hybrid column is M4.5 (terse-locked) which supersedes the M4.2 hybrid lock; M4.2 baseline shown for reference.
 
-| Dataset | M3 (Qwen3-0.6B hybrid) | M4 (Qwen3.5-0.8B hybrid) | M4 (Qwen3.5-0.8B base) | Δ M4-hybrid vs M3 |
-|---|---:|---:|---:|---:|
-| bamboogle | 0.056 | 0.048 | 0.000 | −0.008 |
-| nq | 0.113 | 0.063 | 0.004 | −0.050 |
-| triviaqa | 0.178 | 0.124 | 0.012 | −0.054 |
-| popqa | 0.133 | 0.075 | 0.008 | −0.058 |
-| hotpotqa | 0.083 | 0.064 | 0.011 | −0.019 |
-| 2wikimultihopqa | 0.141 | 0.040 | 0.032 | −0.101 |
-| musique | 0.010 | 0.008 | 0.000 | −0.002 |
-| **mean** | **0.102** | **0.060** | **0.010** | **−0.042** |
+| Dataset | M3 (Qwen3-0.6B hybrid) | **M4.5 (Qwen3.5-0.8B + terse)** | M4.2 (Qwen3.5-0.8B + minimal) | M4 (Qwen3.5-0.8B base) | **Δ M4.5 vs M3** | Δ M4.2 vs M3 |
+|---|---:|---:|---:|---:|---:|---:|
+| bamboogle | 0.056 | **0.072** | 0.048 | 0.000 | **+0.016** | −0.008 |
+| nq | 0.113 | **0.100** | 0.063 | 0.004 | **−0.013** | −0.050 |
+| triviaqa | 0.178 | **0.202** | 0.124 | 0.012 | **+0.024** | −0.054 |
+| popqa | 0.133 | **0.124** | 0.075 | 0.008 | **−0.009** | −0.058 |
+| hotpotqa | 0.083 | **0.083** | 0.064 | 0.011 | **+0.000** | −0.019 |
+| 2wikimultihopqa | 0.141 | **0.046** | 0.040 | 0.032 | **−0.095** | −0.101 |
+| musique | 0.010 | **0.018** | 0.008 | 0.000 | **+0.008** | −0.002 |
+| **mean** | **0.102** | **0.092** | **0.060** | **0.010** | **−0.010** | **−0.042** |
 
-**Qwen3.5-0.8B hybrid is uniformly below Qwen3-0.6B hybrid on this protocol** (no dataset crosses); the cross-family Δ averages −0.042 EM (−41 % relative). Largest gaps on the multi-hop datasets (2wiki −0.10, popqa −0.06, triviaqa −0.05). Despite the larger param count and newer training data, Qwen3.5 family doesn't carry a stronger zero-shot retrieval-tool prior than Qwen3 hybrid did out of the box.
+**Headline: M4.5 closes ~76 % of the M3 cross-family gap.** Avg Δ improved from −0.042 (M4.2) → **−0.010 (M4.5)**. Three datasets now exceed M3 (bamboogle +0.016, triviaqa +0.024, musique +0.008); two are essentially tied (hotpotqa Δ 0, popqa Δ −0.009, nq Δ −0.013). The remaining gap is concentrated almost entirely on **2wikimultihopqa** (Δ −0.095 — terse 0.046 vs M3 0.141) — M3's Qwen3-0.6B was unusually strong on 2wiki, likely a side-effect of its smaller-model post-training distribution that Qwen3.5-0.8B lacks.
+
+Excluding 2wiki, M4.5 mean = 0.099 vs M3 mean (also ex-2wiki) = 0.096 → **M4.5 actually exceeds M3 by +0.003 across the 6 non-2wiki datasets**. The Qwen3.5 cross-family gap is therefore not a Qwen3.5 *floor* problem — it's a 2wiki-specific shape mismatch.
 
 ## 5.5 M4.4 Phase 4 — base prompt screen (2026-05-12)
 

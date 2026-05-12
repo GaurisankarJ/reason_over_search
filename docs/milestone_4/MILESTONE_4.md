@@ -489,9 +489,28 @@ All 3 share the M4.3 no-system structure (no auto-inject; format spec inlined in
 
 ## M4.5 — hybrid full sweep with `qwen35_terse`
 
-**Status (2026-05-12): scheduled. Runs after Phase 4 base screen (or in parallel on a second box).**
+**Status (2026-05-12): ✅ COMPLETE. Wall: 3 h 36 min (13:14 → 16:50 UTC). Mean EM 0.092 (Δ +0.032 vs M4.2 lock, +53 % relative). Closes 76 % of the M3 cross-family gap.**
 
-Re-runs the full Plan A test/dev sets (51,713 items / variant, 7 datasets) on `eval/qwen3.5_0.8b/` (hybrid) with the Phase-1b-locked prompt `qwen35_terse`. Replaces [`RESULTS_m4.md`](../report/RESULTS_m4.md) §4 hybrid row + refreshes §5 cross-family delta (was avg Δ −0.042 favouring M3 Qwen3-0.6B; expected to flip to ~0 or slight M4 advantage after the terse lock — Phase 1b n=300 anchor lands at 0.103 vs M3 full-sweep 0.102).
+Per-dataset full-sweep numbers (M4.5 hybrid `qwen35_terse` vs M4.2 hybrid `qwen35_minimal`):
+
+| Dataset | N | M4.5 EM | M4.2 EM | Δ |
+|---|---:|---:|---:|---:|
+| bamboogle (test) | 125 | 0.072 | 0.048 | +0.024 |
+| nq (test) | 3,610 | 0.100 | 0.063 | +0.037 |
+| triviaqa (test) | 11,313 | **0.202** | 0.124 | **+0.078** |
+| popqa (test) | 14,267 | 0.124 | 0.075 | +0.049 |
+| hotpotqa (dev) | 7,405 | 0.083 | 0.064 | +0.019 |
+| 2wikimultihopqa (dev) | 12,576 | 0.046 | 0.040 | +0.006 |
+| musique (dev) | 2,417 | 0.018 | 0.008 | +0.010 |
+| **mean** | **51,713** | **0.092** | **0.060** | **+0.032** |
+
+Phase 1b n=300 prediction was mean EM 0.103; full-sweep landed at 0.092 (Δ −0.011 shrinkage, well within Wilson 95 % CI at n=300 of ~2.7 pp). All 7 datasets remain positive Δ at full scale, matching Phase 1b directionality.
+
+Result files: `evaluation_qwen35/results/<dataset>/<dataset>_*_m4_qwen3.5_0.8b_qwen35_terse_seed1/metric_score.txt` (no `_n*` suffix = full split). Full table + cross-family delta in [`../report/RESULTS_m4.md` §4.1 + §5](../report/RESULTS_m4.md).
+
+
+
+Re-ran the full Plan A test/dev sets (51,713 items / variant, 7 datasets) on `eval/qwen3.5_0.8b/` (hybrid) with the Phase-1b-locked prompt `qwen35_terse`. [`RESULTS_m4.md`](../report/RESULTS_m4.md) §4.1 has the new locked hybrid numbers (mean EM 0.092); §5 cross-family delta refreshed (was avg Δ −0.042 favouring M3; M4.5 closes to Δ −0.010; non-2wiki mean now exceeds M3 by +0.003).
 
 | Knob | Value |
 |---|---|
@@ -555,8 +574,8 @@ sbatch scripts/sbatch_m4.sh qwen3.5_0.8b_base 51713 ${PHASE4_LOCK}
 | 4d | → see **M4.6 — base full sweep** below | renamed 2026-05-12; was "Phase 5". Blocked on 4c. Runs the full n=51,713 base sweep with the Phase-4-locked base prompt. ⏳ blocked. If Phase 4 produces no candidate above the bar, the M4.3 lock stays and M4.6 is unnecessary. |
 | 5 | Cross-family re-comparison M3 vs M4 post-M4.5 / M4.6 lock — refresh [`RESULTS_m4.md`](../report/RESULTS_m4.md) §5 | ⏳ blocked on M4.5 + M4.6 (both variants must lock at full-sweep scale before §5 cross-family table is final) |
 | 6 | M5 (separate milestone): GRPO training on Qwen3.5-0.8B with the M4-locked prompt as the byte-aligned eval / train shape — see [`MILESTONE_5.md`](../milestone_5/MILESTONE_5.md) | ⏳ unblocked for hybrid (can use the terse-locked hybrid prompt now); base alignment waits on M4.6. |
-| 7 | **M4.5 — hybrid full sweep with `qwen35_terse`** (n=51,713 × 7 datasets, ~7 h) | ⏳ next. See [§M4.5](#m45--hybrid-full-sweep-with-qwen35_terse) below. |
-| 8 | **M4.6 — base full sweep with Phase-4 lock** (n=51,713 × 7 datasets, ~7 h) | ⏳ blocked on 4c. See [§M4.6](#m46--base-full-sweep-with-phase-4-lock) below. |
+| 7 | **M4.5 — hybrid full sweep with `qwen35_terse`** (n=51,713 × 7 datasets) | ✅ **DONE 2026-05-12 16:50 UTC, wall 3 h 36 min**. Mean EM **0.092** (Δ +0.032 / +53 % rel. vs M4.2 lock 0.060). Closes 76 % of M3 cross-family gap. Per-dataset + cross-family delta in [`../report/RESULTS_m4.md` §4.1 + §5](../report/RESULTS_m4.md). |
+| 8 | **M4.6 — base full sweep with Phase-4 lock** (n=51,713 × 7 datasets) | ⊘ **NOT RUN — no winner to validate**. Phase 4 produced no candidate above the +0.025 bar (best at 0.015 mean EM, bar 0.035). M4.3 lock (`qwen35_minimal_no_system`, mean EM 0.010) stays as canonical base prompt. [`RESULTS_m4.md` §4.2/§4.3](../report/RESULTS_m4.md) base row unchanged. |
 
 ## Pointers
 
