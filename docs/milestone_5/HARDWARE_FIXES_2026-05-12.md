@@ -308,3 +308,156 @@ git status   # should be clean if no edits since the last commit (cleanup is dat
 - [`../setup/HF_CHECKPOINT_UPLOAD.md`](../setup/HF_CHECKPOINT_UPLOAD.md) — HF watcher operator doc (research_v2)
 - [`../setup/HARDWARE_COMPARISON.md`](../setup/HARDWARE_COMPARISON.md) §3 — 2× A100 wall-clock projection
 - [`MILESTONE_5.md`](MILESTONE_5.md) — M5 narrative + run history
+
+
+## 12. Vast 2xA100-SXM4 verification + Option A upgrade (2026-05-12 PM)
+
+Rented a Vast.ai 2× A100-SXM4-80GB instance to verify the 2xa100 prod
+path in depth before the M5.1 2× sbatch starts 2026-05-15 21:05 CEST.
+Vast iteration is minutes vs ALICE's queue-wait days, and the SXM4
+hardware (NVLink) is a tighter test of TP=2 memory than ALICE's PCIe.
+
+### 12.1 Bugs caught on Vast (in order)
+
+1. **Missing `bin/python` symlinks in uv-managed venvs.** The Vast
+   workspace was rsync'd from a prior instance; rsync didn't preserve
+   the hardlinks to `/.uv/python_install/cpython-3.13.13-linux-x86_64-gnu/bin/python3`.
+   Fix: re-symlink in each `training/nemo_rl/.venv/bin/`. Vast-specific.
+
+2. **uv `--locked --extra automodel` tries to compile causal-conv1d
+   + transformer-engine from git source on every run.** The Vast Docker
+   image (`pantomiman/reason-over-search-v1:v2`) doesn't ship these
+   pre-compiled like the ALICE SIF does. Fix: NeMo-RL's
+   `_env_builder()` at `nemo_rl/utils/venvs.py:110` has an early-return
+   path `if not force_rebuild and python_path.exists(): return ...`.
+   The prebuilt sub-venv at
+   `training/nemo_rl/venvs/.../DTensorPolicyWorkerV2/bin/python` already
+   exists; deleting any stale `STARTED_ENV_BUILDER` marker triggers
+   the early-return and skips uv. Vast-specific (ALICE's SIF has the
+   pre-compiled venvs baked in).
+
+3. **`/tmp` (overlay, 35 GB) fills during HF model download + Ray
+   temp.** `HF_HOME` and `RAY_TMPDIR` were unset, so HF downloaded
+   Qwen3.5-0.8B (~1.7 GB) to `/root/.cache/huggingface` and Ray
+   spilled to `/tmp/ray`. Both on the small overlay. Fix on Vast:
+   add `HF_HOME=/workspace/hf_cache`, `RAY_TMPDIR=/workspace/ray_tmp`,
+   `TRANSFORMERS_CACHE=/workspace/hf_cache/hub` to the experiment's
+   `.env`. Pre-download model to `/workspace/hf_cache` once. Vast-only;
+   ALICE's sbatch already binds these via apptainer.
+
+4. **TP=2 FSDP `reset_sharded_param` crash** (`length=248320` vs local
+   `124160`) on any `model.to(device)` call after refit (CPU offload
+   AND CUDA onload). Triggered in `offload_after_refit()` and
+   `prepare_for_lp_inference()` of `dtensor_policy_worker_v2.py`. Root
+   cause: `Qwen3_5ForConditionalGeneration` is unknown to NeMo-Automodel,
+   so heuristic plan wraps `embed_tokens`/`lm_head` with vocab-parallel
+   sharding; FSDP doesn't reconcile the shard dim with full vocab on
+   `narrow`. Same family of bug as
+   [pytorch/pytorch#136228](https://github.com/pytorch/pytorch/issues/136228);
+   no upstream fix in NeMo-RL HEAD.
+
+5. **Pre-existing yaml parse error**: duplicate `cluster.num_nodes: 1`
+   in all 3 prod_2xa100 yamls (lines 476–477). OmegaConf rejects with
+   `ConstructorError: found duplicate key`. Would have crashed every
+   ALICE 2x sbatch at config-load on 2026-05-15. Surfaced only because
+   the 2xa100 path had never run end-to-end. Caught while running the
+   prod 1-step OOM check on Vast.
+
+### 12.2 Fixes committed to `experiment_1_alice`
+
+| Commit | Scope | Net effect |
+|---|---|---|
+| **0041727** | Option B (`tensor_parallel_size: 1`) + `offload_after_refit` cpu_offload guard + `force_hf:true` (no-op) | Safe fallback; ~1.3-1.5× speedup vs 1× A100 |
+| **590b4bd** | Remove duplicate `cluster.num_nodes` in 3 prod yamls | Unblocks ALICE 2x prod sbatches from immediate yaml-parse crash |
+| **ca5386e** | Option A: `tensor_parallel_size: 2` + `custom_parallel_plan` + 3 plan files | Full ~2-2.5× speedup; the FSDP bug workaround |
+
+`force_hf: true` was tried first based on a third-party suggestion and
+DOES NOT help (only affects state-dict adapter, not the FSDP path);
+kept in yaml as a no-op for traceability.
+
+### 12.3 The custom parallel plan
+
+`training_m5_X/src/parallel_plan_qwen35.py` (identical across 3
+experiments per the M5 self-contained convention):
+
+```python
+{
+    # Transformer-layer projections sharded across TP=2:
+    "model.layers.*.self_attn.q_proj":    ColwiseParallel(),
+    "model.layers.*.self_attn.k_proj":    ColwiseParallel(),
+    "model.layers.*.self_attn.v_proj":    ColwiseParallel(),
+    "model.layers.*.self_attn.qkv_proj":  ColwiseParallel(),
+    "model.layers.*.self_attn.o_proj":    RowwiseParallel(),
+    "model.layers.*.mlp.gate_up_proj":    ColwiseParallel(),
+    "model.layers.*.mlp.up_proj":         ColwiseParallel(),
+    "model.layers.*.mlp.gate_proj":       ColwiseParallel(),
+    "model.layers.*.mlp.down_proj":       RowwiseParallel(),
+    # NO embed_tokens, NO lm_head -> replicated (avoids the bug)
+}
+```
+
+The Qwen3.5 `Qwen3_5GatedDeltaNet` (Mamba-style) layers don't match
+any pattern and fall back to FSDP-only handling (no TP). They're a
+minority of the 24 layers; the speedup loss is small.
+
+### 12.4 Verification matrix (Vast, 2xA100-SXM4-80GB)
+
+| Run | Mode | Steps | Outcome |
+|---|---|---|---|
+| Option B smoke (v6) | TP=1 dtensor / TP=2 vllm | 4 / 4 | PASS, ckpts step_2 + step_4 |
+| Option A smoke (Hydra override, v7) | TP=2 + custom plan | 4 / 4 | PASS, ckpts saved |
+| Option A smoke (yaml-only, v8) | TP=2 + custom plan via yaml | 4 / 4 | PASS, confirms ALICE invocation path |
+| Option A prod 1-step micro=1 | TP=2, micro=1, seq=8192, 64 prompts × 5 gens | 1 / 1 | PASS, 52 min wall, peak ~74 GB on GPU 0 |
+| Option A prod 5-step micro=2 | TP=2, micro=2, seq=8192 | 2 / 5 | **OOM at step 3** during training pass; fragmentation pattern (needed +14.56 GB, only 12.72 GB free) |
+
+### 12.5 The micro_batch_size=2 question
+
+Tempting throughput lever (~2× train pass), but step 3 OOMs from
+fragmentation on a margin that fits steps 1 + 2 cleanly. Step 1 + 2
+GPU 0 peaks at ~78 GB (within 80 GB), but PyTorch reserved-but-unallocated
+fragments accumulate across the refit/offload/onload cycles. By step 3
+the contiguous free is too small for the 14.56 GB activation peak.
+
+`PYTORCH_ALLOC_CONF=expandable_segments:True` would mitigate but
+**breaks NeMo-RL's CUDA-IPC weight sharing** between policy and vLLM
+worker (`pidfd_getfd: Operation not permitted` — known issue,
+documented in `training_m5_X/scripts/run.sh` comment block).
+
+Conclusion: `train_micro_batch_size: 1` stays for now. micro=2 is a
+follow-up that may be unlocked with activation-checkpointing or
+optimizer CPU offload (separate experiment).
+
+### 12.6 What stays on Vast, doesn't go to ALICE
+
+- `.env` additions (`HF_HOME`, `RAY_TMPDIR`, `TRANSFORMERS_CACHE`):
+  ALICE's sbatch already provides these via apptainer bind
+  (`HF_HOME_HOST`, `RAY_SCRATCH_HOST`)
+- `bin/python` symlink fix: ALICE's SIF has venvs baked in correctly
+- `/tmp` cleanup: ALICE uses zfsstore for working dirs
+
+### 12.7 Tomorrow's ALICE verifications
+
+Auto-verifications fire on existing queued sbatches; they pull
+`experiment_1_alice` HEAD (now `ca5386e`) at job-start:
+- **sbatch 2274508** ~21:32 CEST: 1xA100 full-shape verify (unaffected by Option A)
+- **sbatch 2275683** ~23:24 CEST: 2xA100 verify with stage 4 prod_2xa100
+  1-step OOM check — this is the ALICE-side validation of Option A
+- **srun 2275986** ~Thu 01:35 CEST: interactive 2xA100, 4h walltime
+
+If any of these surface a problem specific to ALICE's PCIe topology
+(vs Vast's NVLink) or apptainer environment, fix before May 15 21:05.
+
+### 12.8 Files committed today (Vast tuning)
+
+```
+training_m5_1/configs/m5_1_research_paper_2xa100.yaml   # TP 1 -> 2, custom plan ref
+training_m5_1/configs/m5_smoke_2xa100.yaml              # same
+training_m5_5/configs/m5_5_research_paper_2xa100.yaml   # same + dup num_nodes removed
+training_m5_5/configs/m5_smoke_2xa100.yaml              # same
+training_m5_6/configs/m5_6_research_paper_2xa100.yaml   # same + dup num_nodes removed
+training_m5_6/configs/m5_smoke_2xa100.yaml              # same
+training_m5_1/src/parallel_plan_qwen35.py               # NEW (the plan)
+training_m5_5/src/parallel_plan_qwen35.py               # NEW
+training_m5_6/src/parallel_plan_qwen35.py               # NEW
+training/nemo_rl/nemo_rl/models/policy/workers/dtensor_policy_worker_v2.py  # cpu_offload guard
+```
