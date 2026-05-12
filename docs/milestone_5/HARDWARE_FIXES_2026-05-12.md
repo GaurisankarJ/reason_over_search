@@ -302,6 +302,161 @@ git status   # should be clean if no edits since the last commit (cleanup is dat
 # If anything dirty, commit + push
 ```
 
+## 12. Vast 2x A100 verification session (2026-05-12 evening)
+
+User rented Vast `23.127.144.217:12802` (2× A100-SXM4-80GB NVLink, Docker overlay) to verify the 2xa100 path before ALICE's prod sbatches fire May 14-19. Stayed on `experiment_1_alice` branch throughout. Session summary:
+
+### 12.1 — TP=2 FSDP `reset_sharded_param` crash on vocab-parallel embed/lm_head
+
+Initial 2xa100 prod 1-step OOM check crashed during the first `model.to("cpu")` call in `offload_after_refit`. Traceback:
+
+```
+File ".../torch/distributed/fsdp/_fully_shard/_fsdp_param.py:560 in _reset_sharded_param"
+RuntimeError: a Tensor with 124160 elements cannot be converted to Scalar
+```
+
+Length 248320 vs 124160 → Qwen3.5-0.8B vocab is 248320, split across 2 ranks = 124160 per shard. Same bug class as `pytorch/pytorch#136228`. NeMo-Automodel doesn't have a built-in parallel plan for `Qwen3_5ForConditionalGeneration`, so its heuristic auto-applies vocab-parallel sharding to `embed_tokens` + `lm_head` → triggers the FSDP narrow bug.
+
+### 12.2 — Fix: `custom_parallel_plan` excluding embed/lm_head (Option A, commits ca5386e + 4aa7168)
+
+New file `training_m5_X/src/parallel_plan_qwen35.py` (3 copies, identical 35 lines):
+
+```python
+from torch.distributed.tensor.parallel import ColwiseParallel, RowwiseParallel
+def custom_parallel_plan():
+    return {
+        "model.layers.*.self_attn.q_proj":    ColwiseParallel(),
+        "model.layers.*.self_attn.k_proj":    ColwiseParallel(),
+        "model.layers.*.self_attn.v_proj":    ColwiseParallel(),
+        "model.layers.*.self_attn.qkv_proj":  ColwiseParallel(),
+        "model.layers.*.self_attn.o_proj":    RowwiseParallel(),
+        "model.layers.*.mlp.gate_up_proj":    ColwiseParallel(),
+        "model.layers.*.mlp.up_proj":         ColwiseParallel(),
+        "model.layers.*.mlp.gate_proj":       ColwiseParallel(),
+        "model.layers.*.mlp.down_proj":       RowwiseParallel(),
+        # NO embed_tokens, NO lm_head -> replicated (avoids FSDP narrow bug)
+    }
+```
+
+Wired into all 6 × 2xa100 yamls:
+```yaml
+dtensor_cfg:
+  tensor_parallel_size: 2
+  custom_parallel_plan: training_m5_X.src.parallel_plan_qwen35.custom_parallel_plan
+```
+
+Side-effect: embed + lm_head replicated across 2 GPUs costs ~2× 1 GB extra memory, trivial vs the activation savings from TP=2.
+
+### 12.3 — Pre-existing bug: duplicate `cluster.num_nodes` in 3 prod yamls
+
+While porting Option A, surfaced that `m5_1_research_paper_2xa100.yaml`, `m5_5_research_paper_2xa100.yaml`, `m5_6_research_paper_2xa100.yaml` all had `num_nodes: 1` declared TWICE in `cluster:` block. YAML parse silently picked the last; both load successfully but fragile. Fixed via sed; would have crashed any 3 ALICE 2x prod sbatches at config-load if a sibling change had reordered keys.
+
+### 12.4 — `offload_after_refit` gated on `cpu_offload` (commit ca5386e)
+
+Patch in `training/nemo_rl/nemo_rl/models/policy/workers/dtensor_policy_worker_v2.py`:
+
+```python
+def offload_after_refit(self) -> None:
+    # TP_OFFLOAD_GUARD_2026_05_12: gate on cpu_offload; FSDP reset_sharded_param
+    # crashes on vocab-parallel embed/lm_head at TP>1 when calling model.to("cpu") here.
+    if self.cpu_offload:
+        self.model = self.move_to_cpu(self.model)
+```
+
+Default config has `cpu_offload: false` so this branch is skipped. Defensive belt-and-suspenders alongside §12.2.
+
+### 12.5 — `micro=2` fragmentation OOM at step 3 (UNRESOLVED, micro=1 stays the default)
+
+Three Vast attempts to enable `train_micro_batch_size=2 + logprob_batch_size=2`:
+
+| Attempt | vLLM `gpu_memory_utilization` | `PYTORCH_CUDA_ALLOC_CONF` | Outcome |
+|---|---|---|---|
+| 1 | 0.7 | (default) | OOM at step 3 generation: tried 14.5 GB, 12-14 GB free |
+| 2 | 0.55 | (default) | OOM at step 3 generation: saved 2 GB total, still failed |
+| 3 | 0.7 | `max_split_size_mb:64` | No OOM in 1h 06 min; reached step 2 training; **but throughput collapsed** — step 1 generation 7.5 min (normal), step 1 training 32+ min (vs ~2 min historically with micro=1) → ~30× slowdown |
+
+`max_split_size_mb:64` "works" in the sense of past-the-failure-point, but at a wall-clock penalty that makes it strictly worse than micro=1. Killed at 1h 19 min.
+
+**Verdict**: ship **micro=1 + default allocator** to ALICE. The fragmentation pattern at micro=2 is the documented `log_softmax` allocator scar from the M5.2 v7 postmortem (§3 of `RESULTS_SMOKE_m5.md`). The unblocking lever is to patch `nemo_rl/distributed/model_utils.py:1378` to chunk the logits→fp32 cast (deferred to M5.3); allocator tweaks cannot work around it.
+
+### 12.6 — Verification matrix outcome on Vast (SXM4 NVLink topology)
+
+| Test | Outcome |
+|---|---|
+| 3× smoke_2xa100 (m5_1, m5_5, m5_6) end-to-end with Option A | PASSED, ckpts saved at step_2 + step_4 |
+| 2xa100 prod 1-step OOM check at micro=1 | PASSED |
+| 2xa100 prod 5-step OOM check at micro=2 | FAILED (§12.5) |
+
+Important caveat: ALICE A100s are **PCIe**, not SXM4. NVLink-vs-PCIe inter-GPU bandwidth differs ~4×. The Option A custom_parallel_plan fix is correct on either topology (it's a code-path fix, not a bandwidth fix), but step-time will be slower on ALICE PCIe. The 2x verify on ALICE (sbatch 2275683 + srun 2275986, 2026-05-13) is the actual production-topology validation.
+
+### 12.7 — Commits landed on `experiment_1_alice`
+
+| Commit | Subject |
+|---|---|
+| `0041727` | feat(training): Option B fallback (FSDP-only, TP=1) for 2xa100 |
+| `590b4bd` | fix(configs): remove duplicate `cluster.num_nodes` in 3 prod 2xa100 yamls |
+| `ca5386e` | feat(training): Option A — custom_parallel_plan for Qwen3.5 + offload gating |
+| `4aa7168` | docs(m5): record Vast 2xa100 verification + Option A wiring |
+
+All pushed to `origin/experiment_1_alice`. ALICE working dir at `/zfsstore/user/s4374886/omega/reason_over_search-m5` pulled cleanly (was behind 4 commits; fast-forward).
+
+## 13. ALICE 2274508 cold-start surprise + retriever boot bottleneck
+
+### 13.1 — `m5_verify_seq.sh` recreated for 1xa100 path
+
+Found missing on ALICE (referenced by the existing 1xa100 sbatch but had been cleaned in §10.4). Recreated as a 1xa100 mirror of `m5_verify_seq_2xa100.sh`: stages 1-3 run `bash sbatch_m5_X.sh --mode smoke` for m5_1, m5_5, m5_6 (4 steps each); stage 4 runs `bash sbatch_m5_1.sh --mode prod` with `save_period=5 grpo.max_num_steps=5 checkpointing.enabled=false train_micro_batch_size=1` for 5-step prod OOM check at the 1xa100 shape. Bumped stage 4 from 1 → 5 steps mid-flight by editing the on-disk script while sbatch 2274508 was running (the frozen sbatch reads this file fresh each stage).
+
+### 13.2 — Retriever cold-boot measured at 2157s (36 min) on cold zfsstore
+
+`m5_1_2274508_retriever.log` shows 36 min from `apptainer exec ... retriever_serving.py` to first `/health` 200. 8 retriever workers × E5-base-v2 model load (199 weight-shard loop) + 16 GB IVF-SQ8 FAISS index mmap, all cold-read from zfsstore at ~40 MB/s. Consistent with the conservative 5400s timeout in `sbatch_m5_1*.sh`.
+
+This is 15% of every 4h verify-walltime budget burned on retriever boot. For long-haul prod sbatches (7 day walltime) it's a one-time cost, acceptable. For verifies, it's expensive.
+
+### 13.3 — Training Python process stuck in `Dl` for 1h+ after retriever healthy
+
+After retriever `/health` at 22:36 CEST, `run_grpo.py` (PID 1134955) launched. As of 23:43 CEST:
+
+- Wall: 1h 07 min
+- CPU: **23 seconds total**
+- State: `Dl` (uninterruptible disk-wait, multi-threaded)
+- GPU 0: 0% util, 2.5 GB used (retriever residue only)
+- Retriever served 0 POST /retrieve requests (training never reached first rollout)
+
+48 min of <0.5% CPU is not normal cold-start I/O. Most likely culprit: apptainer's squashfuse_ll layer reading the SIF rootfs over zfsstore is serialised on a single cold-read path (Python stdlib + torch + nemo_rl + vllm imports all hit it). HF cache + Qwen3.5-0.8B weights compound the I/O wait.
+
+**This is the first time we've actually let an ALICE training Python come up end-to-end today**. The prior "successful" sruns (2266786 m5_smoke_alloc, 2266839 m5_smoke_mig) were `srun` allocations that ran `m5_verify_seq.sh` but were cancelled at 10:46 CEST before the training step started. So the cold-zfsstore + apptainer-FUSE Python startup cost is a previously-unmeasured failure mode that 2274508 surfaced.
+
+### 13.4 — Mitigation plan for 2026-05-13 2x verify + future ALICE runs
+
+User constraint (2026-05-12 23:14 CEST): "we need 8 [retrievers] for training at least, so don't dial it back" → can't reduce `RETRIEVER_NUM_WORKERS` below 8.
+
+Three levers to evaluate during the 2x A100 srun 2275986 (2026-05-13 06:55 CEST):
+
+1. **Warm-cache test**: tonight's 2274508 reads have warmed the zfsstore page cache. If 2275683 (02:51 CEST) and 2275986 (06:55 CEST) land on node870 (or any node sharing zfsstore cache), retriever cold-boot should drop from 36 min to 5-10 min. First diagnostic check.
+2. **Pre-warm at sbatch start**: explicit `vmtouch -t <index>` + `cat venv-files > /dev/null` before the retriever launch. Burns ~5 min of compute time to force pages resident; saves ~25 min on first `/health`. Tested via the new sbatch 2293032 (`m5_1_smoke_check_sbatch.sh`, submitted 2026-05-13 00:13 CEST, queues at end of priority).
+3. **Stage to node-local scratch** (deferred): copy index + encoder weights + critical Python stdlib paths to `$TMPDIR` (node-local NVMe) before retriever start. Cleanest fix but needs `$TMPDIR` capacity check + script rewiring.
+
+### 13.5 — sbatch 2293032 (diagnostic 1xa100 smoke check)
+
+Submitted at 00:13 CEST (after user request "submit an srun again for 1xa100 check"). Same shape as 2274508 but ONLY runs `bash sbatch_m5_1.sh --mode smoke` (no m5_5, m5_6, no prod stage), and runs a pre-warm block of `vmtouch -t` on the index + `find | cat > /dev/null` on hf_cache and venv before launching. Queued behind 7 priority-blocked jobs; SLURM-estimated start `2026-05-13T10:55`. Will run AFTER the prod 1xa100 sbatch (2276314 on 14 May), so won't pre-validate the prod sbatches; it WILL validate whether pre-warming kills the cold-start problem.
+
+## 14. Tomorrow's plan (2026-05-13)
+
+| CEST time | Job | Goal | What "OK" looks like |
+|---|---|---|---|
+| ~02:51 | sbatch 2275683 (2x verify, m5_verify_seq_2xa100.sh) | Confirm Option A on ALICE PCIe | 3 smoke_2xa100 ckpts saved + stage 4 5-step prod_2xa100 no-OOM at micro=1 |
+| ~06:55 | srun 2275986 (interactive 2xA100, 4h walltime) | Manual poke session inside the allocation | Run `bash sbatch_m5_1_2xa100.sh --mode smoke_2xa100` inside the srun; confirm first training step time-to-completion |
+| (later) | sbatch 2293032 (1xa100 smoke check w/ pre-warm) | Diagnose retriever cold-boot solution | Retriever `/health` in <10 min instead of 36; first training step prints within 5 min after that |
+
+**Inside the 06:55 srun**, the operator job is:
+
+1. Verify training step lands cleanly (no FSDP narrow crash, no fragmentation OOM)
+2. Capture per-step wall-clock for steady-state projection (current projection: 8.8 min/step at micro=2, 15.8 min/step at micro=1; we'll be at micro=1)
+3. Diagnose retriever cold-boot time on warm zfsstore (key data point for whether pre-warm helps)
+4. If anything fails, scancel the relevant queued prod sbatches before they fire (M5.1 2x May 15, M5.6 2x May 18, M5.5 2x May 19) — same 1-3 day buffer pattern as §10.2
+
+After 02:51 + 06:55 both pass, the 6 prod sbatches (2276314-2276319) are good to start firing May 14-19.
+
 ## 11. References
 
 - [`../report/RESULTS_SMOKE_m5.md`](../report/RESULTS_SMOKE_m5.md) — research_v2's a1 / a2 postmortem (ckpt fix originates here, §7)
