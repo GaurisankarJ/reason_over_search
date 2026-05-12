@@ -7,7 +7,7 @@
 #   - policy.generation.vllm_cfg.tensor_parallel_size : 2 (was 1; splits rollout weights)
 #   - policy.generation.vllm_cfg.gpu_memory_utilization : 0.7 (was 0.5; TP=2 frees per-GPU budget)
 #
-# DTensor backend stays at TP=1 (DDP across the two GPUs for training).
+# DTensor backend: TP=2 (was TP=1 DDP; flipped 2026-05-12 per HARDWARE_COMPARISON §3).
 # train_micro_batch_size stays at 1 (Qwen3.5 GDN kernel + seq=8192 log_softmax peak).
 # Pattern mirrors training/configs/_archive_m2/grpo_qwen3.5_2b_2xa100.yaml.
 #
@@ -188,7 +188,11 @@ policy:
     cpu_offload: false
     sequence_parallel: false
     activation_checkpointing: true
-    tensor_parallel_size: 1
+    # [2x A100 speedup, ported from HARDWARE_COMPARISON §3] TP=2 partitions the
+    # model across both GPUs (training side); was 1 (DDP) before. Load-bearing
+    # for the projected ~2-2.5x training-phase speedup. micro=2 is the secondary
+    # gain TP=2 unlocks; KEPT at 1 here pending a dedicated 2-GPU smoke.
+    tensor_parallel_size: 2
     context_parallel_size: 1
     custom_parallel_plan: null
     automodel_kwargs: {}
