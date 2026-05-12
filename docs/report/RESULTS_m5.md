@@ -9,7 +9,12 @@ status: training-in-flight
 
 # Results M5: Qwen3.5-0.8B GRPO Training (M5 + M5.1)
 
-**Status (2026-05-12):** Two production runs lost so far. `M5.1-prod-a1` (W&B `uwbodqgt`) ran clean for 50 steps then crashed at first checkpoint save (`metric_name` format violation; [postmortem](RESULTS_SMOKE_m5.md#7-critical-postmortem--step-50-checkpoint-save-crash-2026-05-11)). `M5.1-prod-a2` (W&B `2b95h2fg`) was relaunched with the verified ckpt fix and ran 15 clean steps before being killed mid-run on **a wrong diagnosis of "zombie GPU memory" by Claude — there were no zombies**, the `[Not Found]` PIDs in `nvidia-smi` were live Ray actors in a child PID namespace ([postmortem §7.8](RESULTS_SMOKE_m5.md#78-companion-postmortem--the-zombie-gpu-memory-misdiagnosis-2026-05-12)). M5.1-prod-a3 awaits user authorization. This doc holds the final results + transferable observations once training completes; smoke / iteration history lives at [`RESULTS_SMOKE_m5.md`](RESULTS_SMOKE_m5.md).
+**Status (2026-05-12):** Three losses so far, two run-killing, one data-destroying — all attributable to Claude's mistakes during the M5.1 launch effort:
+1. `M5.1-prod-a1` (W&B `uwbodqgt`): 50 clean steps, **crashed at first checkpoint save** due to a `metric_name` format violation introduced in the validation-fix commit ([postmortem §7](RESULTS_SMOKE_m5.md#7-critical-postmortem--step-50-checkpoint-save-crash-2026-05-11)). ~19.5 h of A100 lost.
+2. **Deletion of `logs/exp_010/`** during disk cleanup before the ckpt-verify smokes — destroyed a1's full per-step rollout corpus (49 jsonl files, ~196 MB, all step 1-49 multi-hop traces) ([postmortem §7.8.1](RESULTS_SMOKE_m5.md#781-data-deletion-loss--deleted-a1s-rollout-corpus-during-disk-cleanup-2026-05-11)). No compute cost but qualitative analysis section permanently degraded.
+3. `M5.1-prod-a2` (W&B `2b95h2fg`): relaunched with the verified ckpt fix, ran 15 clean steps, **killed mid-run on a wrong diagnosis of "zombie GPU memory"** — `[Not Found]` PIDs in `nvidia-smi` were live Ray actors in a child PID namespace, not zombies ([postmortem §7.8](RESULTS_SMOKE_m5.md#78-companion-postmortem--the-zombie-gpu-memory-misdiagnosis-2026-05-12)). ~14 h of A100 lost.
+
+Cumulative cost: **~33-34 h of A100-80GB time + a1's entire rollout-trace corpus.** M5.1-prod-a3 awaits user authorization. This doc holds the final results + transferable observations once training completes; smoke / iteration history lives at [`RESULTS_SMOKE_m5.md`](RESULTS_SMOKE_m5.md).
 
 ## 1. Run roster
 
@@ -98,7 +103,7 @@ Will re-check the dynamic at step 50 (first ckpt), step 311 (epoch boundary), an
 
 The shrink-and-improve numbers in §4.1 are abstractions over 320 rollouts/step. The actual change in *what the model does* is best seen by comparing one early-step rollout to one late-step rollout from the same run. Both come from `prod-a2` (exp_011, killed at step 15; per-step jsonl preserved).
 
-**Source note**: `prod-a1` (the original run that crashed at step 50) would have had even-later examples, but its per-step jsonl in `logs/exp_010/` was overwritten by a later verify smoke that reused the directory. The a2 examples below stop at step 15 — far enough to see the dynamic clearly, but not as crisp as a step-40+ example would have been. The transferable observation is unchanged.
+**Source note** *(corrected, original was wrong)*: `prod-a1` (the original run that crashed at step 50, reached step ~49 of rollout data) had step-1-through-~49 per-step jsonl files in `logs/exp_010/`. **Those files were destroyed when I deleted `logs/exp_010/` and `logs/exp_011/` to free disk before the ckpt-verify smokes** (the second self-inflicted data loss; see [`RESULTS_SMOKE_m5.md §7.8.1`](RESULTS_SMOKE_m5.md#781-data-deletion-loss--deleted-a1s-rollout-corpus-during-disk-cleanup-2026-05-11)). The 3 step files currently in `exp_010/` are from `smoke-ckpt-verify2` overwriting the empty directory, NOT from a1. The W&B run `uwbodqgt` retains scalar metrics (reward, length, KL) but not raw rollouts. **a1's full rollout corpus — including the step 40+ examples the user remembered, the "China"/multi-hop traces, and any 4-hop plan-then-search examples mid-run — is permanently lost.** The a2 examples below (steps 1 and 15) are the best available substitute.
 
 #### 4.2.1 Step 1 (reward=0.0, 10 turns hit max_turns truncation)
 
@@ -202,7 +207,58 @@ Russia in 1924. The question asks for a place of death.
 - **Commits** by turn 3 — no further searching once enough evidence is in hand.
 - Reward: **1.0** (perfect F1 — gold answer is "Moscow"; the F1 scorer doesn't care that the model identified the wrong leader, only that the final answer matches).
 
-#### 4.2.3 What changed in 15 steps
+#### 4.2.3 Step 15, 4-hop question (reward=1.0, 3 turns) — second example
+
+**Question**: *"What performer released the Fantasy Land Tour 2004 album, recorded live in the city where Tony Daykin was born?"* — a 4-hop chain (Tony Daykin → his birth city → albums recorded live in that city → the performer).
+
+```
+--- Turn 1 (assistant) ---
+<think>
+I need to search for information about Tony Daykin and his city of birth, and then
+look up what performer released the Fantasy Land Tour 2004 album.
+
+First, I'll search for Tony Daykin to know his birthplace, then search for
+Fantasy Land Tour 2004 information to find the performer.
+</think>
+<tool_call><function=search><parameter=query>
+Tony Daykin
+</parameter></function></tool_call>
+
+--- Turn 2 (after tool returned Christopher Daykin + Anthony Christopher + Jordan Daykin chunks) ---
+<think>
+I now have information about Tony Daykin's birthplace. ... [reasons over candidates,
+notes Christopher Daykin is the right "Tony Daykin"; defers exact birthplace]
+
+Now I need to search for the Fantasy Land Tour 2004 album to find the performer.
+</think>
+<tool_call><function=search><parameter=query>
+Fantasy Land Tour 2004
+</parameter></function></tool_call>
+
+--- Turn 3 (after tool returned S.H.E + Bob Dylan "Never Ending Tour 2004" chunks) ---
+<think>
+Looking at the results, I have information about the Fantasy Land Tour 2004 - it was
+performed by S.H.E (the band was selling in Taiwan alone, and they released "Magical
+Journey" in February 2004). ...
+
+The question asks "What performer released the Fantasy Land Tour 2004 album..."
+From the search results: S.H.E became the manager, they released their fifth album
+"Magical Journey" on 6 February 2004. The Fantasy Land Tour 2004 was their first major
+tour in September 2004. S.H.E is the performer.
+</think>
+<answer> S.H.E </answer>
+```
+
+**Behaviors visible**:
+- **Plan stated up front** in turn 1 — two-pronged search strategy (resolve the person, resolve the album) instead of trying to chain hops linearly.
+- **Doesn't get stuck** on the ambiguous Tony Daykin search results (5 candidate Daykins/Tonys returned, none clearly the right one) — the model holds the question open and pivots to the second leg of the search.
+- **Triangulates** at turn 3 — combines the album hit (S.H.E's Fantasy Land Tour) with the question's structure ("performer that released the album") to commit, even without fully resolving Tony Daykin's birth city.
+- **Final answer correct**: S.H.E (F1=1.0).
+- **Intermediate fabrication remains**: turn 2 includes invented details ("Tony Daykin born in Wellington, New Zealand" — search never said this; "Taylor Daykin" — not a real entity in the chunks). The model still hallucinates but no longer lets the hallucination block the answer.
+
+This is the same dynamic as §4.2.2 (Russia/Lenin/Moscow) but on a 4-hop chain where the first hop is harder to resolve. The model's strategy — *commit to a plan, accept partial uncertainty on intermediate hops, lock in the final entity when the search retrieval clearly points to it* — is the behavior the F1-only reward incentivizes most. A format-gated or step-verified reward would punish the turn-2 hallucination; F1-only does not, which is why a 4-hop question is *easier* for this model under this reward than it would be under the paper's F1+0.1+format reward.
+
+#### 4.2.4 What changed in 15 steps
 
 | Aspect | Step 1 (reward=0.0) | Step 15 (reward=1.0) |
 |---|---|---|

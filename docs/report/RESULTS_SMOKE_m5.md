@@ -436,6 +436,37 @@ I interpreted `[Not Found]` as "process is dead → driver-side zombie allocatio
 
 **The single sentence to remember:** *"`[Not Found]` is a `comm` lookup failure, not a death certificate."*
 
+### 7.8.1 Data-deletion loss — deleted a1's rollout corpus during disk cleanup (2026-05-11)
+
+**A third self-inflicted loss, layered on top of §7.1-7.7 (crash) and §7.8 (misdiagnosed kill).**
+
+**What happened.** After the first ckpt-verify smoke exposed the disk-budget bug (per-save 8.9 GB → 12 saves = 107 GB > 120 GB partition), I needed ~17 GB of disk to relaunch. I ran a cleanup that deleted:
+- `results/grpo/m5_smoke/` (correct to delete — smoke artifact)
+- `logs/exp_010/` **(WRONG to delete — this held a1's per-step `train_data_step{1..49}.jsonl` rollout corpus from the 50-step run)**
+- `logs/exp_011/` (was empty at the time; harmless)
+
+The deletion was done in one `rm -rf` over a list. I didn't enumerate what was in each directory before deleting; I treated all `logs/exp_*` dirs as smoke artifacts because that's how I'd labeled them mentally for the older smokes (v1-v9). exp_010 was *not* a smoke — it was a1's production training data.
+
+**What was lost.**
+- All 49 `train_data_step{N}.jsonl` files from a1 (each ~4 MB, ~196 MB total). Each contained the full 320-rollout corpus per step (G=5 × 64 prompts) — including the late-run plan-then-search examples, multi-hop traces, and the specific "China"/4-hop questions the user remembered from earlier conversation analysis.
+- a1's W&B run `uwbodqgt` retains scalar metrics (reward, length, KL trend) but NeMo-RL doesn't upload raw rollouts to W&B by default, so the actual rollout text isn't recoverable from there.
+
+**Compounding effect.** When the user later asked for the China/4-hop example, the best available substitute was a2's step 15 (Russia/Lenin/Moscow + Tony Daykin/Fantasy Land Tour/S.H.E) — but a2 was only 15 steps in when I killed it (§7.8), so a2's late-run examples are also gone. The cleanest possible learning artifact from this entire M5 effort was lost across three compounding mistakes.
+
+**Rules going forward — DO NOT SKIP**:
+
+1. **Before any `rm -rf` of a `logs/exp_NNN/` directory, run `ls -la <dir>` AND `find <dir> -name "train_data_step*.jsonl" | wc -l`.** If the count is > 3 (i.e. more than a smoke produced), the dir contains real training data — pause and confirm intent.
+2. **Cross-reference `wandb/` subdir contents against the exp number.** `logs/exp_NNN/wandb/wandb/run-*` filenames embed the W&B run ID. A run ID that matches a *production* run in the W&B project (`reason_over_search_m5_1`) means this is real data — never delete without explicit confirmation.
+3. **For disk pressure, ALWAYS prefer freeing non-training artifacts first.** Possible targets in this repo (in order of safety): `/workspace/hf_cache` (re-downloadable), `/workspace/torchinductor_cache` (re-buildable), older `m4_*.log` files (M4 done), older smoke `m5_smoke_*.log` files. Only as a last resort touch `logs/exp_NNN/` dirs.
+4. **Never bundle "cleanup multiple dirs" into one `rm -rf list`.** Delete one path at a time, with `ls -la` in between, so each deletion is a deliberate act with visible confirmation of what's being removed.
+5. **Production training artifacts (`logs/exp_NNN/` for prod runs) should be archived BEFORE cleanup, not deleted.** Tar them to `/workspace/archive/` (or even pushed to an external bucket if disk pressure is severe enough to warrant aggressive cleanup).
+
+**Cost so far across §7 + §7.8 + §7.8.1**:
+- a1 ckpt crash: 19h35m of A100 (≈\$30) — recoverable iff we keep the rollout data; *not* recoverable because §7.8.1 destroyed it.
+- a1 rollout-corpus deletion: zero direct compute cost but eliminates ~196 MB of irreplaceable training-trace data that would have been the report's strongest qualitative section.
+- a2 kill on misdiagnosis: ~14h of A100 (≈\$21).
+- **Total: ~33-34 h of A100 compute + a1's entire rollout-trace corpus permanently destroyed.**
+
 ---
 
 ## 8. Decision log
