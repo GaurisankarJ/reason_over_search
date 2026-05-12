@@ -81,6 +81,35 @@ Untrained-floor comparison. M3 reference is the pre-GRPO Qwen3-0.6B hybrid (`qwe
 
 **Qwen3.5-0.8B hybrid is uniformly below Qwen3-0.6B hybrid on this protocol** (no dataset crosses); the cross-family Δ averages −0.042 EM (−41 % relative). Largest gaps on the multi-hop datasets (2wiki −0.10, popqa −0.06, triviaqa −0.05). Despite the larger param count and newer training data, Qwen3.5 family doesn't carry a stronger zero-shot retrieval-tool prior than Qwen3 hybrid did out of the box.
 
+## 5.5 M4.4 Phase 4 — base prompt screen (2026-05-12)
+
+Re-opens the M4.3 base lock (`qwen35_minimal_no_system`, full-sweep mean EM **0.010**) to test whether any Phase-1b-style prompt intervention lifts base. Full design + per-candidate templates in [`../milestone_4/MILESTONE_4.md` §"Phase 4 results"](../milestone_4/MILESTONE_4.md). All runs: hybrid SGLang swapped to base on `eval/qwen3.5_0.8b_base/`, n=300 / dataset (bamboogle full split = 125), greedy `seed=1`.
+
+**Primary 4-candidate screen (n=300, mean EM):**
+
+| # | mode | bamboogle (n=125) | nq | triviaqa | popqa | hotpotqa | 2wiki | musique | **mean EM** | Δ vs anchor | bar +0.025 |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| (iv) | `qwen35_minimal_no_system` (M4.3 anchor re-run at n=300) | 0.000 | 0.003 | 0.010 | 0.003 | 0.003 | 0.037 | 0.000 | **0.008** | – | – |
+| (i) | `qwen35_terse` (Phase-1b hybrid winner; auto-inject ON) | 0.008 | 0.007 | 0.017 | 0.010 | 0.007 | 0.010 | 0.000 | **0.008** | +0.0002 | FAIL |
+| (ii) | `qwen35_terse_no_system` (terse user + no auto-inject) | 0.008 | 0.007 | 0.017 | 0.007 | 0.013 | 0.027 | 0.000 | **0.011** | +0.0031 | FAIL |
+| (iii) | `qwen35_research_role_no_system` (role-prime in user + no auto-inject) | 0.000 | 0.013 | 0.013 | 0.013 | 0.013 | 0.023 | 0.000 | **0.011** | +0.0028 | FAIL |
+
+**All 4 fail the +0.025 bar.** The largest lift (cand ii at Δ +0.0031) is ~8× below the bar. Auto-inject is re-confirmed harmful on base (cand i regresses to the floor). User-prose interventions (terse, role-prime) move base within n=300 noise of the M4.3 anchor.
+
+**Fallback B (top-3 Phase-1b near-miss prose ported to no-system, n=300, mean EM):**
+
+| # | mode | bamboogle | nq | triviaqa | popqa | hotpotqa | 2wiki | musique | **mean EM** | Δ vs anchor | bar |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| B-1 | `qwen35_decide_no_system` | 0.008 | 0.023 | 0.013 | 0.003 | 0.017 | 0.040 | 0.000 | **0.015** | +0.007 | FAIL |
+| B-2 | `qwen35_source_only_no_system` | 0.000 | 0.003 | 0.027 | 0.013 | 0.023 | 0.023 | 0.000 | **0.013** | +0.005 | FAIL |
+| B-3 | `qwen35_self_check_no_system` | 0.000 | 0.007 | 0.023 | 0.007 | 0.020 | **0.043** | **0.003** | **0.015** | +0.007 | FAIL |
+
+**All 7 Phase 4 candidates fail the +0.025 base bar.** Best two (B-1, B-3) tie at mean EM 0.015 vs the bar at 0.035 (~2.3× below). M4.3 lock `qwen35_minimal_no_system` (full-sweep mean EM 0.010) stays as the locked base prompt; **M4.6 base full sweep is NOT run** (no winner to validate at full scale, §4 base row unchanged).
+
+**B-3 notable single-cell signals:** musique EM 0.003 (first non-zero base musique anywhere — 1 correct of 300) and 2wiki EM 0.043 (highest base 2wiki across the 7-candidate screen). Both within Wilson 95 % CI half-width at n=300 (~1.5 pp); not statistically distinguishable from noise but the only individual cells where a Phase 4 prompt did something measurable on base. Mechanism: self-check instruction may have caught fabrications on the binary-comparison subset of 2wiki.
+
+**Musique EM = 0.000 on base across every candidate except B-3's single chance-correct item.** Confirms multi-hop is unreachable for base via prompt search — M5 (GRPO training) is the right next leverage point.
+
 ## 6. Findings
 
 1. **The untrained M4 hybrid floor is 0.060 EM**; the base floor is 0.010 EM. Both are below the M3 pre-GRPO Qwen3-0.6B floor (0.102 EM). M5 GRPO training has a clear "beat the untrained floor" target on the same eval protocol.

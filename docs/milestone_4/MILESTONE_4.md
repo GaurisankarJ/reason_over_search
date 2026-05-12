@@ -409,6 +409,84 @@ Result files: `evaluation_qwen35/results/<dataset>/<dataset>_*_m4_qwen3.5_0.8b_<
 
 Both unblocked from this commit forward; M5 scaffold work remains unblocked regardless.
 
+### Phase 4 results — primary 4-candidate base prompt screen (2026-05-12)
+
+Run on `eval/qwen3.5_0.8b_base/` (base variant), n=300/dataset (bamboogle full split = 125), greedy / `seed=1`, optimised stack. Wall-clock: cand (i) 18 min (incl. SGLang OOD-disk restart between bamboogle and nq, see below); cand (ii)+(iii)+(iv) ran sequentially in **26 min 12 s** at avg ~1 min 11 s/dataset.
+
+| # | mode | bamboogle (n=125) | nq | triviaqa | popqa | hotpotqa | 2wikimultihopqa | musique | **mean EM** | Δ vs control | bar +0.025 |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| (iv) | `qwen35_minimal_no_system` (M4.3 control re-anchor) | 0.000 | 0.003 | 0.010 | 0.003 | 0.003 | 0.037 | 0.000 | **0.008** | – (anchor) | – |
+| (i) | `qwen35_terse` (auto-inject ON) | 0.008 | 0.007 | 0.017 | 0.010 | 0.007 | 0.010 | 0.000 | **0.008** | +0.0002 | **FAIL** |
+| (ii) | `qwen35_terse_no_system` | 0.008 | 0.007 | 0.017 | 0.007 | 0.013 | 0.027 | 0.000 | **0.011** | +0.0031 | **FAIL** |
+| (iii) | `qwen35_research_role_no_system` | 0.000 | 0.013 | 0.013 | 0.013 | 0.013 | 0.023 | 0.000 | **0.011** | +0.0028 | **FAIL** |
+
+**Verdict: NULL RESULT** — all 4 primary candidates fail the +0.025 bar. The largest lift (cand ii at Δ +0.0031) is ~8× below the bar (+0.025).
+
+**Findings:**
+
+1. **Auto-inject re-confirmed harmful on base, even with clean user prose.** Cand (i) `qwen35_terse` is the hybrid Phase 1b winner shape (auto-inject ON + terse user message). On base it scores mean EM 0.008 — *below* the M4.3 lock 0.010 full-sweep / 0.008 n=300 re-anchor. The hybrid winner does NOT transfer. The `tools=[]` auto-inject block (= chat template's `# Tools` schema + nested-XML format example + `<IMPORTANT>` reminder) is load-bearing helpful for hybrid (in-distribution for tool-use post-training) but pure scaffolding noise for base (which lacks the tool-use prior). Result holds regardless of user-prose cleanliness.
+2. **User-prose interventions (terse, role-prime) don't lift base above the M4.3 floor.** Cand (ii) `qwen35_terse_no_system` (terse user + no auto-inject — the untested cross-variant intersection) lands at 0.011, statistically indistinguishable from the M4.3 re-anchor at 0.008 (Wilson 95 % CI half-width at p=0.01, n=300 ≈ 1.1 pp). Cand (iii) `qwen35_research_role_no_system` (role-prime in user role) at 0.011 similarly. The base variant's ceiling under any zero-shot prompt with the current pipeline is ~0.010 ± noise.
+3. **Musique stays at EM 0.000 across every base run.** All 4 primary candidates + the M4.3 full-sweep anchor have musique EM = 0.000. ACC/F1 fluctuate within n=300 noise (≤ 0.02 absolute). Multi-hop is the hardest dataset for base regardless of prompt; that's the capability gap M5 (GRPO training) is designed to close.
+4. **2wikimultihopqa is the only dataset where base shows lift.** Cand (iv) M4.3 control bumps to 0.037 EM on 2wiki vs 0.000-0.013 elsewhere. This is the *chance-correctness artifact* on binary-comparison questions ("Who was born first, X or Y?") flagged in [Phase 1a §1.2](#phase-1-results--qwen35_minimal_nothink-e-2026-05-10): bypass-and-fabricate scores ~50 % on the binary subset.
+
+Result files preserved at `evaluation_qwen35/results/<dataset>/<dataset>_*_m4_qwen3.5_0.8b_base_<mode>_seed1_n300/metric_score.txt` for all 4 modes × 7 datasets = **28 cells**.
+
+### Phase 4 fallback B — top-3 Phase-1b prose ported to no-system (2026-05-12)
+
+Triggered after the primary 4-candidate screen produced no winner. Tests whether the Phase-1b *near-miss* prose interventions (decision rules / source-grounding / self-verify — all of which marginally lifted hybrid but failed the hybrid +0.025 bar) lift **base** when stripped of the auto-inject scaffolding that hurts base. 3 new templates landed in [`templates.py`](../../evaluation_qwen35/flashrag/search_r1/templates.py); routing added to both `_QWEN35_USER_PROMPT_MODES` and `_QWEN35_NO_TOOLS_MODES` in [`active_pipeline.py`](../../evaluation_qwen35/flashrag/pipeline/active_pipeline.py).
+
+| # | mode | Source prose | Phase 1b hybrid Δ vs A | Mechanism on base (hypothesis) |
+|---|---|---|---:|---|
+| B-1 | `qwen35_decide_no_system` | M3.1 decision rules ("Use the information...", "After each search result, decide...") in user role | +0.0201 (near miss) | Explicit decision rules might compensate for base's lack of decision-loop prior |
+| B-2 | `qwen35_source_only_no_system` | Source-grounding + uncertainty escape (`<answer>unknown</answer>` if results don't contain answer) | +0.0172 (near miss) | Permitting "unknown" might prevent the bypass-and-fabricate failure mode |
+| B-3 | `qwen35_self_check_no_system` | Self-verification step before final answer | +0.0133 | Self-check at end might catch hallucinations |
+
+All 3 share the M4.3 no-system structure (no auto-inject; format spec inlined into the user message). Bar: **+0.025 over M4.3 lock** (≥ 0.035 mean EM). Wall-clock: **25 min 12 s** (3 modes × 7 datasets × ~1 min 13 s avg/dataset).
+
+**Fallback B results (n=300, mean EM):**
+
+| # | mode | bamboogle (n=125) | nq | triviaqa | popqa | hotpotqa | 2wiki | musique | **mean EM** | Δ vs anchor | bar +0.025 |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| B-1 | `qwen35_decide_no_system` | 0.008 | 0.023 | 0.013 | 0.003 | 0.017 | 0.040 | 0.000 | **0.015** | +0.0066 | **FAIL** |
+| B-2 | `qwen35_source_only_no_system` | 0.000 | 0.003 | 0.027 | 0.013 | 0.023 | 0.023 | 0.000 | **0.013** | +0.0051 | **FAIL** |
+| B-3 | `qwen35_self_check_no_system` | 0.000 | 0.007 | 0.023 | 0.007 | 0.020 | **0.043** | **0.003** | **0.015** | +0.0066 | **FAIL** |
+
+**All 3 fail the +0.025 bar.** B-1 and B-3 tie for best at mean EM 0.015 — Δ +0.007 vs M4.3 anchor; ~2.3× below the bar.
+
+**Notable single-cell findings on B-3:**
+1. **First non-zero base musique anywhere**: B-3 lands musique EM 0.003 (1 correct of 300). Marginally above noise floor; the self-check instruction may have caught one fabricated answer. Still essentially zero — multi-hop is unreachable for base via prompt search.
+2. **Highest 2wikimultihopqa across the entire Phase 4 screen**: B-3 at 0.043. Likely concentrated in the binary-comparison subset where the self-check prose maps cleanly onto "does my chosen option match what the result says?". Doesn't generalize to non-binary multi-hop.
+
+### Phase 4 closeout — FINAL NULL RESULT (2026-05-12)
+
+**Consolidated 7-candidate base prompt screen at n=300:**
+
+| Rank | Mode | mean EM | Δ vs anchor | bar 0.035 |
+|---|---|---:|---:|---|
+| 1 | `qwen35_decide_no_system` (B-1) | 0.015 | +0.0066 | FAIL |
+| 1 | `qwen35_self_check_no_system` (B-3) | 0.015 | +0.0066 | FAIL |
+| 3 | `qwen35_source_only_no_system` (B-2) | 0.013 | +0.0051 | FAIL |
+| 4 | `qwen35_terse_no_system` (ii) | 0.011 | +0.0031 | FAIL |
+| 4 | `qwen35_research_role_no_system` (iii) | 0.011 | +0.0028 | FAIL |
+| 6 | `qwen35_minimal_no_system` (iv, anchor) | 0.008 | 0 (anchor) | – |
+| 6 | `qwen35_terse` (i, auto-inject ON) | 0.008 | +0.0002 | FAIL |
+
+**Decision: M4.3 lock `qwen35_minimal_no_system` STAYS as the locked base prompt.** Full-sweep mean EM 0.010 ([`RESULTS_m4.md` §4](../report/RESULTS_m4.md)) remains the canonical base number for M4. **M4.6 (base full sweep) is NOT run** — no winner to validate at full scale; the existing §4 base row stands unchanged. M4.5 (hybrid full sweep with `qwen35_terse`) becomes the only remaining M4 compute item.
+
+**Cross-grid findings (final):**
+
+1. **Auto-inject vs base is a hard regression axis.** Cand (i) `qwen35_terse` (hybrid winner shape on base, auto-inject ON) ties with the M4.3 anchor at mean EM 0.008 — *below* the M4.3 full-sweep number 0.010. Confirms M4.3's `tools=[]` finding holds even when the user message prose is at its cleanest. Base lacks the tool-use post-training prior that makes the auto-injected `# Tools` + `<IMPORTANT>` block productive for hybrid.
+2. **User-message prose interventions don't move base out of the 0.008-0.015 noise band.** All 6 no-auto-inject candidates (ii / iii / iv / B-1 / B-2 / B-3) land in this band; none clears the bar. The bar requires Δ +0.025 absolute; the actual best lift is +0.0066. Roughly **4× short**.
+3. **Musique EM = 0.000 on base across every candidate except B-3's single chance-correct item.** Multi-hop is not reachable for base under any zero-shot prompt; M5 GRPO training is the appropriate next leverage point.
+4. **2wikimultihopqa is base's only consistently non-trivial dataset** (0.010-0.043 across candidates). The lift is concentrated in binary-comparison questions ("Who was born first, X or Y?") where bypass-and-fabricate scores ~50 % by chance on the binary outcome. Not real multi-hop competence.
+
+**M4.4 status (final):**
+- Phase 1 ✅ hybrid winner `qwen35_terse` locked (Δ +0.0436 vs M4.2)
+- Phase 2 ⏸ deferred to backlog
+- Phase 4 ✅ base prompt screen complete — **NULL RESULT** across 7 candidates × 7 datasets = 49 cells; M4.3 lock stays
+- M4.5 ⏳ next: hybrid full sweep with `qwen35_terse` (n=51,713 × 7 datasets)
+- M4.6 ⊘ not run — no Phase-4 winner to validate at full scale
+
 ## M4.5 — hybrid full sweep with `qwen35_terse`
 
 **Status (2026-05-12): scheduled. Runs after Phase 4 base screen (or in parallel on a second box).**
