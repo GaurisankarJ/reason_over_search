@@ -194,17 +194,20 @@ Expect: a `<|im_start|>system` block containing the auto-injected `# Tools` + fo
 
 ## M4.4 — prompt search to close the M3 cross-family gap
 
-**Status (2026-05-10): Phase 1 complete (Phase 1a + Phase 1b combined = 12 candidates × 7 datasets × n=300). WINNER for HYBRID: `qwen35_terse` (Δ +0.0436, mean EM 0.103 — closes the M3 cross-family gap of 0.102). Secondary marginal pass: `qwen35_research_role` (Δ +0.0257). 10 of 12 candidates fail the +0.025 bar; the worst (`qwen35_p3_decide_xml`) collapsed at 94.4 % empty-pred rate.**
+**Status (2026-05-12): Phase 1 complete; `qwen35_terse` LOCKED as the hybrid prompt for the full sweep. Phase 2 (winner ablations) deferred to backlog. Phase 4 (base prompt screen) is the active next step. Full-sweep work split out as M4.5 (hybrid) and M4.6 (base) — see new sections below.**
 
-**Extended M4.4 plan (deferred / next milestone TBD)** — 4 sequential phases:
-1. **Phase 2 — hybrid winner ablations** (~30 min, n=300): `terse+decide`, `terse+source_only`, `terse+research_role`. Bar +0.04 over A. If none clear, lock `qwen35_terse` and skip to Phase 3.
-2. **Phase 3 — hybrid full benchmark** (~7 h, n=51,713 × 7 datasets): re-run the full sweep with the Phase-2 locked prompt; replace [`RESULTS_m4.md`](../report/RESULTS_m4.md) §4 hybrid row + §5 cross-family delta.
-3. **Phase 4 — base variant prompt search** (~30–45 min, n=300): re-open the M4.3 base lock (`qwen35_minimal_no_system`, mean EM 0.010). Test analogous candidates for base (e.g., `qwen35_terse_no_system`, `qwen35_terse` with auto-inject re-tested, role-prime variants). M4.3 found base benefits from REMOVING auto-inject; Phase 1b found hybrid benefits from a TERSER user message — the intersection ("terse user + no auto-inject") is untested. Bar +0.025 over current base lock (= 0.035 mean EM).
-4. **Phase 5 — base full benchmark** (~7 h, n=51,713 × 7 datasets): re-run base full sweep with the Phase-4 locked prompt; replace [`RESULTS_m4.md`](../report/RESULTS_m4.md) §4 base row.
+Phase 1 (Phase 1a + Phase 1b combined, 12 candidates × 7 datasets × n=300, 2026-05-10) produced a clear hybrid winner: `qwen35_terse` (Δ +0.0436, mean EM 0.103 — closes the M3 cross-family gap of 0.102; all 7 datasets positive, binomial sign test p = 0.0078). Secondary marginal pass: `qwen35_research_role` (Δ +0.0257). 10 of 12 candidates fail the +0.025 bar; the worst (`qwen35_p3_decide_xml`) collapsed at 94.4 % empty-pred rate.
 
-**Total wall**: ~30 min + ~7 h + ~45 min + ~7 h ≈ **~15 h**. Phases 2 and 4 are independent of each other (different model swap) and could be parallelised across boxes; Phases 3 and 5 likewise.
+**Revised plan (2026-05-12)**:
 
-M4.2 baseline + M3-vs-M4 cross-family comparison stay locked in [`RESULTS_m4.md`](../report/RESULTS_m4.md) until Phase 3 / Phase 5 land.
+1. **Phase 2 — hybrid winner ablations** ⏸ **DEFERRED to backlog**. The three planned candidates (`terse+decide`, `terse+source_only`, `terse+research_role`) ask whether layering one extra knob on top of terse clears the **+0.04** ablation bar. Since terse already cleared the +0.0436 lift bar at p = 0.0078 across all 7 datasets, the marginal value of pushing higher before committing to the full sweep is low; the cost of the wrong ablation (regressing terse) is non-zero. Lock `qwen35_terse` directly. Candidate templates + I/O patterns preserved in [`M4_4_PHASE_1B_DESIGN.md`](M4_4_PHASE_1B_DESIGN.md) §11 if a future iteration revisits.
+2. **Phase 4 — base variant prompt screen** (~30–45 min, n=300, **next**): re-open the M4.3 base lock (`qwen35_minimal_no_system`, mean EM 0.010). 4-candidate screen: (i) `qwen35_terse` w/ `tools=[]` auto-inject + system, (ii) `qwen35_terse_no_system` (terse user message, no auto-inject — mirrors M4.3 lock structure), (iii) `qwen35_research_role_no_system` (role-prime in user role, no system), (iv) `qwen35_minimal_no_system` (M4.3 control). Bar +0.025 over the M4.3 lock (≥ 0.035 mean EM). M4.3 found base benefits from REMOVING auto-inject; Phase 1b found hybrid benefits from a TERSER user message — the intersection ("terse user + no auto-inject") is the headline untested combination.
+3. **M4.5 — hybrid full sweep** (~7 h, n=51,713 × 7 datasets, **independent of Phase 4**): re-run the full sweep with `qwen35_terse`; replace [`RESULTS_m4.md`](../report/RESULTS_m4.md) §4 hybrid row + §5 cross-family delta. See [§M4.5](#m45--hybrid-full-sweep-with-qwen35_terse) below.
+4. **M4.6 — base full sweep** (~7 h, n=51,713 × 7 datasets, **blocked on Phase 4**): re-run the full sweep with the Phase-4-locked base prompt; replace [`RESULTS_m4.md`](../report/RESULTS_m4.md) §4 base row. If Phase 4 produces no candidate above the bar, the M4.3 lock stays and M4.6 is unnecessary (the existing full sweep stands). See [§M4.6](#m46--base-full-sweep-with-phase-4-lock) below.
+
+**Total wall**: ~45 min (Phase 4) + ~7 h (M4.5) + ~7 h (M4.6) ≈ **~15 h**. M4.5 ⫫ Phase 4 (different model swap) and M4.5 ⫫ M4.6 — parallelisable across boxes. On one box, natural order is Phase 4 → M4.5 → M4.6 (or M4.5 first if the hybrid model is already loaded).
+
+M4.2 baseline + M3-vs-M4 cross-family comparison stay locked in [`RESULTS_m4.md`](../report/RESULTS_m4.md) until M4.5 / M4.6 land.
 
 ### Why we revisit the M4.2 lock
 
@@ -406,6 +409,60 @@ Result files: `evaluation_qwen35/results/<dataset>/<dataset>_*_m4_qwen3.5_0.8b_<
 
 Both unblocked from this commit forward; M5 scaffold work remains unblocked regardless.
 
+## M4.5 — hybrid full sweep with `qwen35_terse`
+
+**Status (2026-05-12): scheduled. Runs after Phase 4 base screen (or in parallel on a second box).**
+
+Re-runs the full Plan A test/dev sets (51,713 items / variant, 7 datasets) on `eval/qwen3.5_0.8b/` (hybrid) with the Phase-1b-locked prompt `qwen35_terse`. Replaces [`RESULTS_m4.md`](../report/RESULTS_m4.md) §4 hybrid row + refreshes §5 cross-family delta (was avg Δ −0.042 favouring M3 Qwen3-0.6B; expected to flip to ~0 or slight M4 advantage after the terse lock — Phase 1b n=300 anchor lands at 0.103 vs M3 full-sweep 0.102).
+
+| Knob | Value |
+|---|---|
+| Model | `eval/qwen3.5_0.8b/` (hybrid) |
+| `prompt_mode` | `qwen35_terse` |
+| Routing | user-locus terse prompt + `tools=[QWEN35_SEARCH_TOOL]` auto-inject ON + `enable_thinking=True` |
+| Datasets | 7 × Plan A test/dev (bamboogle/nq/triviaqa/popqa/hotpotqa/2wikimultihopqa/musique) |
+| n | 51,713 / variant |
+| Decode | greedy, `seed=1` |
+| Retriever | IVF-SQ8 × 16 workers + `asyncio.to_thread` |
+| `INFERENCE_MAX_WORKERS` | 128 |
+| Wall (est.) | ~7 h on 1× A100-80GB (anchored on M4.2 full-sweep wall ~150 min × ~3× from longer rollouts on terse hybrid) |
+
+**Run**:
+
+```bash
+sbatch scripts/sbatch_m4.sh qwen3.5_0.8b 51713 qwen35_terse
+# or on this box:
+bash scripts/run_m4.sh qwen3.5_0.8b qwen35_terse seed1   # all 7 datasets, full split
+```
+
+Result files land at `evaluation_qwen35/results/<dataset>/<dataset>_*_m4_qwen3.5_0.8b_qwen35_terse_seed1/metric_score.txt` (no `_n*` suffix = full split).
+
+**Definition of done**: [`RESULTS_m4.md`](../report/RESULTS_m4.md) §4 hybrid row replaced with terse numbers; §5 cross-family delta refreshed; `log.md` bullet logged.
+
+## M4.6 — base full sweep with Phase-4 lock
+
+**Status (2026-05-12): blocked on M4.4 Phase 4 (4c). Conditional — only runs if Phase 4 produces a lift over the M4.3 lock.**
+
+Re-runs the full Plan A test/dev sets on `eval/qwen3.5_0.8b_base/` with whichever prompt the M4.4 Phase 4 screen locks in. If no Phase-4 candidate clears the +0.025 bar (≥ 0.035 mean EM), **M4.6 is unnecessary**: the existing M4.2 full-sweep base row stays and [`RESULTS_m4.md`](../report/RESULTS_m4.md) §4 is unchanged for base.
+
+| Knob | Value |
+|---|---|
+| Model | `eval/qwen3.5_0.8b_base/` (base, no post-training) |
+| `prompt_mode` | TBD by Phase 4 result (default = `qwen35_minimal_no_system` if no lift) |
+| Routing | TBD by Phase 4 winner (terse vs no_system family) |
+| Datasets | 7 × Plan A test/dev |
+| n | 51,713 / variant |
+| Decode | greedy, `seed=1` |
+| Wall (est.) | ~7 h on 1× A100-80GB |
+
+**Run** (templated; PROMPT_MODE filled in after Phase 4 lock):
+
+```bash
+sbatch scripts/sbatch_m4.sh qwen3.5_0.8b_base 51713 ${PHASE4_LOCK}
+```
+
+**Definition of done**: [`RESULTS_m4.md`](../report/RESULTS_m4.md) §4 base row replaced (if Phase 4 produced a lift) OR §4 base row reaffirmed (if Phase 4 was null). §5 cross-family delta refreshed regardless (base axis closed); `log.md` bullet logged.
+
 ## What's left
 
 | # | Task | Status |
@@ -414,12 +471,14 @@ Both unblocked from this commit forward; M5 scaffold work remains unblocked rega
 | 2 | Full sweep 51,713 items / variant — base + hybrid baselines (M4.2 lock) | ✅ done 2026-05-10 ([`RESULTS_m4.md` §4](../report/RESULTS_m4.md)); hybrid mean EM 0.060, base 0.010 |
 | 3 | Cross-family comparison M3 (Qwen3-0.6B) vs M4.2 (Qwen3.5-0.8B) baseline | ✅ done 2026-05-10 ([`RESULTS_m4.md` §5](../report/RESULTS_m4.md)); avg Δ −0.042 EM motivates M4.4 |
 | 4 | **M4.4 prompt search at n=300** — close (or rule out) the M3 cross-family gap before committing M5 training compute | ✅ Phase 1 complete 2026-05-10: WINNER `qwen35_terse` Δ +0.0436, mean EM 0.1030 — closes the M3 cross-family gap (M3=0.102). Secondary marginal pass `qwen35_research_role` Δ +0.0257. 10 of 12 candidates failed bar (incl. all 3 system-role-prose variants — rules out M3.1 winner shape cross-family). |
-| 4a | **M4.4 Phase 2** — winner ablations at n=300/dataset, ~30 min wall (next milestone TBD) | ⏳ deferred. Run when ready: (i) `terse+decide` = terse user + M3.1 decision sentences appended; (ii) `terse+source_only` = terse user + "use only search results / answer 'unknown' if not found" appended; (iii) `terse+research_role` = role-prime in system + terse as user message. Each must clear **+0.04 over A** (= 0.0994 mean EM) to escalate to Phase 3. If none, lock `qwen35_terse` and go straight to Phase 3. Implementation cost: ~30 LoC (3 template constants + `_QWEN35_USER_PROMPT_MODES` updates) + ~30 min wall. Templates + I/O patterns to be added to [`M4_4_PHASE_1B_DESIGN.md`](M4_4_PHASE_1B_DESIGN.md) §11 (Phase-2 follow-up). |
-| 4b | **M4.4 Phase 3** — full n=51,713 hybrid sweep with locked prompt (next milestone TBD) | ⏳ deferred, blocked on 4a. Wall: ~7 h on the optimised stack. Replaces [`RESULTS_m4.md`](../report/RESULTS_m4.md) §4 hybrid row with the new locked prompt (`qwen35_terse` unless Phase 2 produces a better candidate). Triggers refresh of [`RESULTS_m4.md`](../report/RESULTS_m4.md) §5 cross-family delta (was avg Δ −0.042 favouring M3 Qwen3-0.6B; expect to flip to ~0 or slight M4 advantage after the terse lock). |
-| 4c | **M4.4 Phase 4** — base variant prompt search at n=300 (next milestone TBD) | ⏳ deferred. Re-opens the M4.3 lock (`qwen35_minimal_no_system`, mean EM 0.010). Test ~4–6 candidates × 7 datasets × n=300 (~30–45 min wall). Designed candidates: (i) `qwen35_terse_no_system` = Phase-1b winner prose without `tools=[]` auto-inject (parallels M4.3 lock structure); (ii) `qwen35_terse` = terse WITH auto-inject (re-test the M4.3 auto-inject-hurts-base finding now that user prose is cleaner); (iii) `qwen35_research_role_no_system` = role-prime in user role (no system); (iv) M4.3 lock as control. Bar **+0.025 over M4.3 lock** (≥ 0.035 mean EM). Implementation cost: ~30 LoC (new `_no_system` templates + `_QWEN35_NO_TOOLS_MODES` updates in [`active_pipeline.py`](../../evaluation_qwen35/flashrag/pipeline/active_pipeline.py)). Pipeline routing for `tools=[]` skip already supported (M4.3 path). |
-| 4d | **M4.4 Phase 5** — full n=51,713 base sweep with locked base prompt (next milestone TBD) | ⏳ deferred, blocked on 4c. Wall: ~7 h on the optimised stack (same budget as Phase 3 hybrid). Replaces [`RESULTS_m4.md`](../report/RESULTS_m4.md) §4 base row with the Phase-4 locked prompt. M3 vs M4 cross-family base comparison also refreshes from this. If Phase 4 produces no candidate above the bar, the M4.3 lock (`qwen35_minimal_no_system`) stays and Phase 5 is unnecessary. |
-| 5 | Cross-family re-comparison M3 vs M4 post-M4.4 lock — refresh [`RESULTS_m4.md`](../report/RESULTS_m4.md) §5 if M4.4 changes the lock | ⏳ blocked on #4b + #4d (both variants must lock before the §5 cross-family table is final) |
-| 6 | M5 (separate milestone): GRPO training on Qwen3.5-0.8B with the M4.4-locked prompt as the byte-aligned eval / train shape — see [`MILESTONE_5.md`](../milestone_5/MILESTONE_5.md) | ⏳ scaffold pending (independent of 4a–4d; can use the terse-locked hybrid prompt now and re-align later if Phase 2 / 4 produce a different winner) |
+| 4a | **M4.4 Phase 2** — hybrid winner ablations at n=300/dataset, ~30 min wall | ⏸ **Deferred to backlog 2026-05-12**. `qwen35_terse` locked directly. Phase 1's +0.0436 lift (p=0.0078 across all 7 datasets) is well-supported; the marginal value of an extra +0.04-bar ablation lift is uncertain and the regression risk on terse is non-zero. Candidate templates (`terse+decide`, `terse+source_only`, `terse+research_role`) preserved in [`M4_4_PHASE_1B_DESIGN.md`](M4_4_PHASE_1B_DESIGN.md) §11 if a future iteration revisits. |
+| 4b | → see **M4.5 — hybrid full sweep** below | renamed 2026-05-12; was "Phase 3". Runs the full n=51,713 hybrid sweep with `qwen35_terse` locked. ⏳ next. |
+| 4c | **M4.4 Phase 4** — base variant prompt screen at n=300 (active next step 2026-05-12) | ⏳ Re-opens the M4.3 lock (`qwen35_minimal_no_system`, mean EM 0.010). 4-candidate screen: (i) **`qwen35_terse`** — terse user msg + `tools=[]` auto-inject + system (= hybrid winner shape — **run first**); (ii) `qwen35_terse_no_system` — terse user message, no auto-inject (mirrors M4.3 lock structure); (iii) `qwen35_research_role_no_system` — role-prime in user role, no system; (iv) `qwen35_minimal_no_system` — M4.3 control. Bar **+0.025 over M4.3 lock** (≥ 0.035 mean EM). Implementation cost: ~30 LoC (2 new templates + `_QWEN35_USER_PROMPT_MODES` / `_QWEN35_NO_TOOLS_MODES` updates in [`active_pipeline.py`](../../evaluation_qwen35/flashrag/pipeline/active_pipeline.py)). **Fallback**: if none of the 4 clear the bar, port the remaining Phase-1b hybrid candidates (`qwen35_decide`, `qwen35_source_only`, `qwen35_self_check`, `qwen35_decompose`, `qwen35_multi_search`, `qwen35_hamlet_1shot`, `qwen35_research_role`) to base at n=300 — they're already wired in the pipeline, just swap the model path. |
+| 4d | → see **M4.6 — base full sweep** below | renamed 2026-05-12; was "Phase 5". Blocked on 4c. Runs the full n=51,713 base sweep with the Phase-4-locked base prompt. ⏳ blocked. If Phase 4 produces no candidate above the bar, the M4.3 lock stays and M4.6 is unnecessary. |
+| 5 | Cross-family re-comparison M3 vs M4 post-M4.5 / M4.6 lock — refresh [`RESULTS_m4.md`](../report/RESULTS_m4.md) §5 | ⏳ blocked on M4.5 + M4.6 (both variants must lock at full-sweep scale before §5 cross-family table is final) |
+| 6 | M5 (separate milestone): GRPO training on Qwen3.5-0.8B with the M4-locked prompt as the byte-aligned eval / train shape — see [`MILESTONE_5.md`](../milestone_5/MILESTONE_5.md) | ⏳ unblocked for hybrid (can use the terse-locked hybrid prompt now); base alignment waits on M4.6. |
+| 7 | **M4.5 — hybrid full sweep with `qwen35_terse`** (n=51,713 × 7 datasets, ~7 h) | ⏳ next. See [§M4.5](#m45--hybrid-full-sweep-with-qwen35_terse) below. |
+| 8 | **M4.6 — base full sweep with Phase-4 lock** (n=51,713 × 7 datasets, ~7 h) | ⏳ blocked on 4c. See [§M4.6](#m46--base-full-sweep-with-phase-4-lock) below. |
 
 ## Pointers
 

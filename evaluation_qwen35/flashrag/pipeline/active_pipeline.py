@@ -51,12 +51,23 @@ _QWEN35_USER_PROMPT_MODES = {
     'qwen35_terse', 'qwen35_decide', 'qwen35_search_first',
     'qwen35_hamlet_1shot', 'qwen35_decompose', 'qwen35_source_only',
     'qwen35_self_check', 'qwen35_multi_search',
+    # M4.4 Phase 4 base candidates (no-system variants; M4.3 lock structure).
+    'qwen35_terse_no_system', 'qwen35_research_role_no_system',
+    # M4.4 Phase 4 fallback B: Phase-1b near-miss prose ported to no-system.
+    'qwen35_decide_no_system', 'qwen35_source_only_no_system', 'qwen35_self_check_no_system',
 }
 
 # Subset of user-prompt modes that ALSO drop the `tools=[]` auto-inject. With
 # no tools= passed, Qwen3.5's chat template emits NO system block at all; the
 # format spec must be inlined into the user message (the template handles this).
-_QWEN35_NO_TOOLS_MODES = {'qwen35_minimal_no_system'}
+_QWEN35_NO_TOOLS_MODES = {
+    'qwen35_minimal_no_system',
+    # M4.4 Phase 4: parallel `_no_system` variants for the base prompt screen.
+    'qwen35_terse_no_system', 'qwen35_research_role_no_system',
+    # M4.4 Phase 4 fallback B: parallel `_no_system` variants of the top-3
+    # Phase-1b near-miss prose interventions.
+    'qwen35_decide_no_system', 'qwen35_source_only_no_system', 'qwen35_self_check_no_system',
+}
 
 
 def _is_qwen35_user_prompt(mode: str) -> bool:

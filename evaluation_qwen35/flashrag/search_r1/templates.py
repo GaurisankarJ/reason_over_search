@@ -397,6 +397,99 @@ QWEN35_TEMPLATES["qwen35_source_only"] = QWEN35_SOURCE_ONLY_TEMPLATE
 QWEN35_TEMPLATES["qwen35_self_check"] = QWEN35_SELF_CHECK_TEMPLATE
 QWEN35_TEMPLATES["qwen35_multi_search"] = QWEN35_MULTI_SEARCH_TEMPLATE
 
+# ─── M4.4 Phase 4 — base-variant no-system candidates (2026-05-12) ───────────
+# Both candidates parallel the M4.3 lock structure (no `tools=[]` auto-inject,
+# no system block; format spec inlined into the user message). Routed via
+# `_QWEN35_USER_PROMPT_MODES` + `_QWEN35_NO_TOOLS_MODES`.
+
+# Candidate (ii): qwen35_terse_no_system — Phase-1b winner prose (terse) with
+# the M4.3-lock structure (no auto-inject, no system). Tests whether the
+# untested intersection "terse user message + no auto-inject" lifts base.
+QWEN35_TERSE_NO_SYSTEM_TEMPLATE = (
+    "Use the `search` tool to look up facts as needed. "
+    "Call the tool by writing:\n"
+    "<tool_call>\n<function=search>\n<parameter=query>\nyour query\n</parameter>\n</function>\n</tool_call>\n"
+    "The result will be returned inside <tool_response> and </tool_response>. "
+    "When you have the answer, write it inside <answer> and </answer>. "
+    "For example, <answer> Beijing </answer>.\n"
+    "Question: {prompt}\n"
+)
+QWEN35_TEMPLATES["qwen35_terse_no_system"] = QWEN35_TERSE_NO_SYSTEM_TEMPLATE
+
+# Candidate (iii): qwen35_research_role_no_system — Phase-1b secondary pass
+# (research_role role-prime) ported to the M4.3 lock structure. Role-prime
+# goes in user role (no system available without `tools=[]`).
+QWEN35_RESEARCH_ROLE_NO_SYSTEM_TEMPLATE = (
+    "You are a research assistant. "
+    "For every factual question, verify the answer using the `search` tool before responding. "
+    "Call the tool by writing:\n"
+    "<tool_call>\n<function=search>\n<parameter=query>\nyour query\n</parameter>\n</function>\n</tool_call>\n"
+    "The result will be returned inside <tool_response> and </tool_response>. "
+    "Provide the final answer inside <answer> and </answer>. "
+    "For example, <answer> Beijing </answer>.\n"
+    "Question: {prompt}\n"
+)
+QWEN35_TEMPLATES["qwen35_research_role_no_system"] = QWEN35_RESEARCH_ROLE_NO_SYSTEM_TEMPLATE
+
+# ─── M4.4 Phase 4 fallback B (2026-05-12) — top-3 Phase-1b near-miss prose ───
+# variants ported to the M4.3 no-system structure (no auto-inject; format spec
+# inlined). Tests whether the prose interventions (decision rules / source
+# grounding / self-verify) lift base when the auto-inject scaffolding is gone.
+# Triggered after the primary 4-candidate Phase 4 screen produced no winner.
+
+# (B-1) qwen35_decide_no_system — M3.1 decision rules in user role, no auto-inject.
+QWEN35_DECIDE_NO_SYSTEM_TEMPLATE = (
+    "Answer the given question. "
+    "You must conduct reasoning inside <think> and </think> first every time you get new information. "
+    "After reasoning, if you find you lack some knowledge, you can call the search tool by writing:\n"
+    "<tool_call>\n<function=search>\n<parameter=query>\nyour query\n</parameter>\n</function>\n</tool_call>\n"
+    "The result will be returned inside <tool_response> and </tool_response>. "
+    "You can search as many times as you want. "
+    "Use the information in the search results to determine the final answer. "
+    "After each search result, decide whether another search is needed or whether you can provide the final answer. "
+    "If you find no further external knowledge needed, you can directly provide the answer inside "
+    "<answer> and </answer>, without detailed illustrations. "
+    "For example, <answer> Beijing </answer>. "
+    "Question: {prompt}\n"
+)
+QWEN35_TEMPLATES["qwen35_decide_no_system"] = QWEN35_DECIDE_NO_SYSTEM_TEMPLATE
+
+# (B-2) qwen35_source_only_no_system — source-grounding + uncertainty escape, no auto-inject.
+QWEN35_SOURCE_ONLY_NO_SYSTEM_TEMPLATE = (
+    "Answer the given question. "
+    "You must conduct reasoning inside <think> and </think> first every time you get new information. "
+    "After reasoning, if you find you lack some knowledge, you can call the search tool by writing:\n"
+    "<tool_call>\n<function=search>\n<parameter=query>\nyour query\n</parameter>\n</function>\n</tool_call>\n"
+    "The result will be returned inside <tool_response> and </tool_response>. "
+    "You can search as many times as you want.\n"
+    "\n"
+    "Use ONLY information returned by the search tool. "
+    "If the search results do not contain the answer, write <answer>unknown</answer>.\n"
+    "\n"
+    "Otherwise, provide the answer inside <answer> and </answer>, without detailed illustrations. "
+    "For example, <answer> Beijing </answer>. "
+    "Question: {prompt}\n"
+)
+QWEN35_TEMPLATES["qwen35_source_only_no_system"] = QWEN35_SOURCE_ONLY_NO_SYSTEM_TEMPLATE
+
+# (B-3) qwen35_self_check_no_system — self-verify before answering, no auto-inject.
+QWEN35_SELF_CHECK_NO_SYSTEM_TEMPLATE = (
+    "Answer the given question. "
+    "You must conduct reasoning inside <think> and </think> first every time you get new information. "
+    "After reasoning, if you find you lack some knowledge, you can call the search tool by writing:\n"
+    "<tool_call>\n<function=search>\n<parameter=query>\nyour query\n</parameter>\n</function>\n</tool_call>\n"
+    "The result will be returned inside <tool_response> and </tool_response>. "
+    "You can search as many times as you want.\n"
+    "\n"
+    "Before writing the final answer, briefly verify that it is supported by the search results. "
+    "If it is not, refine your query and search again.\n"
+    "\n"
+    "Then provide the answer inside <answer> and </answer>, without detailed illustrations. "
+    "For example, <answer> Beijing </answer>. "
+    "Question: {prompt}\n"
+)
+QWEN35_TEMPLATES["qwen35_self_check_no_system"] = QWEN35_SELF_CHECK_NO_SYSTEM_TEMPLATE
+
 # ─── Search-R1 paper user-message template (M1 baseline reproduction) ────────
 SEARCH_R1_TEMPLATE = (
         "Answer the given question. "
