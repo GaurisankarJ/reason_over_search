@@ -127,10 +127,10 @@ policy:
     activation_checkpointing: true
     # TP=2 partitions the model across both GPUs — the load-bearing 2x
     # speedup knob (matches m5_1_research_paper_2xa100.yaml's training side).
-    tensor_parallel_size: 2
+    tensor_parallel_size: 1  # Option B (NeMo-RL FSDP+TP>1 bug): policy TP=1, vLLM keeps TP=2
     context_parallel_size: 1
     custom_parallel_plan: null
-    automodel_kwargs: {}
+    automodel_kwargs: {force_hf: true}  # NeMo-RL issue 2072: bypass automodel state_dict adapter, fixes TP=2 vocab-parallel lm_head refit
     lora_cfg:
       enabled: false
       target_modules: []

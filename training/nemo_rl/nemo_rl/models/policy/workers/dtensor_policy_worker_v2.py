@@ -1042,7 +1042,10 @@ class DTensorPolicyWorkerV2Impl(AbstractPolicyWorker, ColocatablePolicyInterface
     @wrap_with_nvtx_name("dtensor_policy_worker_v2/offload_after_refit")
     def offload_after_refit(self) -> None:
         """Offload as much as possible on the CPU."""
-        self.model = self.move_to_cpu(self.model)
+        # TP_OFFLOAD_GUARD_2026_05_12: gate on cpu_offload; FSDP reset_sharded_param crashes
+        # on vocab-parallel embed/lm_head at TP>1 when calling model.to("cpu") here.
+        if self.cpu_offload:
+            self.model = self.move_to_cpu(self.model)
         self.model.eval()
         torch.randn(1).cuda()  # wake up torch allocator
         self.offload_before_refit()  # rerun the old offload function

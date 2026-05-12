@@ -195,10 +195,10 @@ policy:
     # speedup the 2x recipe is supposed to deliver; was 1 (DDP) before.
     # micro=2 is the secondary gain TP=2 unlocks; KEPT at 1 here pending a
     # dedicated 2-GPU smoke that verifies activation peak doesn't OOM.
-    tensor_parallel_size: 2
+    tensor_parallel_size: 1  # Option B (NeMo-RL FSDP+TP>1 bug): policy TP=1, vLLM keeps TP=2
     context_parallel_size: 1
     custom_parallel_plan: null
-    automodel_kwargs: {}
+    automodel_kwargs: {force_hf: true}  # NeMo-RL issue 2072: bypass automodel state_dict adapter, fixes TP=2 vocab-parallel lm_head refit
     lora_cfg:
       enabled: false
       target_modules: []
