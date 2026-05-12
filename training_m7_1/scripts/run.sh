@@ -6,6 +6,7 @@
 #   --mode smoke_8192  → configs/m7_smoke_8192.yaml        (20 traj × 50 steps; seq=8192)
 #   --mode prod_shape  → configs/m7_prod_shape_smoke.yaml  (320 traj × 3 steps; prod shape)
 #   --mode short100    → configs/m7_1_short100.yaml        (100-step prod probe, ckpts at 50+100)
+#   --mode extend      → configs/m7_1_extend.yaml          (resume short100 step 100 → 622, save_period=100, keep_top_k=2)
 #   --mode prod        → configs/m7_1_research_paper.yaml  (full 622-step ReSearch recipe)
 #
 # Common knobs:
@@ -49,9 +50,10 @@ case "$MODE" in
     smoke_8192)      CONFIG="training_m7_1/configs/m7_smoke_8192.yaml" ;;            # [M7.0.7b] seq=8192 smoke variant
     prod_shape)      CONFIG="training_m7_1/configs/m7_prod_shape_smoke.yaml" ;;       # [M7.0.7c] prod batch (320 traj) × 3 steps
     short100)        CONFIG="training_m7_1/configs/m7_1_short100.yaml" ;;             # [M7.1] 100-step probe, ckpts at 50+100
+    extend)          CONFIG="training_m7_1/configs/m7_1_extend.yaml" ;;                # [M7.1] resume short100 step 100 → 622, save_period=100, keep_top_k=2
     prod)            CONFIG="training_m7_1/configs/m7_1_research_paper.yaml" ;;
-    "")              echo "error: --mode is required (smoke|smoke_8192|prod_shape|short100|prod)" >&2; exit 2 ;;
-    *)               echo "error: --mode must be smoke|smoke_8192|prod_shape|short100|prod (got: $MODE)" >&2; exit 2 ;;
+    "")              echo "error: --mode is required (smoke|smoke_8192|prod_shape|short100|extend|prod)" >&2; exit 2 ;;
+    *)               echo "error: --mode must be smoke|smoke_8192|prod_shape|short100|extend|prod (got: $MODE)" >&2; exit 2 ;;
 esac
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -89,7 +91,13 @@ TS="$(date -u +%Y%m%dT%H%MZ)"
 # to distinguish from M5.1 hybrid runs in W&B + on-disk artifacts.
 RUN_NAME="qwen3.5-0.8b-base-musique-m7_${MODE}-seed${SEED}-${TS}"
 # Checkpoint dir keyed by (mode, seed); not timestamped, so resumes work.
-CKPT_DIR="${CHECKPOINT_DIR_BASE:-results/grpo}/m7_${MODE}/seed${SEED}"
+# [M7.1] extend mode reuses the short100 dir so NeMo-RL auto-resumes from
+# the step 100 checkpoint written by the short100 run.
+if [[ "$MODE" == "extend" ]]; then
+    CKPT_DIR="${CHECKPOINT_DIR_BASE:-results/grpo}/m7_short100/seed${SEED}"
+else
+    CKPT_DIR="${CHECKPOINT_DIR_BASE:-results/grpo}/m7_${MODE}/seed${SEED}"
+fi
 
 OVERRIDES=(
     "grpo.seed=${SEED}"

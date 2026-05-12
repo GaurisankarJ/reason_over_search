@@ -1,0 +1,379 @@
+# M7.1-extend — auto-resume from short100 step 100 ckpt, run to step 622.
+#
+# Purpose: when m7_1_short100 finishes its 100-step probe and the signal
+# meets the GO criterion (steps 91-100 avg rew_mean ≥ 0.035 AND ≥ 2× the
+# steps 1-10 baseline), this config picks up where short100 left off and
+# trains to full prod length (622 steps total, ≡ 2 epochs of MuSiQue at
+# bs=64 prompts × G=5).
+#
+# Resume mechanism: checkpoint_dir POINTS AT the short100 dir
+# (results/grpo/m7_short100/seed42) — NeMo-RL's resume logic auto-loads
+# the highest-numbered step_N ckpt in checkpoint_dir at startup. Optimizer
+# state is NOT restored (save_optimizer:false in short100); AdamW moments
+# re-init from zero at constant LR=1e-6 — minor perturbation, fine.
+#
+# DELTAS vs m7_1_short100.yaml:
+#   - grpo.max_num_steps                  100  → 622   (full ReSearch budget)
+#   - checkpointing.save_period           50   → 100   (fewer ckpts to disk)
+#   - checkpointing.keep_top_k            null → 2     (keep ≤2 ckpts, ~6 GB peak)
+#   - logger.wandb.name + mlflow + swanlab  -m7_short100- → -m7_extend-
+#   (ckpt_dir stays at results/grpo/m7_short100 so resume just works.)
+#
+# Disk math:
+#   - save_period=100 from step 100 → ckpts at steps 200, 300, 400, 500, 600
+#     (5 new ckpts + step 100 = 6 total over the run)
+#   - keep_top_k=2 prunes to 2 latest at any time → ~6.4 GB peak on disk
+#
+# Run from repo root (after short100 step 100 ckpt exists):
+#   bash training_m7_1/scripts/run.sh --mode extend
+
+# =============================================================================
+# GRPO algorithm
+# =============================================================================
+grpo:
+  num_generations_per_prompt: 5
+  num_prompts_per_step: 64
+  max_num_steps: 622
+  max_num_epochs: 2
+  val_period: 0
+  val_at_start: false
+  val_at_end: false
+  max_val_samples: 256
+  val_batch_size: 256
+  max_rollout_turns: 10
+  normalize_rewards: true
+  use_leave_one_out_baseline: false
+  overlong_filtering: false
+  use_dynamic_sampling: false
+  dynamic_sampling_max_gen_batches: 10
+  batch_multiplier: 1
+  reward_shaping:
+    enabled: false
+    overlong_buffer_length: 128
+    overlong_buffer_penalty: 1
+    max_response_length: ${policy.max_total_sequence_length}
+    stop_properly_penalty_coef: null
+  adv_estimator:
+    name: "grpo"
+    normalize_rewards: ${grpo.normalize_rewards}
+    use_leave_one_out_baseline: ${grpo.use_leave_one_out_baseline}
+    minus_baseline: true
+  reward_scaling:
+    enabled: false
+    source_min: 0.0
+    source_max: 1.0
+    target_min: 0.0
+    target_max: 1.0
+  seq_logprob_error_threshold: null
+  seed: 42
+  async_grpo:
+    enabled: false
+    max_trajectory_age_steps: 1
+    in_flight_weight_updates: false
+    recompute_kv_cache_after_weight_updates: false
+
+# =============================================================================
+# Loss
+# =============================================================================
+loss_fn:
+  reference_policy_kl_penalty: 0.001
+  reference_policy_kl_type: "k3"
+  kl_input_clamp_value: 20.0
+  kl_output_clamp_value: 10.0
+  ratio_clip_min: 0.2
+  ratio_clip_max: 0.2
+  ratio_clip_c: null
+  use_on_policy_kl_approximation: false
+  use_importance_sampling_correction: false
+  truncated_importance_sampling_ratio: null
+  truncated_importance_sampling_ratio_min: null
+  truncated_importance_sampling_type: tis
+  sequence_level_importance_ratios: false
+  token_level_loss: true
+  force_on_policy_ratio: false
+  use_kl_in_reward: false
+
+# =============================================================================
+# Checkpointing
+# =============================================================================
+checkpointing:
+  enabled: true
+  checkpoint_dir: "results/grpo/m7_short100"
+  metric_name: null
+  higher_is_better: false
+  keep_top_k: 2
+  save_period: 100
+  checkpoint_must_save_by: null
+  model_save_format: "safetensors"
+  save_consolidated: true
+  save_optimizer: false
+
+# =============================================================================
+# Policy (model + training + generation)
+# =============================================================================
+policy:
+  model_name: "/workspace/reason_over_search/eval/qwen3.5_0.8b_base"
+  tokenizer:
+    name: ${policy.model_name}
+    chat_template_kwargs: null
+  hf_config_overrides: {}
+
+  train_global_batch_size: 320
+  train_micro_batch_size: 1
+  generation_batch_size: 32
+  logprob_batch_size: ${policy.train_micro_batch_size}
+  max_total_sequence_length: 8192
+  precision: "bfloat16"
+  logprob_chunk_size: null
+  offload_optimizer_for_logprob: false
+
+  dtensor_cfg:
+    _v2: true
+    enabled: true
+    cpu_offload: false
+    sequence_parallel: false
+    activation_checkpointing: true
+    tensor_parallel_size: 1
+    context_parallel_size: 1
+    custom_parallel_plan: null
+    automodel_kwargs: {}
+    lora_cfg:
+      enabled: false
+      target_modules: []
+      exclude_modules: []
+      match_all_linear: true
+      dim: 8
+      alpha: 32
+      dropout: 0.0
+      dropout_position: "post"
+      lora_A_init: "xavier"
+      use_triton: true
+
+  megatron_cfg:
+    enabled: false
+    force_reconvert_from_hf: false
+    empty_unused_memory_level: 1
+    activation_checkpointing: false
+    converter_type: "Qwen2ForCausalLM"
+    tensor_model_parallel_size: 1
+    expert_tensor_parallel_size: 1
+    expert_model_parallel_size: 1
+    pipeline_model_parallel_size: 1
+    num_layers_in_first_pipeline_stage: null
+    num_layers_in_last_pipeline_stage: null
+    context_parallel_size: 1
+    pipeline_dtype: ${policy.precision}
+    sequence_parallel: false
+    freeze_moe_router: true
+    moe_router_dtype: "fp64"
+    moe_router_load_balancing_type: "none"
+    moe_router_bias_update_rate: 0.0
+    moe_permute_fusion: false
+    apply_rope_fusion: true
+    bias_activation_fusion: true
+    defer_fp32_logits: false
+    moe_per_layer_logging: false
+    moe_enable_deepep: false
+    moe_token_dispatcher_type: "alltoall"
+    moe_shared_expert_overlap: false
+    gradient_accumulation_fusion: false
+    peft:
+      enabled: false
+      target_modules: []
+      exclude_modules: []
+      dim: 8
+      alpha: 32
+      dropout: 0.0
+      dropout_position: "post"
+      lora_A_init_method: "xavier"
+      lora_B_init_method: "zero"
+      a2a_experimental: false
+      lora_dtype: None
+    optimizer:
+      optimizer: "adam"
+      lr: 1.0e-6
+      min_lr: 1.0e-7
+      weight_decay: 0.01
+      bf16: true
+      fp16: false
+      params_dtype: "float32"
+      adam_beta1: 0.9
+      adam_beta2: 0.999
+      adam_eps: 1e-8
+      sgd_momentum: 0.9
+      use_distributed_optimizer: true
+      use_precision_aware_optimizer: true
+      clip_grad: ${policy.max_grad_norm}
+      optimizer_cpu_offload: false
+      optimizer_offload_fraction: 0.0
+    scheduler:
+      start_weight_decay: ${policy.megatron_cfg.optimizer.weight_decay}
+      end_weight_decay: ${policy.megatron_cfg.optimizer.weight_decay}
+      weight_decay_incr_style: "constant"
+      lr_decay_style: "constant"
+      lr_decay_iters: 1000
+      lr_warmup_iters: 0
+      lr_warmup_init: 1.0e-7
+    distributed_data_parallel_config:
+      grad_reduce_in_fp32: false
+      overlap_grad_reduce: true
+      overlap_param_gather: true
+      use_custom_fsdp: false
+      data_parallel_sharding_strategy: "optim_grads_params"
+    fp8_cfg:
+      enabled: false
+      fp8: "e4m3"
+      fp8_recipe: "blockwise"
+      fp8_param: false
+    env_vars: null
+
+  draft:
+    enabled: false
+    model_name: null
+    loss_weight: 0.1
+    num_layers: null
+    aux_layer_indices: null
+
+  dynamic_batching:
+    enabled: true
+    train_mb_tokens: ${mul:${policy.max_total_sequence_length}, ${policy.train_micro_batch_size}}
+    logprob_mb_tokens: ${mul:${policy.max_total_sequence_length}, ${policy.logprob_batch_size}}
+    sequence_length_round: 64
+
+  sequence_packing:
+    enabled: false
+    train_mb_tokens: ${mul:${policy.max_total_sequence_length}, ${policy.train_micro_batch_size}}
+    logprob_mb_tokens: ${mul:${policy.max_total_sequence_length}, ${policy.logprob_batch_size}}
+    algorithm: "modified_first_fit_decreasing"
+    sequence_length_round: 64
+
+  make_sequence_length_divisible_by: ${policy.dtensor_cfg.tensor_parallel_size}
+  max_grad_norm: 1.0
+
+  optimizer:
+    name: "torch.optim.AdamW"
+    kwargs:
+      lr: 1.0e-6
+      weight_decay: 0.01
+      betas: [0.9, 0.999]
+      eps: 1e-8
+      foreach: false
+      fused: true
+
+  scheduler:
+    - name: "torch.optim.lr_scheduler.LinearLR"
+      kwargs:
+        start_factor: 1.0
+        end_factor: 1.0
+        total_iters: 1
+    - name: "torch.optim.lr_scheduler.ConstantLR"
+      kwargs:
+        factor: 1.0
+        total_iters: 10000000000
+    - milestones: [1]
+
+  generation:
+    backend: "vllm"
+    max_new_tokens: 1024
+    temperature: 1.0
+    top_p: 1.0
+    top_k: null
+    stop_token_ids: null
+    stop_strings: ["</tool_call>", "</search>", "</answer>"]
+    mcore_generation_config:
+      buffer_size_gb: 10
+      num_cuda_graphs: 4
+      block_size_tokens: 256
+      use_cuda_graphs_for_non_decode_steps: true
+      enable_chunked_prefill: true
+      unified_memory_level: 0
+      max_tokens: 16384
+    vllm_cfg:
+      async_engine: true
+      precision: ${policy.precision}
+      kv_cache_dtype: "auto"
+      tensor_parallel_size: 1
+      pipeline_parallel_size: 1
+      expert_parallel_size: 1
+      gpu_memory_utilization: 0.5
+      max_model_len: ${policy.max_total_sequence_length}
+      enforce_eager: false
+      use_deep_gemm: false
+      num_last_layers_in_bf16: 0
+      num_first_layers_in_bf16: 0
+      enable_vllm_metrics_logger: true
+      vllm_metrics_logger_interval: 0.5
+    vllm_kwargs: {}
+    colocated:
+      enabled: true
+      resources:
+        gpus_per_node: null
+        num_nodes: null
+
+# =============================================================================
+# Data — MuSiQue (single-dataset training, matches M5.1/M7 prod)
+# =============================================================================
+data:
+  max_input_seq_length: ${policy.max_total_sequence_length}
+  shuffle: true
+  num_workers: 1
+  use_multiple_dataloader: false
+
+  train:
+    dataset_name: search_r1
+    data_path: data/training/musique/train.parquet
+    arm: qwen_native_no_system
+    seed: ${grpo.seed}
+
+  validation: null
+
+  default:
+    prompt_file: training_m7_1/src/prompts/m7_qwen35_base_user.txt
+    system_prompt_file: null
+    processor: search_r1_processor
+    env_name: search_r1
+
+# =============================================================================
+# Env — Search-R1 retrieval Ray actor
+# =============================================================================
+env:
+  search_r1:
+    arm: qwen_native_no_system
+    retriever_url: "http://127.0.0.1:3005"
+    top_n: 5
+    max_turns: 10
+    max_obs_chars: 1024
+    request_timeout_s: 30.0
+
+# =============================================================================
+# Logging
+# =============================================================================
+logger:
+  log_dir: "logs"
+  num_val_samples_to_print: 5
+  wandb_enabled: true
+  tensorboard_enabled: false
+  mlflow_enabled: false
+  swanlab_enabled: false
+  monitor_gpus: true
+  wandb:
+    project: "reason_over_search_m7_1"
+    name: "qwen3.5-0.8b-base-musique-m7_extend-seed42"
+  swanlab:
+    project: "reason_over_search_m7_1"
+    name: "qwen3.5-0.8b-base-musique-m7_extend-seed42"
+  tensorboard: {}
+  mlflow:
+    experiment_name: "reason_over_search_m7_1"
+    run_name: "qwen3.5-0.8b-base-musique-m7_extend-seed42"
+    tracking_uri: "http://localhost:5000"
+  gpu_monitoring:
+    collection_interval: 10
+    flush_interval: 10
+
+# =============================================================================
+# Cluster
+# =============================================================================
+cluster:
+  gpus_per_node: 1
+  num_nodes: 1
