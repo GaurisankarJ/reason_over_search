@@ -55,8 +55,8 @@ from training_m5_6.src.environments.parsers import (
 )
 from training_m5_6.src.rewards.search_r1 import (
     compute_search_r1_reward,
+    em_check,
     extract_solution,
-    f1_check,
 )
 
 
@@ -210,11 +210,11 @@ class SearchR1Env(EnvironmentInterface):
                     m["content"] for m in log if m["role"] != "user"
                 )
                 gold = meta.get("ground_truth") or []
-                # Best-effort: maybe an unclosed <answer was emitted; f1_check
+                # Best-effort: maybe an unclosed <answer was emitted; em_check
                 # against an empty string yields 0, which is what we want.
-                # F1 (not EM) here to stay consistent with M5.1's F1-only reward.
+                # EM (not F1) here to stay consistent with M5.6's EM-only reward.
                 ans = extract_solution(solution_str) or ""
-                rewards[i] = float(f1_check(ans, gold)) if ans else 0.0
+                rewards[i] = float(em_check(ans, gold)) if ans else 0.0
                 terminateds[i] = True
                 observations.append({"role": "tool", "content": ""})
                 next_stop_strings.append(None)
