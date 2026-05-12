@@ -106,10 +106,14 @@ Per-mode budgets (qwen3 + qwen35 share the M3 shape; search_r1 stays at paper):
 
 ## Variant dispatch
 
-| Variant | Path | `enable_thinking` | `prompt_mode` (default) |
-|---|---|---|---|
-| `qwen3.5_0.8b` (hybrid) | `eval/qwen3.5_0.8b/` | True | `qwen35_minimal` (M4.2; auto-inject in system) |
-| `qwen3.5_0.8b_base` | `eval/qwen3.5_0.8b_base/` | True | `qwen35_minimal_no_system` (M4.3; no system block) |
+**Final locked prompts (2026-05-12, end of M4):**
+
+| Variant | Path | `enable_thinking` | `prompt_mode` (locked) | `tools=[]` auto-inject |
+|---|---|---|---|---|
+| `qwen3.5_0.8b` (hybrid) | `eval/qwen3.5_0.8b/` | True | **`qwen35_terse`** (M4.5 lock; replaces M4.2 `qwen35_minimal`) | **yes** |
+| `qwen3.5_0.8b_base` | `eval/qwen3.5_0.8b_base/` | True | **`qwen35_minimal_no_system`** (M4.3 lock; stays after M4.4 Phase 4 null result) | **no** |
+
+The `run_m4.sh` script's default for hybrid is still `qwen35_minimal` (the M4.2 default — left unchanged to avoid breaking `save_note` mapping for the M4.5 result files which were produced with explicit `PROMPT_MODE=qwen35_terse`). Canonical invocation post-M4.5: `PROMPT_MODE=qwen35_terse bash scripts/run_m4.sh qwen3.5_0.8b <dataset> 1` for hybrid. Base needs no override.
 
 **Both variants run with `enable_thinking=True`** so the chat template emits an open `<think>\n` generation prefix and the model reasons before each tool call. This is mildly off-distribution for the base variant (which wasn't post-trained on the hybrid soft-switch protocol), but giving the base model space to reason before each tool call is worth more than the small cost of seeing an open think block; using the same render shape across variants also makes the hybrid-vs-base comparison directly comparable. (Earlier draft had base on `enable_thinking=False`; flipped 2026-05-09.)
 
@@ -576,6 +580,149 @@ sbatch scripts/sbatch_m4.sh qwen3.5_0.8b_base 51713 ${PHASE4_LOCK}
 | 6 | M5 (separate milestone): GRPO training on Qwen3.5-0.8B with the M4-locked prompt as the byte-aligned eval / train shape — see [`MILESTONE_5.md`](../milestone_5/MILESTONE_5.md) | ⏳ unblocked for hybrid (can use the terse-locked hybrid prompt now); base alignment waits on M4.6. |
 | 7 | **M4.5 — hybrid full sweep with `qwen35_terse`** (n=51,713 × 7 datasets) | ✅ **DONE 2026-05-12 16:50 UTC, wall 3 h 36 min**. Mean EM **0.092** (Δ +0.032 / +53 % rel. vs M4.2 lock 0.060). Closes 76 % of M3 cross-family gap. Per-dataset + cross-family delta in [`../report/RESULTS_m4.md` §4.1 + §5](../report/RESULTS_m4.md). |
 | 8 | **M4.6 — base full sweep with Phase-4 lock** (n=51,713 × 7 datasets) | ⊘ **NOT RUN — no winner to validate**. Phase 4 produced no candidate above the +0.025 bar (best at 0.015 mean EM, bar 0.035). M4.3 lock (`qwen35_minimal_no_system`, mean EM 0.010) stays as canonical base prompt. [`RESULTS_m4.md` §4.2/§4.3](../report/RESULTS_m4.md) base row unchanged. |
+
+## Handoff to M5 — locked prompts & settings
+
+**This section is the canonical reference for any M5 / future-GRPO work that wants byte-aligned eval against the M4 untrained floor.**
+
+### Final M4 prompt locks (2026-05-12)
+
+| Variant | `prompt_mode` | Template constant | Routing |
+|---|---|---|---|
+| **Hybrid** (`Qwen/Qwen3.5-0.8B`) | **`qwen35_terse`** | [`QWEN35_TERSE_TEMPLATE`](../../evaluation_qwen35/flashrag/search_r1/templates.py) | user-locus prompt + `tools=[QWEN35_SEARCH_TOOL]` auto-inject ON + `enable_thinking=True` |
+| **Base** (`Qwen/Qwen3.5-0.8B-Base`) | **`qwen35_minimal_no_system`** | [`QWEN35_MINIMAL_NO_SYSTEM_TEMPLATE`](../../evaluation_qwen35/flashrag/search_r1/templates.py) | user-locus prompt + `tools=[]` auto-inject OFF (no system block) + `enable_thinking=True` |
+
+### Hybrid template (locked) — `qwen35_terse`
+
+```python
+QWEN35_TERSE_TEMPLATE = (
+    "Use the `search` tool to look up facts as needed. "
+    "When you have the answer, write it inside <answer> and </answer>. "
+    "For example, <answer> Beijing </answer>.\n"
+    "Question: {prompt}\n"
+)
+```
+
+**3 sentences, ~30 user-tokens.** Auto-inject by the chat template (when `tools=[QWEN35_SEARCH_TOOL]` is passed to `apply_chat_template`) emits the `# Tools` schema + nested-XML format example + `<IMPORTANT>` reminder verbatim in the system block — that auto-inject is the load-bearing piece for hybrid.
+
+### Base template (locked) — `qwen35_minimal_no_system`
+
+```python
+QWEN35_MINIMAL_NO_SYSTEM_TEMPLATE = (
+    "Answer the given question. "
+    "You must conduct reasoning inside <think> and </think> first every time you get new information. "
+    "After reasoning, if you find you lack some knowledge, you can call the search tool by writing:\n"
+    "<tool_call>\n<function=search>\n<parameter=query>\nyour query\n</parameter>\n</function>\n</tool_call>\n"
+    "The result will be returned inside <tool_response> and </tool_response>. "
+    "You can search as many times as you want. "
+    "If you find no further external knowledge needed, you can directly provide the answer inside "
+    "<answer> and </answer>, without detailed illustrations. "
+    "For example, <answer> Beijing </answer>. "
+    "Question: {prompt}\n"
+)
+```
+
+**~150 prompt tokens total** (no system block; format spec inlined verbatim into the user message). `tools=[]` deliberately NOT passed (M4.3 finding: auto-inject hurts base 5×). Confirmed across 7-candidate prompt screen 2026-05-12 (M4.4 Phase 4 — full null result; this template stays as the floor).
+
+### Tool schema — `QWEN35_SEARCH_TOOL`
+
+Both variants share this OpenAI-style function schema (registered in [`evaluation_qwen35/flashrag/search_r1/templates.py`](../../evaluation_qwen35/flashrag/search_r1/templates.py)):
+
+```python
+QWEN35_SEARCH_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "search",
+        "description": "Search Wikipedia for passages relevant to the query. "
+                       "Returns the top-K most relevant chunks. "
+                       "Call this whenever the question requires factual knowledge you do not already have.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "The search query. Be specific."}
+            },
+            "required": ["query"]
+        }
+    }
+}
+```
+
+For hybrid: passed to `apply_chat_template(messages, tools=[QWEN35_SEARCH_TOOL], ...)` → auto-inject emits the system block.
+For base: NOT passed → no system block; the user message inlines the format spec instead.
+
+### Pipeline settings (both variants, locked)
+
+| Knob | Value | Source |
+|---|---|---|
+| `apply_chat` | `True` | both render through `tokenizer.apply_chat_template` |
+| `enable_thinking` | `True` (open `<think>\n` generation prefix) | both variants |
+| Action stop tag | `</tool_call>` | matches Qwen3.5 nested-XML |
+| Tool-response wrap | `<\|im_end\|>\n<\|im_start\|>user\n<tool_response>\n{X}\n</tool_response><\|im_end\|>\n<\|im_start\|>assistant\n` | turn-bounded; byte-identical to training-side `format_docs_qwen_native` |
+| Final-answer wrap | `<answer>X</answer>` plain (no `\boxed{}`) | M4 standard |
+| `max_search_turns` | 5 | per M3 alignment |
+| `step_limit` | 8192 | bounded by `remain_length` |
+| `max_obs_per_chunk` | 120 tokens | per-chunk cap; total topk=5 → ~600 obs tokens/turn |
+| `generator_max_input_len` | 8192 | M4.2 bump from 4096 |
+| Decoding | greedy (`temperature=0.0`) | single seed (`seed=1`) |
+| Retriever | IVF-SQ8 × 16 workers | top-K=5 chunks/call; e5-base-v2 encoder |
+| `INFERENCE_MAX_WORKERS` | 128 | client-side concurrency |
+
+### Full-sweep validation numbers (Plan A, n=51,713 × 7 datasets)
+
+| Variant | Locked prompt | Mean EM | Mean ACC | Mean F1 |
+|---|---|---:|---:|---:|
+| Hybrid `qwen3.5_0.8b` | `qwen35_terse` (M4.5, 2026-05-12) | **0.092** | 0.146 | 0.123 |
+| Base `qwen3.5_0.8b_base` | `qwen35_minimal_no_system` (M4.3, 2026-05-09) | **0.010** | 0.026 | 0.019 |
+
+Per-dataset numbers in [`../report/RESULTS_m4.md` §4.1 + §4.2](../report/RESULTS_m4.md). Cross-family delta vs M3 Qwen3-0.6B in [§5](../report/RESULTS_m4.md). Result files preserved at `evaluation_qwen35/results/<dataset>/<dataset>_*_m4_qwen3.5_0.8b_qwen35_terse_seed1/` (hybrid) and `<dataset>_*_m4_qwen3.5_0.8b_base_seed1/` (base) — no `_n*` suffix = full split.
+
+### What this means for M5 (byte-alignment requirement)
+
+**M5 GRPO training rollouts MUST use byte-identical eval render shapes** to ensure the M4 untrained-floor table directly compares against any trained checkpoint. Concretely:
+
+1. **Hybrid M5 training**: rollout prompts MUST be generated by `tokenizer.apply_chat_template([{"role":"user","content":QWEN35_TERSE_TEMPLATE.format(prompt=Q)}], tools=[QWEN35_SEARCH_TOOL], add_generation_prompt=True, enable_thinking=True)`.
+2. **Base M5 training** (if attempted): rollout prompts MUST be generated by `tokenizer.apply_chat_template([{"role":"user","content":QWEN35_MINIMAL_NO_SYSTEM_TEMPLATE.format(prompt=Q)}], add_generation_prompt=True, enable_thinking=True)` — **without** the `tools=` argument.
+3. **Tool-response wrap** during rollout must be the turn-bounded form above (matches eval).
+4. **Answer wrap** must be plain `<answer>X</answer>` (no `\boxed{}`) — the F1 scorer normalizes either but training/eval byte-parity matters for KL-baseline integrity.
+
+The training-side overlay at [`training_m5_1/src/`](../../training_m5_1/) was scaffolded for M4.2 `qwen35_minimal`. The pre-staged prompt file `training_m5_1/src/prompts/m5_qwen35_user.txt` MUST be re-synced before the next M5.1 launch:
+
+```bash
+python training_m5_1/scripts/sync_m4_prompts.py --mode qwen35_terse
+```
+
+This is documented as a TODO in [`CODE_SETUP_m5.md` §3.2](../report/CODE_SETUP_m5.md).
+
+### Sanity-check the rendered prompt on ALICE / Vast before any M5 launch
+
+```bash
+PY=/venv/evaluation_search_r1/bin/python
+$PY -c "
+import sys; sys.path.insert(0, '/workspace/reason_over_search/evaluation_qwen35')
+from transformers import AutoTokenizer
+from flashrag.search_r1.templates import QWEN35_TERSE_TEMPLATE, QWEN35_SEARCH_TOOL
+
+tok = AutoTokenizer.from_pretrained('/workspace/reason_over_search/eval/qwen3.5_0.8b')
+user_msg = QWEN35_TERSE_TEMPLATE.format(prompt='Who directed Inception?')
+rendered = tok.apply_chat_template(
+    [{'role':'user','content': user_msg}],
+    tools=[QWEN35_SEARCH_TOOL], tokenize=False,
+    add_generation_prompt=True, enable_thinking=True)
+print(rendered)
+"
+```
+
+Expected output (verified 2026-05-12): a `<|im_start|>system` block with the auto-injected `# Tools` schema + format example + `<IMPORTANT>` reminder; then the 3-sentence user message with `Question: Who directed Inception?`; then `<|im_start|>assistant\n<think>\n` (the open think prefix; ~349 tokens total).
+
+### Pointers for an M5 implementer
+
+- Templates + tool schema: [`evaluation_qwen35/flashrag/search_r1/templates.py`](../../evaluation_qwen35/flashrag/search_r1/templates.py)
+- Pipeline routing logic: [`evaluation_qwen35/flashrag/pipeline/active_pipeline.py`](../../evaluation_qwen35/flashrag/pipeline/active_pipeline.py) — see `_QWEN35_USER_PROMPT_MODES` + `_QWEN35_NO_TOOLS_MODES`
+- Result files (untrained floor): `evaluation_qwen35/results/<dataset>/`
+- Run script: [`scripts/run_m4.sh`](../../scripts/run_m4.sh) — invoke with `PROMPT_MODE=qwen35_terse` for hybrid; base needs no override
+- Chat-template reference: [`docs/training/CHAT_TEMPLATE.md` §2](../training/CHAT_TEMPLATE.md) (auto-inject verbatim)
+- M5 narrative: [`../milestone_5/MILESTONE_5.md`](../milestone_5/MILESTONE_5.md)
+- M5 code-setup audit: [`../report/CODE_SETUP_m5.md`](../report/CODE_SETUP_m5.md)
 
 ## Pointers
 

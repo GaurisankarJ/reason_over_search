@@ -72,9 +72,19 @@ esac
 #   hybrid -> qwen35_minimal (auto-inject helps; in-distribution for tool-use post-training)
 #   base   -> qwen35_minimal_no_system (auto-inject hurts; base lacks tool-use prior)
 # Override either via `PROMPT_MODE=<mode>` env var.
+#
+# M4.5 LOCK (2026-05-12): hybrid canonical prompt is now `qwen35_terse` (mean EM
+# 0.092 at full Plan A, Δ +0.032 / +53% over M4.2 lock 0.060; closes 76% of M3
+# cross-family gap). Defaults below NOT changed to preserve save_note mapping
+# for the M4.5 result files (which were produced with explicit PROMPT_MODE
+# override and have mode_tag=_qwen35_terse). For any future hybrid invocation
+# invoke as:  `PROMPT_MODE=qwen35_terse bash scripts/run_m4.sh qwen3.5_0.8b ...`
+# Base default is the locked prompt (M4.3, validated through M4.4 Phase 4 null
+# result 2026-05-12 — no candidate above the +0.025 bar across 7-candidate
+# screen). Full handoff: see docs/milestone_4/MILESTONE_4.md §"Handoff to M5".
 case "$variant" in
-  qwen3.5_0.8b)        default_prompt_mode=qwen35_minimal ;;
-  qwen3.5_0.8b_base)   default_prompt_mode=qwen35_minimal_no_system ;;
+  qwen3.5_0.8b)        default_prompt_mode=qwen35_minimal ;;       # canonical lock = qwen35_terse (M4.5; override via PROMPT_MODE)
+  qwen3.5_0.8b_base)   default_prompt_mode=qwen35_minimal_no_system ;;  # canonical lock (M4.3, confirmed by M4.4 Phase 4)
   *)                   default_prompt_mode=qwen35_minimal ;;
 esac
 prompt_mode="${PROMPT_MODE:-$default_prompt_mode}"

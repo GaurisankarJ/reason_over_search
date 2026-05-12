@@ -67,7 +67,7 @@ training_m5_1/
     datasets/search_r1.py             # unchanged structure; data_path now points at MuSiQue parquet
     processors/search_r1.py           # docstring comment updated for MuSiQue
     chat_template/tools.py            # CHANGED: re-export QWEN35_SEARCH_TOOL from evaluation_qwen35
-    prompts/m5_qwen35_user.txt        # NEW: pre-staged from M4.2 canonical (qwen35_minimal); regenerate via sync_m4_prompts.py
+    prompts/m5_qwen35_user.txt        # NEW: pre-staged from M4.2 canonical (qwen35_minimal); SHOULD be re-synced to M4.5 lock (qwen35_terse) before next M5.1 launch — use `python scripts/sync_m4_prompts.py --mode qwen35_terse`
     prompts/_archive_m2/              # M2 prompt files archived here
     registry.py                       # CHANGED: all imports renamed training. -> training_m5_1.
   configs/
@@ -99,7 +99,7 @@ training_m5_1/
 | `environments/parsers.py` | local `_RE_QWEN_QUERY` regex | qwen_native arm delegates to `flashrag.search_r1.parser.extract_tool_call_query`; paper arm regex kept local | **done** | Single source of truth for the action parser (M3 14-fix precedent) |
 | `environments/search_r1_env.py` | turn-bounded `<tool_response>` wrap; `em_check` fallback; `em_hit_rate` metric | identical wrap + byte-for-byte M4 alignment; `f1_check` fallback under truncation; `near_em_rate` metric (F1 ≥ 0.8); fixed `max_chars_per_chunk` kwarg dispatch bug (was `max_chars=`, would TypeError on first qwen_native search turn) | **done** | Hard alignment + M5.1 reward consistency + latent bug fix |
 | `chat_template/tools.py` | local `SEARCH_TOOL` dict | re-export `QWEN35_SEARCH_TOOL` (aliased as `SEARCH_TOOL`) from `flashrag.search_r1.templates` | **done** | Locks training schema = eval schema |
-| `prompts/m5_qwen35_user.txt` | n/a (M2 used `search_r1_qwen_native_user.txt`) | pre-staged from M4.2 canonical (`qwen35_minimal`); written by `scripts/sync_m4_prompts.py --mode <key>` | **done; re-run after M4.4 lock** | Dynamic sync avoids hard-coding the prompt text in training overlay |
+| `prompts/m5_qwen35_user.txt` | n/a (M2 used `search_r1_qwen_native_user.txt`) | pre-staged from M4.2 canonical (`qwen35_minimal`); written by `scripts/sync_m4_prompts.py --mode <key>` | **needs re-sync to `qwen35_terse` before next M5.1 launch** (M4.5 lock 2026-05-12; mean EM 0.092 vs M4.2 0.060) | Dynamic sync avoids hard-coding the prompt text in training overlay |
 | `datasets/search_r1.py` | reads NQ + HotpotQA parquet | unchanged code; new `data_path: data/training/musique/train.parquet` in m5_smoke.yaml | **done** (dataset-agnostic adapter; only the config path changes) | M5.1 dataset choice (MuSiQue only) |
 | `processors/search_r1.py` | docstring mentions NQ+HotpotQA only | docstring updated to mention both NQ+HotpotQA (M2) and MuSiQue (M5.1) | **done** (no functional change; `data_source` field optional) | Documentation only |
 | `registry.py` | `from training.src...` imports | `from training_m5_1.src...` (14 import sites renamed across src/, tests/, scripts/) | **done** | Package isolation between sibling experiments |

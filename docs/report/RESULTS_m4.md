@@ -8,16 +8,20 @@ updated: 2026-05-10
 
 # Results M4: Qwen3.5-0.8B Untrained Baseline
 
-**Status (2026-05-10):** full sweep complete, both variants. M4 close-out done; this is the locked untrained floor for any M5+ GRPO-trained Qwen3.5-0.8B checkpoint.
+**Status (2026-05-12):** M4 fully closed. Both variants validated at full Plan A. Locked prompts:
+- **Hybrid: `qwen35_terse`** (M4.5, mean EM 0.092 — Δ +0.032 / +53 % over M4.2 lock `qwen35_minimal` 0.060; closes 76 % of the M3 cross-family gap).
+- **Base: `qwen35_minimal_no_system`** (M4.3, mean EM 0.010 — Phase 4 prompt screen produced no winner; locked unchanged).
+
+This is the locked untrained floor for any M5+ GRPO-trained Qwen3.5-0.8B checkpoint. M5 training uses the hybrid template byte-aligned to the eval render; see [`../milestone_4/MILESTONE_4.md` §"Handoff to M5"](../milestone_4/MILESTONE_4.md).
 
 ## 1. Run roster
 
-| Variant | HF id | Local path | `prompt_mode` (locked default) | `enable_thinking` |
-|---|---|---|---|---|
-| `qwen3.5_0.8b` (hybrid) | [`Qwen/Qwen3.5-0.8B`](https://huggingface.co/Qwen/Qwen3.5-0.8B) | `eval/qwen3.5_0.8b/` | `qwen35_minimal` (M4.2) | True |
-| `qwen3.5_0.8b_base` | [`Qwen/Qwen3.5-0.8B-Base`](https://huggingface.co/Qwen/Qwen3.5-0.8B-Base) | `eval/qwen3.5_0.8b_base/` | `qwen35_minimal_no_system` (M4.3) | True |
+| Variant | HF id | Local path | `prompt_mode` (final lock) | `enable_thinking` | Auto-inject |
+|---|---|---|---|---|---|
+| `qwen3.5_0.8b` (hybrid) | [`Qwen/Qwen3.5-0.8B`](https://huggingface.co/Qwen/Qwen3.5-0.8B) | `eval/qwen3.5_0.8b/` | **`qwen35_terse`** (M4.5) | True | yes |
+| `qwen3.5_0.8b_base` | [`Qwen/Qwen3.5-0.8B-Base`](https://huggingface.co/Qwen/Qwen3.5-0.8B-Base) | `eval/qwen3.5_0.8b_base/` | **`qwen35_minimal_no_system`** (M4.3) | True | no |
 
-Per-variant prompt-mode asymmetry locked from the smoke iteration (see [`RESULTS_SMOKE_m4.md`](RESULTS_SMOKE_m4.md)): hybrid keeps the auto-injected `# Tools` + `<IMPORTANT>` block (in-distribution for tool-use post-training); base drops the system block entirely (the same block hurts on base, which lacks the tool-use prior).
+Per-variant prompt-mode asymmetry: hybrid keeps the auto-injected `# Tools` + `<IMPORTANT>` block (in-distribution for tool-use post-training) and uses the terse user prose (M4.5 lock — 3 sentences, ~30 user tokens); base drops the system block entirely (the same block hurts base, which lacks the tool-use prior). The asymmetry was re-confirmed by M4.4 Phase 4 (7-candidate base screen produced no candidate above the +0.025 bar; see §5.5).
 
 Pipeline: [`evaluation_qwen35/`](../../evaluation_qwen35/), [`scripts/run_m4.sh`](../../scripts/run_m4.sh), [`scripts/orchestrate_C_then_A.sh`](../../scripts/orchestrate_C_then_A.sh). Code-setup audit: [`CODE_SETUP_m4.md`](CODE_SETUP_m4.md). Milestone narrative: [`../milestone_4/MILESTONE_4.md`](../milestone_4/MILESTONE_4.md).
 
