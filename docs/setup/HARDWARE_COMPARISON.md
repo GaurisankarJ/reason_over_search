@@ -3,13 +3,15 @@ title: HARDWARE_COMPARISON — accelerator + provider comparison for M5.1 traini
 tags: [hardware, training, m5, vast, runpod, thundercompute, gpu]
 source: internal
 created: 2026-05-11
-updated: 2026-05-11
+updated: 2026-05-12
 supersedes: ../archive/HARDWARE_COMPARISON_v1.md
 ---
 
 # Accelerator & provider comparison — M5.1 training
 
-> **Purpose**: Decide which GPU (and which cloud provider) to run a single M5.1 GRPO training run on. Anchored on **live per-step measurements from the M5.1 production run** (Qwen3.5-0.8B GRPO on NeMo-RL, MuSiQue, 1× A100-80GB on Vast — see [`../report/RESULTS_SMOKE_m5.md` §6](../report/RESULTS_SMOKE_m5.md#6-m51-production-training--live)). Spec table carry-forward from [`HARDWARE_4090.md`](HARDWARE_4090.md) (historical 4090 dev-box doc).
+> **⚠ Status caveat (2026-05-12)**: this doc was anchored on **a1's** step-38-42 per-step measurements. a1 has since crashed (step 50, ckpt config bug; [`§7`](../report/RESULTS_SMOKE_m5.md#7-critical-postmortem--step-50-checkpoint-save-crash-2026-05-11)) and a2 was killed at step 15 ([`§7.8`](../report/RESULTS_SMOKE_m5.md#78-companion-postmortem--the-zombie-gpu-memory-misdiagnosis-2026-05-12)). The per-config wall-clock + cost tables below remain *directionally* useful (same config → same hardware-relative speedups) but the **absolute hours/dollars are tied to a1's step-38-42 anchor and may shift** when a3 reaches steady-state. The Pareto recommendation ("port to B200/H100 vs let A100 finish") is still valid; revisit the numbers once a3 lands a clean step-50+ ckpt.
+>
+> **Purpose**: Decide which GPU (and which cloud provider) to run a single M5.1 GRPO training run on. Anchored on **per-step measurements from M5.1-prod-a1** (Qwen3.5-0.8B GRPO on NeMo-RL, MuSiQue, 1× A100-80GB on Vast — see [`../report/RESULTS_SMOKE_m5.md` §6](../report/RESULTS_SMOKE_m5.md#64-eta--revised)). Spec table carry-forward from [`HARDWARE_4090.md`](HARDWARE_4090.md) (historical 4090 dev-box doc).
 >
 > **Supersedes** [`../archive/HARDWARE_COMPARISON_v1.md`](../archive/HARDWARE_COMPARISON_v1.md), which was anchored on the steps 15-17 trough (10.6 min/step). That trough turned out to be the *minimum* of a U-shape: per-step time climbed back as the model learned to write longer (better) rollouts. v0 (step-8 anchor, 33 min/step) is at [`../archive/HARDWARE_COMPARISON_v0.md`](../archive/HARDWARE_COMPARISON_v0.md).
 >

@@ -3,7 +3,7 @@ title: Log
 tags: []
 source: internal
 created: 2026-05-06
-updated: 2026-05-11
+updated: 2026-05-12
 ---
 
 # Wiki log
@@ -26,6 +26,16 @@ Conventions:
 - Cite wiki pages by relative path from this file (e.g. `report/CONVERSATION_CONTEXT.md`).
 - Keep each bullet to one line. Synthesis goes in the wiki page, not here.
 - Don't rewrite past entries; if a fact turns out wrong, add a correcting bullet on the day the correction was made.
+
+---
+
+## 2026-05-12
+
+- Result: **M5.1 — 3 self-inflicted losses behind us, 0 production runs active, ckpt fix verified, a3 awaits authorization.** Cumulative loss: ~33-34 h A100 compute + a1's entire rollout-trace corpus. Three postmortems written: [`report/RESULTS_SMOKE_m5.md` §7](report/RESULTS_SMOKE_m5.md#7-critical-postmortem--step-50-checkpoint-save-crash-2026-05-11) (a1 step-50 ckpt save crash — `metric_name: "train/loss/mean"` violated NeMo-RL's `train:`/`val:` prefix assertion at `grpo.py:2040`; ~19.5 h lost), [`§7.8`](report/RESULTS_SMOKE_m5.md#78-companion-postmortem--the-zombie-gpu-memory-misdiagnosis-2026-05-12) (a2 killed at step 15 on misdiagnosis — `[Not Found]` in `nvidia-smi --query-compute-apps` is a `comm`-lookup failure for child-PID-namespace processes, NOT a zombie certificate; all 3 such PIDs were the live retriever + a2's live Ray actors; ~14 h lost), [`§7.8.1`](report/RESULTS_SMOKE_m5.md#781-data-deletion-loss--deleted-a1s-rollout-corpus-during-disk-cleanup-2026-05-11) (a1 rollout corpus deleted during disk cleanup — `rm -rf logs/exp_010` was bundled into a multi-dir cleanup; exp_010 was production data not a smoke artifact; never committed to git → unrecoverable). All 3 losses attributable to Claude session decisions during the M5.1 launch effort. Canonical current-state doc: [`todo/TODO_2026-05-12.md`](todo/TODO_2026-05-12.md).
+- Decision: **Ckpt-config fix verified end-to-end and committed.** `metric_name: null` (bypasses assertion), `keep_top_k: null` (retains all per `checkpoint.py:46`), `save_optimizer: false` (3.2 GB/save vs 8.9 GB — verified). Two smoke runs confirmed the fix at step-2 save. Both smokes deleted after verification. Yaml at [`training_m5_1/configs/m5_1_research_paper.yaml`](../training_m5_1/configs/m5_1_research_paper.yaml).
+- Result: **a2 rollout corpus preserved.** [`logs/exp_011_a2_archive.tar.gz`](../logs/exp_011_a2_archive.tar.gz) (22 MB, 15 steps × 320 rollouts × `{idx, content, rewards, input_lengths}`; stripped GRPO-internal numerical fields cut 1.77 GB → 104 MB → 22 MB gzipped). Schema + extract instructions in [`logs/exp_011_a2_archive.README.md`](../logs/exp_011_a2_archive.README.md). Three named traces from a2 step 1/15/15 documented in [`report/RESULTS_m5.md` §4.2](report/RESULTS_m5.md#42-reasoning-trace-evolution--concrete-examples-a2-kept-after-a2-termination): NCAVC (rambling, reward=0.0), Russia/Lenin/Moscow (3-hop, reward=1.0), Tony Daykin/Fantasy Land Tour/S.H.E (4-hop, reward=1.0). The user-remembered "China" multi-hop from a1 step 40+ is NOT among them — a1's full corpus is irrecoverable.
+- Decision: **HF Hub auto-upload watcher landed for defensive cloud backup of every saved ckpt.** [`training_m5_1/scripts/upload_ckpts_watcher.sh`](../training_m5_1/scripts/upload_ckpts_watcher.sh) — bash poller in its own process tree, polls `results/grpo/m5_prod/seed42/` every 60 s, uploads each newly atomic-renamed `step_N/` to a private HF Hub model repo (`pantomiman/qwen3.5-0.8b-grpo-musique-m5_prod-seed42-step{N}`) via `huggingface_hub.HfApi`. State file at `.uploaded_steps` keeps it idempotent across restarts. Failures logged + retried on next cycle; cannot crash training (`set -uo pipefail` only, no `-e`). HF_TOKEN + HF_REPO_PREFIX in [`training_m5_1/.env`](../training_m5_1/.env) (gitignored at `training_m5_1/.gitignore:15`). Token validated via `whoami` (user=`pantomiman`, write scope). Full operator doc + 6 specific guarantees on why this won't break training in [`setup/HF_CHECKPOINT_UPLOAD.md`](setup/HF_CHECKPOINT_UPLOAD.md). Rule #7 added to [`report/RESULTS_SMOKE_m5.md §7.8.1`](report/RESULTS_SMOKE_m5.md#781-data-deletion-loss--deleted-a1s-rollout-corpus-during-disk-cleanup-2026-05-11).
+- Decision: **M5 doc sweep — stale "live" status removed from CODE_SETUP_m5 / MILESTONE_5 / MILESTONE_5_3 / TODO_2026-05-11.** Each now points to TODO_2026-05-12.md as canonical current-state. HARDWARE_COMPARISON.md gets a status caveat noting the anchor is on a1's step-38-42 data (still directionally useful, absolute numbers TBD on a3). Workspace pruned of disposable smoke artifacts (exp_001/2/3/4/5/7/8/9/10/11) since their info is captured in docs and a2's corpus is committed. exp_006 (v6 smoke, committed in `accf98c`) preserved as smoke-baseline reference. Commits: [`d47359a`](https://github.com/GaurisankarJ/reason_over_search/commit/d47359a), [`7f62443`](https://github.com/GaurisankarJ/reason_over_search/commit/7f62443), [`5895ad6`](https://github.com/GaurisankarJ/reason_over_search/commit/5895ad6), [`3fdf047`](https://github.com/GaurisankarJ/reason_over_search/commit/3fdf047), [`7d90eeb`](https://github.com/GaurisankarJ/reason_over_search/commit/7d90eeb).
 
 ---
 

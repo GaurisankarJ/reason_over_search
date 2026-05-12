@@ -3,12 +3,12 @@ title: TODO
 tags: [todo]
 source: internal
 created: 2026-05-10
-updated: 2026-05-10
+updated: 2026-05-12
 ---
 
 # TODO
 
-Evergreen pending-work tracker. New TODOs land here; close them by deleting the line (recent context lives in [`log.md`](../log.md), not here). For the current catch-up doc, see [`TODO_2026-05-10.md`](TODO_2026-05-10.md); [`TODO_2026-05-04.md`](TODO_2026-05-04.md) is the older frozen handoff. Folder index: [`README.md`](README.md).
+Evergreen pending-work tracker. New TODOs land here; close them by deleting the line (recent context lives in [`log.md`](../log.md), not here). For the current catch-up doc, see [`TODO_2026-05-12.md`](TODO_2026-05-12.md); older catch-up docs at [`TODO_2026-05-11.md`](TODO_2026-05-11.md) (superseded), [`TODO_2026-05-10.md`](TODO_2026-05-10.md), [`TODO_2026-05-04.md`](TODO_2026-05-04.md). Folder index: [`README.md`](README.md).
 
 ## Infra
 
@@ -21,10 +21,13 @@ Evergreen pending-work tracker. New TODOs land here; close them by deleting the 
 
 ## M5 (Qwen3.5-0.8B GRPO training)
 
-- Create `training_m5_1/` scaffold (copy of [`training/`](../../training/) with MuSiQue dataset adapter + parser re-exported from `evaluation_qwen35`). Per [`milestone_5/MILESTONE_5.md`](../milestone_5/MILESTONE_5.md).
-- Author `milestone_5/PAPER_VS_OURS_M5.md` (clause-by-clause ReSearch-paper-to-YAML mapping); blocks the M5.1 config.
-- M5 smoke (50 steps, MuSiQue 200-row subsample) → populate [`report/RESULTS_SMOKE_m5.md`](../report/RESULTS_SMOKE_m5.md) v1 row.
-- M5.1 production-shape smoke (F1-only reward on `<answer>`, no `\boxed{}` wrapper) → v2 row.
+- ~~Create `training_m5_1/` scaffold~~ — **DONE** (2026-05-09, [`training_m5_1/`](../../training_m5_1/) live).
+- ~~Author `milestone_5/PAPER_VS_OURS_M5.md`~~ — **DONE** (2026-05-10; status "spine only" — fill in remaining TBD cells once M5.1 a3 lands).
+- ~~M5 smoke v1-v6~~ — **DONE** (2026-05-10, v6 success: 93.1 s/step ex-warmup; [`logs/exp_006/`](../../logs/exp_006/) committed in `accf98c`).
+- ~~M5.1 production-shape smoke~~ — **DONE** (2026-05-10 v7 baseline; established 25 d projection at micro=1).
+- **Launch `M5.1-prod-a3`** — awaits user authorization. Prior attempts: a1 crashed at step-50 ckpt save ([§7](../report/RESULTS_SMOKE_m5.md#7-critical-postmortem--step-50-checkpoint-save-crash-2026-05-11)); a2 killed at step 15 on misdiagnosis ([§7.8](../report/RESULTS_SMOKE_m5.md#78-companion-postmortem--the-zombie-gpu-memory-misdiagnosis-2026-05-12)). Fix verified by two smokes. See [`TODO_2026-05-12.md`](TODO_2026-05-12.md) for current state.
+- Hardware decision for a3 (Vast A100 vs port to B200/H100/Spheron) — see [`setup/HARDWARE_COMPARISON.md`](../setup/HARDWARE_COMPARISON.md) (status caveat: anchored on a1's step-38-42 data, revisit when a3 reaches steady-state).
+- Re-fill `PAPER_VS_OURS_M5.md` TBD cells once a3 lands a clean ckpt (some cells e.g. `num_prompts_per_step: TBD → 64` decision are recorded in other docs but not yet ported back into the mapping table).
 
 ## M1 (housekeeping; Jose-owned)
 
