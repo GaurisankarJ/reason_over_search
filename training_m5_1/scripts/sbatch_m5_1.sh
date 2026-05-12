@@ -83,9 +83,14 @@ mkdir -p logs
 # host-absolute symlinks (e.g. local_retriever/corpus -> /zfsstore/.../flash-rag/...,
 # local_retriever/indexes/...index -> /zfsstore/.../reason_over_search/...) resolve.
 ZFS_USER_ROOT="${ZFS_USER_ROOT:-/zfsstore/user/$(id -un)}"
-BIND="${REPO_ROOT}:/workspace/reason_over_search,${HF_HOME_HOST}:/workspace/hf_cache,${UV_CACHE_HOST}:/.uv/cache,${ZFS_USER_ROOT}:${ZFS_USER_ROOT}"
 
 RUN_ID="${SLURM_JOB_ID:-local-$(date -u +%Y%m%dT%H%M%SZ)}"
+# Apptainer SIF's rootfs has /scratchdata as a read-only mount-point that Ray
+# (via NeMo-RL's init_ray) tries to mkdir on init -> OSError: Read-only file
+# system. Bind a per-job writable dir over it so Ray can write its temp files.
+RAY_SCRATCH_HOST="${REPO_ROOT}/logs/ray_scratch_${RUN_ID}"
+mkdir -p "${RAY_SCRATCH_HOST}"
+BIND="${REPO_ROOT}:/workspace/reason_over_search,${HF_HOME_HOST}:/workspace/hf_cache,${UV_CACHE_HOST}:/.uv/cache,${ZFS_USER_ROOT}:${ZFS_USER_ROOT},${RAY_SCRATCH_HOST}:/scratchdata"
 RETRIEVER_LOG="logs/m5_1_${RUN_ID}_retriever.log"
 TRAIN_LOG="logs/m5_1_${RUN_ID}_train.log"
 
