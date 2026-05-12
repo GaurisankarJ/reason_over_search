@@ -170,7 +170,115 @@ docs/milestone_5/HARDWARE_FIXES_2026-05-12.md          # THIS doc
 
 Branch: `experiment_1_alice`. Commits 8b8525d → 596afe6 (12 commits today).
 
-## 10. References
+## 10. Next steps — runbook after Plan B passes
+
+Execute in order. Each step has a clear PASS gate before proceeding.
+
+### 10.1 — Resubmit the 6 prod sbatches with all today's fixes
+
+PASS gate: Plan B verification rc=0 for all 3 (m5_1, m5_5, m5_6) with ckpts + WANDB + at least step_2 HF upload.
+
+```bash
+# On ALICE, from /zfsstore/user/s4374886/omega/reason_over_search-m5:
+
+# 1. Scancel the 6 old prod sbatches (they hold the pre-fix script snapshot)
+scancel 2266965 2266966 2266968 2266996 2267007 2267008
+
+# 2. Resubmit all 6 with the fixed scripts (SLURM snapshots the script at submit time)
+sbatch training_m5_1/scripts/sbatch_m5_1.sh           # M5.1 1x
+sbatch training_m5_1/scripts/sbatch_m5_1_2xa100.sh    # M5.1 2x
+sbatch training_m5_5/scripts/sbatch_m5_5.sh           # M5.5 1x
+sbatch training_m5_5/scripts/sbatch_m5_5_2xa100.sh    # M5.5 2x
+sbatch training_m5_6/scripts/sbatch_m5_6.sh           # M5.6 1x
+sbatch training_m5_6/scripts/sbatch_m5_6_2xa100.sh    # M5.6 2x
+
+# 3. Capture the new JobIDs + StartTimes for the prod tracker
+squeue -u $USER -o "%.10i %.20j %.2t %.20S %R" > /zfsstore/user/s4374886/omega/post_resubmit_queue.txt
+```
+
+### 10.2 — Tomorrow's autonomous verifications (no action needed)
+
+These run themselves while you sleep. Check results when they finish.
+
+| Time (CEST) | Job | Output |
+|---|---|---|
+| Wed 08:23 | sbatch 2274508 (1x A100 + 240g + 8 retrievers full shape) | `/zfsstore/user/s4374886/omega/smoke_verify/` |
+| Wed 13:50 | sbatch 2275683 (2x A100 + 240g, 3 smoke_2xa100 + stage 4 prod 1-step OOM check) | `/zfsstore/user/s4374886/omega/smoke_verify_2xa100/` |
+| Wed 17:50 | srun 2275986 (interactive 2x A100, 4h walltime) | manual poke session |
+
+After Wed 13:50 verification completes:
+- If ALL pass → 2x prod sbatches good to start (M5.1 2x lands May 15)
+- If FAIL → scancel + retune the 2x prod sbatches BEFORE May 15. There's 2 days of buffer.
+
+### 10.3 — Apply HF watcher container-lifetime patch (before May 15)
+
+Symptom (captured in Plan B m5_1): `INFO: Terminating squashfuse_ll after timeout` after the watcher uploads its first checkpoint; subsequent uploads fail with `Transport endpoint is not connected`. In prod (12 saves over 25 days at save_period=50) only step_50 might upload before the container dies.
+
+Two candidate fixes (pick one before May 15):
+
+1. **Run watcher OUTSIDE apptainer**: install `huggingface_hub` into a host-side python venv (eg `/zfsstore/user/s4374886/omega/hf_uploader_venv/`), invoke directly from sbatch instead of via apptainer exec. Decouples the watcher's lifetime from the training apptainer.
+2. **Heartbeat the SIF mount**: have the watcher periodically `touch` a file inside `/workspace/reason_over_search/` to keep the mount referenced.
+
+Option (1) is cleaner. Add to the post-resubmit todo.
+
+### 10.4 — Cleanup runbook (after the 6 prod sbatches are resubmitted)
+
+Run after step 10.1 completes successfully (the new prod sbatches are queued with new JobIDs).
+
+```bash
+# Optional: scancel the now-redundant smoke sbatches that don't add new info
+# (Keep them if you want extra verification data; cancel to free queue slots)
+scancel 2273476           # very old gpu-short m5_1 smoke (legacy)
+# Keep 2274508 (1x full shape verify, useful tomorrow)
+# Keep 2275683 (2x verify with stage 4, useful tomorrow)
+# Keep 2275986 (2x interactive srun, useful tomorrow)
+# Keep 2266786 (current srun, in use)
+
+# Remove smoke artifacts from /zfsstore working dir
+rm -rf /zfsstore/user/s4374886/omega/smoke_inrun
+rm -rf /zfsstore/user/s4374886/omega/smoke_verify_smallmem
+rm -rf /zfsstore/user/s4374886/omega/smoke_verify         # for sbatch 2274508 (created when it runs)
+rm -rf /zfsstore/user/s4374886/omega/smoke_verify_2xa100  # for sbatch 2275683
+rm /zfsstore/user/s4374886/omega/m5_smoke_seq.sh
+rm /zfsstore/user/s4374886/omega/m5_verify_seq.sh
+rm /zfsstore/user/s4374886/omega/m5_verify_seq_smallmem.sh
+rm /zfsstore/user/s4374886/omega/m5_6_retry.sh
+rm /zfsstore/user/s4374886/omega/*.master.log
+rm /zfsstore/user/s4374886/omega/v2_venv_extract_sbatch.sh
+rm /zfsstore/user/s4374886/omega/v2_venv_download.log
+rm /zfsstore/user/s4374886/omega/v2_venv_extract.log
+rm /zfsstore/user/s4374886/omega/v2_venv_extract_*.out
+rm /zfsstore/user/s4374886/omega/v2_venv_extract_*.err
+# Keep m5_verify_seq_2xa100.sh + m5_2xverify_sbatch.sh because sbatch 2275683 references them
+
+# Remove smoke ckpt dirs (only step_2/step_4 of 4-step smokes; not from prod runs)
+rm -rf /zfsstore/user/s4374886/omega/reason_over_search-m5/results/grpo/m5_smoke
+rm -rf /zfsstore/user/s4374886/omega/reason_over_search-m5/results/grpo_m5_5/m5_smoke
+rm -rf /zfsstore/user/s4374886/omega/reason_over_search-m5/results/grpo_m5_6/m5_smoke
+rm -rf /zfsstore/user/s4374886/omega/reason_over_search-m5/results/grpo*/m5_smoke_2xa100
+
+# Smoke training/retriever logs in repo logs/ (gitignored, but cleaner to remove)
+rm /zfsstore/user/s4374886/omega/reason_over_search-m5/logs/m5_*_2266786_*
+
+# Optional: remove the smoke-validation HF Hub repos
+# (since they're 6.36 GB each, you may want to keep step_2 from each experiment
+#  as evidence of the upload working; or delete them. Do it from a python repl
+#  with the HF API + your token.)
+# Repos created today:
+#   pantomiman/qwen3.5-0.8b-grpo-musique-m5_1_smoke-seed42-step2
+#   pantomiman/qwen3.5-0.8b-grpo-musique-m5_5_smoke-seed42-step2
+#   pantomiman/qwen3.5-0.8b-grpo-musique-m5_6_smoke-seed42-step2
+```
+
+### 10.5 — Commit + push the final clean state
+
+```bash
+cd /Users/somedude/Documents/Obsidian/code/omega/reason_over_search
+git status   # should be clean if no edits since the last commit (cleanup is data-only on ALICE)
+# If anything dirty, commit + push
+```
+
+## 11. References
 
 - [`../report/RESULTS_SMOKE_m5.md`](../report/RESULTS_SMOKE_m5.md) — research_v2's a1 / a2 postmortem (ckpt fix originates here, §7)
 - [`../setup/HF_CHECKPOINT_UPLOAD.md`](../setup/HF_CHECKPOINT_UPLOAD.md) — HF watcher operator doc (research_v2)
