@@ -137,17 +137,33 @@ loss_fn:
 checkpointing:
   enabled: true
   checkpoint_dir: "results/grpo/m5_prod"
-  # No val signal (val disabled). Use a training metric so NeMo-RL's
-  # keep_top_k still has a value to compare against. The 25-d run produces
-  # 12 saves; we keep all (disk is roomy on the Vast instance).
-  metric_name: "train/loss/mean"
+  # [Postmortem 2026-05-11 step 50 crash] First production attempt crashed
+  # at step-50 save with `train/loss/mean must start with 'val:' or 'train:'`
+  # — NeMo-RL requires colon-namespaced metric keys (grpo.py:2040). With
+  # val disabled (no MuSiQue dev parquet), top-k metric comparison isn't
+  # useful anyway, so disable both:
+  #   metric_name: null   — bypasses the assertion (DPO Llama recipe uses this)
+  #   keep_top_k: null    — keep ALL checkpoints (0 means "delete all" per
+  #                          checkpoint.py:266; null means "no pruning")
+  metric_name: null
   higher_is_better: false
-  keep_top_k: 0
+  keep_top_k: null
   save_period: 50
   checkpoint_must_save_by: null
   model_save_format: "safetensors"
   save_consolidated: true
-  save_optimizer: true
+  # [Disk] Optimizer state is ~6.4 GB (AdamW m+v in fp32 for 0.8B model)
+  # — 4× larger than the weights themselves. We set this false. Trade-off:
+  # if the run is interrupted, resume re-initializes AdamW state (the
+  # moments re-warm fast at constant LR; minor disturbance).
+  # MEASURED via smoke-ckpt-verify2: per-save = 3.2 GB (consolidated fp32
+  # safetensors @ 0.8B params × 4 B + 13 MB tokenizer). The initial
+  # bf16-based estimate of 1.6 GB was wrong — NeMo-RL's DTensor consolidate
+  # upcasts to fp32. With 12 saves @ save_period=50, total = 38.4 GB.
+  # Current /workspace free ≈ 14 GB → DOES NOT FIT. Adjust save_period
+  # (e.g. 100 → 19.2 GB, 200 → 9.6 GB) or free disk BEFORE launching prod-a2.
+  # See docs/report/RESULTS_SMOKE_m5.md §7.5.1.
+  save_optimizer: false
 
 # =============================================================================
 # Policy (model + training + generation)

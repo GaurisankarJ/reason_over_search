@@ -3,13 +3,13 @@ title: Code Setup M5 — Qwen3.5-0.8B GRPO training on NeMo-RL (M5 + M5.1)
 tags: [report, training, m5, m5.1, qwen3.5, nemo-rl]
 source: internal
 created: 2026-05-09
-updated: 2026-05-11
+updated: 2026-05-12
 ---
 
 # Code Setup M5: Qwen3.5-0.8B GRPO Training Pipeline (M5 + M5.1)
 
-**Status**: §1-§4 populated from the live `configs/m5_1_research_paper.yaml` (M5.1 production launched 2026-05-11 01:05 UTC; exp_010). Remaining TODOs flagged inline.
-**Date**: 2026-05-09 (M5 + M5.1 first launch); 2026-05-11 (spine populated from live yaml).
+**Status (2026-05-12)**: §1-§4 populated from `configs/m5_1_research_paper.yaml`. **Three production-track losses behind us** (see [`RESULTS_m5.md` status panel](RESULTS_m5.md) and [`RESULTS_SMOKE_m5.md` §7 / §7.8 / §7.8.1](RESULTS_SMOKE_m5.md#7-critical-postmortem--step-50-checkpoint-save-crash-2026-05-11)): a1 crashed at step-50 ckpt save (config bug); a1 rollout corpus deleted during disk cleanup (irrecoverable); a2 killed at step 15 on a zombie-GPU misdiagnosis. **No production run currently active.** Config fixed (`metric_name: null`, `keep_top_k: null`, `save_optimizer: false`); awaiting authorization to launch a3. M5.1's only surviving rollout corpus is in [`logs/exp_011_a2_archive.tar.gz`](../../logs/exp_011_a2_archive.tar.gz) (22 MB, steps 1-15).
+**Date**: 2026-05-09 (M5 + M5.1 design); 2026-05-11 (a1 launched + crashed); 2026-05-12 (3-loss status; awaiting a3).
 **Scope**: documents what changed from the M2 NeMo-RL training scaffold ([`training/`](../../training/), Qwen3.5-2B target, paper-default reward + tag scheme) to the M5 / M5.1 pipeline ([`training_m5_1/`](../../training_m5_1/)) for **Qwen3.5-0.8B** training with the **ReSearch-paper recipe** modulo two intentional divergences (F1-only reward, no `\boxed{}` answer wrapper). Train rollout is byte-aligned to the [M4 eval pipeline](../milestone_4/MILESTONE_4.md) so the trained checkpoint is directly evaluable without re-aligning.
 **Cluster**: 1× A100-80GB on Vast.ai.
 **Source paths**: [`training_m5_1/`](../../training_m5_1/) (M5 + M5.1), [`training_m5_1/configs/m5_smoke.yaml`](../../training_m5_1/configs/m5_smoke.yaml) (M5 smoke), [`training_m5_1/configs/m5_1_research_paper.yaml`](../../training_m5_1/configs/m5_1_research_paper.yaml) (M5.1 production), [`training_m5_1/scripts/`](../../training_m5_1/scripts/), milestone narrative at [`../milestone_5/MILESTONE_5.md`](../milestone_5/MILESTONE_5.md).
@@ -139,7 +139,9 @@ Smoke validates the pipeline end-to-end and produces a per-step time number on 1
 | `env.search_r1.top_n` | 5 | 5 | paper `retrieval_topk=5` |
 | `env.search_r1.max_obs_chars` | 1024 (Group-C) | 1024 | paper has no cap; we keep safety net |
 | `checkpointing.enabled` | false (smoke) | true; `save_period: 50`, `keep_top_k: 0` | first ckpt at step 50 |
-| `checkpointing.metric_name` | n/a | `train/loss/mean` | val disabled → train metric for `keep_top_k` |
+| `checkpointing.metric_name` | n/a | `null` (was `train/loss/mean` @ db0852b — crashed a1 step 50) | NeMo-RL requires `train:` or `val:` colon prefix; `null` bypasses the assertion. Fix postmortem [`RESULTS_SMOKE_m5.md` §7](RESULTS_SMOKE_m5.md#7-critical-postmortem--step-50-checkpoint-save-crash-2026-05-11) |
+| `checkpointing.keep_top_k` | n/a | `null` (was `0` @ db0852b — would delete all saves) | `0` is slice-from-zero (`checkpoint.py:266` — wipes everything); `null` retains all (`checkpoint.py:46` docstring) |
+| `checkpointing.save_optimizer` | n/a | `false` | Per-save 8.9 GB → 3.2 GB (verified by smoke-ckpt-verify2). Loses exact-resume on interruption (AdamW re-warms at constant LR). |
 | `grpo.val_period` / `val_at_*` | 0 / false | 0 / false | val disabled (MuSiQue dev parquet not generated; eval out-of-band via `evaluation_qwen35`) |
 | `logger.wandb.project` | `reason_over_search_m5_1_smoke` | `reason_over_search_m5_1` | per-experiment isolation |
 
@@ -185,9 +187,14 @@ Two byte-level checks before declaring M5 smoke green:
 
 ---
 
-## 4. M5.1 Critical Changes (ReSearch-paper-aligned config) — LIVE
+## 4. M5.1 Critical Changes (ReSearch-paper-aligned config) — awaiting a3
 
-`configs/m5_1_research_paper.yaml` is **committed and running** (exp_010, launched 2026-05-11 01:05 UTC; live trajectory in [`RESULTS_SMOKE_m5.md` §6](RESULTS_SMOKE_m5.md#6-m51-production-training--live)). Spine populated from the live config + the paper-vs-ours audit.
+`configs/m5_1_research_paper.yaml` is **committed; not currently running**. Run history:
+- **a1** (exp_010, launched 2026-05-11 01:05 UTC, W&B `uwbodqgt`): ran 49 clean steps, **crashed at first ckpt save** ([`RESULTS_SMOKE_m5.md` §7](RESULTS_SMOKE_m5.md#7-critical-postmortem--step-50-checkpoint-save-crash-2026-05-11)). Rollout corpus subsequently deleted by accident ([§7.8.1](RESULTS_SMOKE_m5.md#781-data-deletion-loss--deleted-a1s-rollout-corpus-during-disk-cleanup-2026-05-11)).
+- **a2** (exp_011, launched 2026-05-11 22:23 UTC, W&B `2b95h2fg`): ran 15 clean steps, **killed mid-run on a misdiagnosis** ([`§7.8`](RESULTS_SMOKE_m5.md#78-companion-postmortem--the-zombie-gpu-memory-misdiagnosis-2026-05-12)). Rollout corpus archived in [`logs/exp_011_a2_archive.tar.gz`](../../logs/exp_011_a2_archive.tar.gz).
+- **a3** (TBD): awaits user authorization. Same yaml; ckpt fix verified end-to-end by two smokes.
+
+Spine populated from the live config + the paper-vs-ours audit.
 
 ### 4.1 Paper-vs-ours mapping (PAPER_VS_OURS_M5.md)
 

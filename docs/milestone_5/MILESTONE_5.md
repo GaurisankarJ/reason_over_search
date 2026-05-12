@@ -8,6 +8,12 @@ updated: 2026-05-09
 
 # Milestone 5: Train Qwen3.5-0.8B with GRPO on the ReSearch-paper recipe (NeMo-RL)
 
+> **Status (2026-05-12)**: This doc is the **original 2026-05-09 planning narrative** and is kept frozen for reference. For current execution state, see:
+> - [`../report/RESULTS_m5.md`](../report/RESULTS_m5.md) — status banner with 3 losses + final-results placeholder + §4.2 reasoning-trace examples.
+> - [`../report/RESULTS_SMOKE_m5.md`](../report/RESULTS_SMOKE_m5.md) — full iteration log + crash/misdiagnosis/deletion postmortems (§7 / §7.8 / §7.8.1).
+> - [`../todo/TODO_2026-05-12.md`](../todo/TODO_2026-05-12.md) — current-day catch-up for fresh sessions.
+> - Surviving rollout corpus: [`logs/exp_011_a2_archive.tar.gz`](../../logs/exp_011_a2_archive.tar.gz) (a2 steps 1-15, 22 MB).
+
 ## Context
 
 [M4](../milestone_4/MILESTONE_4.md) closed (status: hybrid + base baselines locked, untrained floor at hybrid mean EM 0.057 / n=100/dataset on the M4.2 minimal mode; full Plan-A sweep pending). The M4 eval pipeline ([`evaluation_qwen35/`](../../evaluation_qwen35/)) is the **fixed eval target** for any M5 GRPO checkpoint we produce: same model family (Qwen3.5-0.8B), same prompt mode (`qwen35_native` for hybrid, `qwen35_minimal_no_system` for base), same retriever (IVF-SQ8 × 8 workers), same per-mode budgets (`max_search_turns=5`, `step_limit=8192`, `max_obs_length=256`, `retrieval_topk=5`, `generator_max_input_len=4096`).

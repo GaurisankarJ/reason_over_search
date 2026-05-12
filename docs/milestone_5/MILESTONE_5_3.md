@@ -3,15 +3,17 @@ title: Milestone 5.3 — Analyze and improve M5.1 training time
 tags: [milestone, m5.3, training, performance, nemo-rl, qwen3.5]
 source: internal
 created: 2026-05-11
-updated: 2026-05-11
-status: planning
+updated: 2026-05-12
+status: planning (M5.1 not yet completing)
 ---
 
 # Milestone 5.3 — Analyze and improve M5.1 training-time
 
-Companion to [`MILESTONE_5.md`](MILESTONE_5.md) (M5 scaffold + M5.1 full run) and [`PAPER_VS_OURS_M5.md`](PAPER_VS_OURS_M5.md) (paper-faithfulness audit). M5.3 is the **post-M5.1 efficiency milestone**: take the observed bottlenecks from the live M5.1 training run and explore source-level fixes that were out of scope during the overnight launch.
+Companion to [`MILESTONE_5.md`](MILESTONE_5.md) (M5 scaffold + M5.1 full run) and [`PAPER_VS_OURS_M5.md`](PAPER_VS_OURS_M5.md) (paper-faithfulness audit). M5.3 is the **post-M5.1 efficiency milestone**: take the observed bottlenecks from M5.1 training and explore source-level fixes that were out of scope during the original launch.
 
-**Status (2026-05-11):** Planning. M5.1 is running (~10-15 d projected). M5.3 work begins once M5.1 lands or when an interim checkpoint is good enough to validate a patch against.
+**Status (2026-05-12):** Planning. M5.1 is currently **not running** — a1 crashed at step 50 (config bug), a2 was killed at step 15 (misdiagnosis); see [`../report/RESULTS_SMOKE_m5.md` §7 / §7.8 / §7.8.1](../report/RESULTS_SMOKE_m5.md#7-critical-postmortem--step-50-checkpoint-save-crash-2026-05-11). a3 awaits user authorization. M5.3 work begins once M5.1 lands a clean ckpt or when an interim ckpt is good enough to validate a patch against.
+
+The training-phase analysis below remains accurate: a1's 49-step trajectory and a2's 15-step trajectory both confirm the 71-72% training-phase share at production shape. The `micro=1` ceiling and the `model_utils.py:1378` fp32-cast root cause are unchanged.
 
 ---
 
