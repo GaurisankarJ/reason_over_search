@@ -30,10 +30,12 @@ set -euo pipefail
 # ---- args ------------------------------------------------------------------
 MODE="prod_2xa100"
 SEED="42"
+EXTRA_OVERRIDES=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --mode) MODE="$2"; shift 2 ;;
     --seed) SEED="$2"; shift 2 ;;
+    --) shift; EXTRA_OVERRIDES=("$@"); break ;;
     -h|--help) sed -n '2,25p' "$0"; exit 0 ;;
     *) echo "unknown arg: $1" >&2; exit 2 ;;
   esac
@@ -154,12 +156,13 @@ else
 fi
 
 # ---- launch training (foreground apptainer exec) ---------------------------
-echo "[$(ts)] Launching training (mode=${MODE} seed=${SEED})"
+echo "[$(ts)] Launching training (mode=${MODE} seed=${SEED})${EXTRA_OVERRIDES:+ overrides=${EXTRA_OVERRIDES[*]}}"
+EXTRA_OVERRIDES_STR="${EXTRA_OVERRIDES[*]:-}"
 set +e
 apptainer exec --nv --bind "$BIND" --env "HF_HOME=/workspace/hf_cache" --env "CHECKPOINT_DIR_BASE=${CHECKPOINT_DIR_BASE}" "$SIF_PATH" \
   bash -lc "
     cd /workspace/reason_over_search
-    bash training_m5_1/scripts/run.sh --mode '${MODE}' --seed '${SEED}'
+    bash training_m5_1/scripts/run.sh --mode '${MODE}' --seed '${SEED}' ${EXTRA_OVERRIDES_STR:+-- ${EXTRA_OVERRIDES_STR}}
   " 2>&1 | tee "$TRAIN_LOG"
 TRAIN_EXIT=${PIPESTATUS[0]}
 set -e
