@@ -26,11 +26,10 @@ grpo:
   # [smoke] 4 prompts × 5 generations = 20 trajectories per step (milestone
   # doc M5 smoke shape). Production shape will be 96 prompts × 5 = 480.
   num_prompts_per_step: 4
-  # [smoke] 10 steps: enough for stable s/step measurement + memory stability
-  # check across multiple wake/sleep cycles. Reduced from 50 (which was ~2 h
-  # wall and unnecessary for validation). Production schedule is ~156 steps
-  # for 2 epochs of MuSiQue at paper bs=256, scaled inversely if we drop bs.
-  max_num_steps: 10
+  # [smoke] 4 steps: exercise ckpt save at step 2 + step 4 (save_period=2)
+  # and exit cleanly. Was 10; we don't need the s/step signal for sbatch-body
+  # verification.
+  max_num_steps: 4
   max_num_epochs: 1
   # [smoke] Validation off for end-to-end smoke — exercising val codepath
   # would slow the smoke without producing useful signal at 50 steps.
@@ -105,19 +104,26 @@ loss_fn:
   use_kl_in_reward: false
 
 # =============================================================================
-# Checkpointing — off for smoke
+# Checkpointing — ENABLED for smoke so the save round-trip is actually
+# verified before any prod sbatch ships. Mirrors prod yaml's save shape.
+# max_num_steps=4 + save_period=2 -> 2 saves (steps 2, 4); verify dir layout
+# + size ~3.2 GB after smoke completes.
 # =============================================================================
 checkpointing:
-  enabled: false
+  enabled: true
   checkpoint_dir: "results/grpo/m5_smoke"
-  metric_name: "val:accuracy"
-  higher_is_better: true
-  keep_top_k: 3
-  save_period: 100
+  # [Fix 2026-05-11, see m5_5_research_paper.yaml + research_v2:5fa8558]
+  # Defaults that previously crashed prod (`val:accuracy` + keep_top_k=3) are
+  # replaced with the proven null/null/false set so this smoke can actually
+  # save without tripping NeMo-RL's metric-name assertion.
+  metric_name: null
+  higher_is_better: false
+  keep_top_k: null
+  save_period: 2
   checkpoint_must_save_by: null
   model_save_format: "safetensors"
-  save_consolidated: false
-  save_optimizer: true
+  save_consolidated: true   # match prod
+  save_optimizer: false     # match prod (3.2 GB/save)
 
 # =============================================================================
 # Policy (model + training + generation)

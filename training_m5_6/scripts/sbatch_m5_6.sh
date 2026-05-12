@@ -118,8 +118,14 @@ apptainer exec --nv --bind "$BIND" --env "HF_HOME=/workspace/hf_cache" --env "OM
 RETRIEVER_PID=$!
 echo "[$(ts)] Retriever wrapper PID: ${RETRIEVER_PID}"
 
+HF_UPLOADER_PID=""
 cleanup() {
   echo "[$(ts)] cleanup"
+  if [ -n "${HF_UPLOADER_PID:-}" ] && kill -0 "$HF_UPLOADER_PID" 2>/dev/null; then
+    kill "$HF_UPLOADER_PID" 2>/dev/null || true
+    sleep 1
+    kill -9 "$HF_UPLOADER_PID" 2>/dev/null || true
+  fi
   if [ -n "${RETRIEVER_PID:-}" ] && kill -0 "$RETRIEVER_PID" 2>/dev/null; then
     kill "$RETRIEVER_PID" 2>/dev/null || true
     sleep 2
@@ -148,6 +154,21 @@ curl -sf "http://127.0.0.1:${RETRIEVER_PORT}/health" >/dev/null \
   || { echo "ERROR: /health never reachable within ${RETRIEVER_HEALTH_TIMEOUT_S}s" >&2; tail -50 "$RETRIEVER_LOG" >&2; exit 1; }
 curl -sS "http://127.0.0.1:${RETRIEVER_PORT}/health"
 echo
+
+# ---- start HF Hub upload watcher (decoupled background, optional) ----------
+if grep -Eq '^HF_TOKEN=[^[:space:]]+' "training_m5_6/.env" 2>/dev/null; then
+  echo "[$(ts)] Starting HF Hub upload watcher (mode=${MODE} seed=${SEED})"
+  HF_UPLOADER_LOG="logs/m5_6_${RUN_ID}_hf_uploader.log"
+  apptainer exec --bind "$BIND" --env "HF_HOME=/workspace/hf_cache" "$SIF_PATH" \
+    bash -lc "
+      cd /workspace/reason_over_search
+      bash training_m5_6/scripts/upload_ckpts_watcher.sh --mode '${MODE}' --seed '${SEED}'
+    " > "$HF_UPLOADER_LOG" 2>&1 &
+  HF_UPLOADER_PID=$!
+  echo "[$(ts)] HF uploader PID: ${HF_UPLOADER_PID} (log: ${HF_UPLOADER_LOG})"
+else
+  echo "[$(ts)] HF_TOKEN unset in training_m5_6/.env — skipping HF Hub uploader"
+fi
 
 # ---- launch training (foreground apptainer exec) ---------------------------
 echo "[$(ts)] Launching training (mode=${MODE} seed=${SEED})"

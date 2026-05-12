@@ -6,10 +6,10 @@
 # read-only ckpt dir). If this script dies, training continues uninterrupted.
 #
 # Usage:
-#   bash training_m5_1/scripts/upload_ckpts_watcher.sh [--mode prod|smoke] [--seed N]
+#   bash training_m5_6/scripts/upload_ckpts_watcher.sh [--mode prod|smoke] [--seed N]
 #
 # Defaults: --mode prod --seed 42. Reads HF_TOKEN + HF_REPO_PREFIX from
-# training_m5_1/.env (gitignored). Each step N is uploaded to:
+# training_m5_6/.env (gitignored). Each step N is uploaded to:
 #   $HF_REPO_PREFIX-m5_$MODE-seed$SEED-step$N    (private model repo)
 #
 # State file: results/grpo/m5_$MODE/seed$SEED/.uploaded_steps
@@ -46,12 +46,12 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-if [[ -f "${REPO_ROOT}/training_m5_1/.env" ]]; then
-    set -a; source "${REPO_ROOT}/training_m5_1/.env"; set +a
+if [[ -f "${REPO_ROOT}/training_m5_6/.env" ]]; then
+    set -a; source "${REPO_ROOT}/training_m5_6/.env"; set +a
 fi
 
 if [[ -z "${HF_TOKEN:-}" || -z "${HF_REPO_PREFIX:-}" ]]; then
-    echo "error: HF_TOKEN and HF_REPO_PREFIX must be set in training_m5_1/.env" >&2
+    echo "error: HF_TOKEN and HF_REPO_PREFIX must be set in training_m5_6/.env" >&2
     exit 2
 fi
 
@@ -61,7 +61,7 @@ LOG_FILE="logs/hf_uploader_m5_${MODE}.log"
 mkdir -p "logs" "${CKPT_BASE}"
 touch "${STATE_FILE}"
 
-VENV_PYTHON="${REPO_ROOT}/training_m5_1/nemo_rl/.venv/bin/python"
+VENV_PYTHON="${REPO_ROOT}/training_m5_6/nemo_rl/.venv/bin/python"
 if [[ ! -x "${VENV_PYTHON}" ]]; then
     echo "error: venv python not found at ${VENV_PYTHON}" >&2
     exit 1
@@ -72,7 +72,7 @@ log() { printf '%s  %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" | tee -a "${LOG_
 upload_step() {
     local step_dir="$1"
     local step_n; step_n="$(basename "${step_dir}" | sed 's/^step_//')"
-    local repo_name="${HF_REPO_PREFIX}-m5_1_${MODE}-seed${SEED}-step${step_n}"
+    local repo_name="${HF_REPO_PREFIX}-m5_6_${MODE}-seed${SEED}-step${step_n}"
     log "upload step=${step_n} → ${repo_name}"
     HF_TOKEN="${HF_TOKEN}" \
         "${VENV_PYTHON}" - "${step_dir}" "${repo_name}" "${step_n}" "${MODE}" "${SEED}" <<'PYEOF' 2>>"${LOG_FILE}"
@@ -95,17 +95,17 @@ if not weights_dir.exists():
 readme = f"""---
 license: apache-2.0
 base_model: Qwen/Qwen3.5-0.8B
-tags: [grpo, research-paper, musique, m5.1, qwen3.5]
+tags: [grpo, research-paper, musique, m5.6, qwen3.5]
 ---
 
 # Qwen3.5-0.8B GRPO checkpoint — M5.1 step {step}
 
-GRPO training checkpoint from `M5.1-prod` (paper-faithful ReSearch recipe on MuSiQue, 1× A100-80GB).
+GRPO training checkpoint from `M5.6-prod` (EM-only reward, paper-faithful Search-R1) (paper-faithful ReSearch recipe on MuSiQue, 1× A100-80GB).
 Mode: `{mode}`, seed: `{seed}`, step: `{step}`. Uploaded automatically by `upload_ckpts_watcher.sh`.
 
 - Project: [`reason_over_search`](https://github.com/GaurisankarJ/reason_over_search)
-- Run config: `training_m5_1/configs/m5_1_research_paper.yaml`
-- Reward: F1-only on `<answer>...</answer>` content (M5.1 divergence #1)
+- Run config: `training_m5_6/configs/m5_6_research_paper.yaml`
+- Reward: EM-only (0/1) on `<answer>...</answer>` content
 - Answer wrap: plain `<answer>X</answer>` (M5.1 divergence #2)
 
 See `RESULTS_m5.md` and `RESULTS_SMOKE_m5.md` in the repo for run context.

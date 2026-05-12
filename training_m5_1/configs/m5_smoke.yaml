@@ -26,11 +26,10 @@ grpo:
   # [smoke] 4 prompts × 5 generations = 20 trajectories per step (milestone
   # doc M5 smoke shape). Production shape will be 96 prompts × 5 = 480.
   num_prompts_per_step: 4
-  # [smoke] 10 steps: enough for stable s/step measurement + memory stability
-  # check across multiple wake/sleep cycles. Reduced from 50 (which was ~2 h
-  # wall and unnecessary for validation). Production schedule is ~156 steps
-  # for 2 epochs of MuSiQue at paper bs=256, scaled inversely if we drop bs.
-  max_num_steps: 10
+  # [smoke] 4 steps: enough to exercise ckpt save (save_period=2 -> saves at
+  # step 2 + step 4) and exit cleanly. Was 10 (s/step measurement); we don't
+  # need the longer signal for sbatch-body verification.
+  max_num_steps: 4
   max_num_epochs: 1
   # [smoke] Validation off for end-to-end smoke — exercising val codepath
   # would slow the smoke without producing useful signal at 50 steps.
@@ -105,23 +104,27 @@ loss_fn:
   use_kl_in_reward: false
 
 # =============================================================================
-# Checkpointing — off for smoke
+# Checkpointing — ENABLED for smoke so the save round-trip is actually
+# verified before any prod sbatch ships. Mirrors prod yaml's save shape
+# (consolidated=true, optimizer=false) so the smoke exercises the SAME save
+# code path. With max_num_steps=4 + save_period=2, the smoke produces 2 saves
+# (steps 2, 4); the watcher (if running) uploads them to HF Hub. Verify
+# step_2/ and step_4/ exist + sizes ~3.2 GB after smoke completes.
 # =============================================================================
 checkpointing:
-  enabled: false
+  enabled: true
   checkpoint_dir: "results/grpo/m5_smoke"
-  # See m5_1_research_paper.yaml for the postmortem on these two fields:
-  # `train/loss/mean` and `keep_top_k: 0` both crashed production. Use
-  # nulls here so a verification smoke can flip `enabled: true` without
-  # tripping the assertion.
+  # See m5_1_research_paper.yaml for the postmortem (research_v2:5fa8558):
+  # `train/loss/mean` and `keep_top_k: 0` both crashed prod. The contract is
+  # load-bearing — if either changes, re-verify via this smoke before prod.
   metric_name: null
   higher_is_better: false
   keep_top_k: null
-  save_period: 100
+  save_period: 2
   checkpoint_must_save_by: null
   model_save_format: "safetensors"
-  save_consolidated: false
-  save_optimizer: false   # match m5_1_research_paper.yaml (disk-budget driven; see prod yaml for rationale)
+  save_consolidated: true   # match prod save shape; smoke must exercise consolidate
+  save_optimizer: false     # match prod (3.2 GB/save consolidated fp32 safetensors)
 
 # =============================================================================
 # Policy (model + training + generation)

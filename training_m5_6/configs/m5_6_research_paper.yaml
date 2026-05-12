@@ -137,17 +137,19 @@ loss_fn:
 checkpointing:
   enabled: true
   checkpoint_dir: "results/grpo/m5_6_prod"
-  # No val signal (val disabled). Use a training metric so NeMo-RL's
-  # keep_top_k still has a value to compare against. The 25-d run produces
-  # 12 saves; we keep all (disk is roomy on the Vast instance).
-  metric_name: "train/loss/mean"
+  # [Fix 2026-05-11, ported from research_v2:5fa8558] Prior M5.1 prod attempt
+  # crashed at step-50 first save: metric_name must be 'train:' or 'val:'
+  # prefixed (grpo.py:2040); keep_top_k=0 deletes every save (slice [0:] in
+  # checkpoint.py:266). save_optimizer=false drops 8.9 GB -> 3.2 GB per save.
+  # See training_m5_1/configs/m5_1_research_paper.yaml for the full block.
+  metric_name: null
   higher_is_better: false
-  keep_top_k: 0
+  keep_top_k: null
   save_period: 50
   checkpoint_must_save_by: null
   model_save_format: "safetensors"
   save_consolidated: true
-  save_optimizer: true
+  save_optimizer: false
 
 # =============================================================================
 # Policy (model + training + generation)
