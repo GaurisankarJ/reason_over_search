@@ -79,7 +79,7 @@ export CHECKPOINT_DIR_BASE="${CHECKPOINT_DIR_BASE:-results/grpo_m5_6}"
   || { echo "Retriever index missing: local_retriever/${RETRIEVER_INDEX#./}" >&2; exit 1; }
 [ -s "data/training/musique/train.parquet" ]        || { echo "MuSiQue parquet missing/empty (run training_m5_6/scripts/prep_musique.py)" >&2; exit 1; }
 [ -f "training_m5_6/.env" ]                         || { echo "training_m5_6/.env missing (WANDB_API_KEY)" >&2; exit 1; }
-[ -x "training/nemo_rl/.venv/bin/python" ]          || { echo "training venv missing at training/nemo_rl/.venv (bootstrap_alice.sh or setup.sh)" >&2; exit 1; }
+[ -d "training_m5_6/nemo_rl/.venv" ]                || { echo "training venv missing at training_m5_6/nemo_rl/.venv (bootstrap_alice.sh or setup.sh; symlink to shared venv is fine)" >&2; exit 1; }
 
 mkdir -p logs
 

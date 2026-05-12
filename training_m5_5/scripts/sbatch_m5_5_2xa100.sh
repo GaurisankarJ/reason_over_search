@@ -3,7 +3,7 @@
 #
 # Differences from sbatch_m5_5.sh (1x A100):
 #   - SBATCH --gres=gpu:a100:2
-#   - default --mode is prod_2xa100 (loads m5_1_research_paper_2xa100.yaml,
+#   - default --mode is prod_2xa100 (loads m5_5_research_paper_2xa100.yaml,
 #     which adds vllm tensor_parallel_size=2 + cluster.gpus_per_node=2)
 #   - CHECKPOINT_DIR_BASE defaults to results/grpo_m5_5_2xa100 so the 1x and 2x
 #     runs do not collide in the checkpoint dir
@@ -59,8 +59,8 @@ export CHECKPOINT_DIR_BASE="${CHECKPOINT_DIR_BASE:-results/grpo_m5_5_2xa100}"
   || { echo "Retriever index missing: local_retriever/${RETRIEVER_INDEX#./}" >&2; exit 1; }
 [ -s "data/training/musique/train.parquet" ]        || { echo "MuSiQue parquet missing/empty (run training_m5_5/scripts/prep_musique.py)" >&2; exit 1; }
 [ -f "training_m5_5/.env" ]                         || { echo "training_m5_5/.env missing (WANDB_API_KEY)" >&2; exit 1; }
-[ -x "training/nemo_rl/.venv/bin/python" ]          || { echo "training venv missing at training/nemo_rl/.venv" >&2; exit 1; }
-[ -f "training_m5_5/configs/m5_1_research_paper_2xa100.yaml" ] || { echo "2x A100 config missing" >&2; exit 1; }
+[ -d "training_m5_5/nemo_rl/.venv" ]                || { echo "training venv missing at training_m5_5/nemo_rl/.venv (symlink to shared venv is fine)" >&2; exit 1; }
+[ -f "training_m5_5/configs/m5_5_research_paper_2xa100.yaml" ] || { echo "2x A100 config missing at training_m5_5/configs/m5_5_research_paper_2xa100.yaml" >&2; exit 1; }
 
 mkdir -p logs
 
