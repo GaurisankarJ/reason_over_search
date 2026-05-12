@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # M5.1 GRPO launcher for Qwen3.5-0.8B on MuSiQue, 1× A100 80GB.
 #
-# Two configs supported, selected via --mode:
-#   --mode smoke  → configs/m7_smoke.yaml         (20 traj/step × 50 steps;
-#                                                  validates loop end-to-end)
-#   --mode prod   → configs/m7_1_research_paper.yaml (full ReSearch recipe;
-#                                                  authored in M5.1 step 6)
+# Configs supported, selected via --mode:
+#   --mode smoke       → configs/m7_smoke.yaml             (20 traj × 50 steps; seq=4096)
+#   --mode smoke_8192  → configs/m7_smoke_8192.yaml        (20 traj × 50 steps; seq=8192)
+#   --mode prod_shape  → configs/m7_prod_shape_smoke.yaml  (320 traj × 3 steps; prod shape)
+#   --mode short100    → configs/m7_1_short100.yaml        (100-step prod probe, ckpts at 50+100)
+#   --mode prod        → configs/m7_1_research_paper.yaml  (full 622-step ReSearch recipe)
 #
 # Common knobs:
 #   --seed N      → GRPO seed (RNG; defaults to 42)
@@ -47,9 +48,10 @@ case "$MODE" in
     smoke)           CONFIG="training_m7_1/configs/m7_smoke.yaml" ;;
     smoke_8192)      CONFIG="training_m7_1/configs/m7_smoke_8192.yaml" ;;            # [M7.0.7b] seq=8192 smoke variant
     prod_shape)      CONFIG="training_m7_1/configs/m7_prod_shape_smoke.yaml" ;;       # [M7.0.7c] prod batch (320 traj) × 3 steps
+    short100)        CONFIG="training_m7_1/configs/m7_1_short100.yaml" ;;             # [M7.1] 100-step probe, ckpts at 50+100
     prod)            CONFIG="training_m7_1/configs/m7_1_research_paper.yaml" ;;
-    "")              echo "error: --mode is required (smoke|smoke_8192|prod_shape|prod)" >&2; exit 2 ;;
-    *)               echo "error: --mode must be smoke|smoke_8192|prod_shape|prod (got: $MODE)" >&2; exit 2 ;;
+    "")              echo "error: --mode is required (smoke|smoke_8192|prod_shape|short100|prod)" >&2; exit 2 ;;
+    *)               echo "error: --mode must be smoke|smoke_8192|prod_shape|short100|prod (got: $MODE)" >&2; exit 2 ;;
 esac
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
