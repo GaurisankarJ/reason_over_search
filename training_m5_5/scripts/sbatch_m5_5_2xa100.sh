@@ -49,7 +49,7 @@ UV_CACHE_HOST="${UV_CACHE_HOST:-/zfsstore/user/s4374886/uv_cache}"
 RETRIEVER_PORT="${RETRIEVER_PORT:-3005}"
 RETRIEVER_INDEX="${RETRIEVER_INDEX:-./indexes/wiki18_100w_e5_ivf4096_sq8.index}"
 RETRIEVER_NUM_WORKERS="${RETRIEVER_NUM_WORKERS:-8}"
-RETRIEVER_HEALTH_TIMEOUT_S="${RETRIEVER_HEALTH_TIMEOUT_S:-1800}"
+RETRIEVER_HEALTH_TIMEOUT_S="${RETRIEVER_HEALTH_TIMEOUT_S:-3600}"   # 60 min; cold zfsstore on ALICE needs >30 min for 8x retriever boot
 
 # Differentiate checkpoint dir from the 1x run.
 export CHECKPOINT_DIR_BASE="${CHECKPOINT_DIR_BASE:-results/grpo_m5_5_2xa100}"
