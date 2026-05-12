@@ -192,9 +192,9 @@ policy:
     # model across both GPUs (training side); was 1 (DDP) before. Load-bearing
     # for the projected ~2-2.5x training-phase speedup. micro=2 is the secondary
     # gain TP=2 unlocks; KEPT at 1 here pending a dedicated 2-GPU smoke.
-    tensor_parallel_size: 1  # Option B (NeMo-RL FSDP+TP>1 bug): policy TP=1, vLLM keeps TP=2
+    tensor_parallel_size: 2  # Option A: TP=2 with custom_parallel_plan (Qwen3.5 vocab-parallel FSDP bug workaround)
     context_parallel_size: 1
-    custom_parallel_plan: null
+    custom_parallel_plan: training_m5_6.src.parallel_plan_qwen35.custom_parallel_plan  # Option A: Qwen3.5 vocab-parallel FSDP bug workaround
     automodel_kwargs: {force_hf: true}  # NeMo-RL issue 2072: bypass automodel state_dict adapter, fixes TP=2 vocab-parallel lm_head refit
     lora_cfg:
       enabled: false
