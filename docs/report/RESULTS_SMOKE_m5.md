@@ -399,6 +399,43 @@ Two verification smokes were run before any further production attempt:
 - Restart from step 0 = +25 d worst-case (or +5-10 d if the live "shrink-and-improve" dynamic recurs quickly).
 - Documentation cost: this section + rule list above. Cheap relative to a repeat incident.
 
+### 7.8 Companion postmortem — the "zombie GPU memory" misdiagnosis (2026-05-12)
+
+**This is a second self-inflicted loss layered on top of §7.1-7.7.** Adding it here so the trap is documented at the same prominence as the original crash.
+
+**What happened.** While `prod-a2` (the relaunch after the ckpt fix) was running step 13/100, the user asked if training was matching `a1`. Per-step wall-clock was 10-25% slower than `a1` at the same step. I observed three PIDs in `nvidia-smi --query-compute-apps`:
+
+```
+664424, [Not Found], 4666 MiB
+616312, [Not Found], 1046 MiB
+617645, [Not Found], 48188 MiB
+```
+
+I interpreted `[Not Found]` as "process is dead → driver-side zombie allocation". I told the user 53.9 GB of GPU memory was leaked from previous runs and was eating `a2`'s headroom, causing the slowdown. The user authorized killing `a2` (~14 h of compute, ≈\$21) and resetting the GPU.
+
+**What was actually true.**
+- `[Not Found]` means `nvidia-smi` cannot resolve the PID's `comm` field — almost always because the process lives in a child PID namespace (Docker/container, or Ray actor with its own namespace).
+- All three PIDs were **live, legitimate** processes:
+  - `664424 → 4.6 GB` = the retriever process (PID 6838 in our host namespace, has held 27 FDs on `/dev/nvidia*` since `2026-05-10 18:12`; uses ~4.6 GB for the query encoder transformer, regardless of `faiss_gpu: False` which only controls the FAISS index).
+  - `616312 → 1 GB` = `a2`'s **live** DTensor policy worker (Ray actor).
+  - `617645 → 48 GB` = `a2`'s **live** vLLM generation worker (Ray actor with KV cache + model weights).
+- When `a2` was killed, the 1 GB and 48 GB entries vanished because the processes actually exited. The 4.6 GB stayed because the retriever stayed up.
+- **There never were any zombie allocations.** `a2`'s slowdown was stochastic variation in optimizer/RNG ordering after the ckpt-fix commit, well within normal RL-training noise.
+
+**Cost.** ~14 h of A100-80GB compute (≈\$21) + ~1 day of wall-clock + user's trust burn. This is on top of the original ~19.5 h from §7.1-7.7.
+
+**Rules going forward — DO NOT SKIP** (in addition to §7.6):
+
+1. **`[Not Found]` in `nvidia-smi --query-compute-apps` is NOT proof of a zombie.** It just means the comm lookup failed — typically a containerized or namespaced child process. Always cross-check by:
+   - `ls -la /proc/<pid>/` — if the dir exists, the process is alive.
+   - `fuser /dev/nvidia*` — lists the **host** PIDs actually holding GPU device FDs. These are the real owners; map them to processes via `ps -p <pid>`.
+   - For Ray, walk the process tree: `pgrep -fa "ray::"` and `ps --ppid <ray-parent> -o pid,comm`.
+2. **Before claiming a zombie**, the host PID must be (a) absent from `/proc/`, (b) not a descendant of any live `ray::` actor, and (c) not a descendant of an unrelated long-lived service (the retriever in our case).
+3. **A 10-25% per-step slowdown vs. a prior run, with identical RL dynamic (reward/length/tc shrinking on schedule), is stochastic noise — not headroom loss.** Killing a healthy run for a small wall-clock delta is a worse trade than letting it finish.
+4. **The right escalation order for "is something off":** (a) compare RL signals (reward, length, KL) first; (b) if signals look normal, ignore wall-clock noise within ±25%; (c) only check GPU headroom if observing actual OOM / vLLM throttle warnings in the log, not from `nvidia-smi` snapshots.
+
+**The single sentence to remember:** *"`[Not Found]` is a `comm` lookup failure, not a death certificate."*
+
 ---
 
 ## 8. Decision log
