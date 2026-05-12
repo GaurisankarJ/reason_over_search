@@ -44,10 +44,12 @@ while [[ $# -gt 0 ]]; do
 done
 
 case "$MODE" in
-    smoke) CONFIG="training_m7_1/configs/m7_smoke.yaml" ;;
-    prod)  CONFIG="training_m7_1/configs/m7_1_research_paper.yaml" ;;
-    "")    echo "error: --mode is required (smoke|prod)" >&2; exit 2 ;;
-    *)     echo "error: --mode must be smoke or prod (got: $MODE)" >&2; exit 2 ;;
+    smoke)           CONFIG="training_m7_1/configs/m7_smoke.yaml" ;;
+    smoke_8192)      CONFIG="training_m7_1/configs/m7_smoke_8192.yaml" ;;            # [M7.0.7b] seq=8192 smoke variant
+    prod_shape)      CONFIG="training_m7_1/configs/m7_prod_shape_smoke.yaml" ;;       # [M7.0.7c] prod batch (320 traj) × 3 steps
+    prod)            CONFIG="training_m7_1/configs/m7_1_research_paper.yaml" ;;
+    "")              echo "error: --mode is required (smoke|smoke_8192|prod_shape|prod)" >&2; exit 2 ;;
+    *)               echo "error: --mode must be smoke|smoke_8192|prod_shape|prod (got: $MODE)" >&2; exit 2 ;;
 esac
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -81,9 +83,11 @@ fi
 # vllm_cfg.gpu_memory_utilization in the yaml instead.
 
 TS="$(date -u +%Y%m%dT%H%MZ)"
-RUN_NAME="qwen3.5-0.8b-musique-m5_${MODE}-seed${SEED}-${TS}"
+# [M7] Run names + ckpt dirs now use m7_ prefix and include "base" qualifier
+# to distinguish from M5.1 hybrid runs in W&B + on-disk artifacts.
+RUN_NAME="qwen3.5-0.8b-base-musique-m7_${MODE}-seed${SEED}-${TS}"
 # Checkpoint dir keyed by (mode, seed); not timestamped, so resumes work.
-CKPT_DIR="${CHECKPOINT_DIR_BASE:-results/grpo}/m5_${MODE}/seed${SEED}"
+CKPT_DIR="${CHECKPOINT_DIR_BASE:-results/grpo}/m7_${MODE}/seed${SEED}"
 
 OVERRIDES=(
     "grpo.seed=${SEED}"

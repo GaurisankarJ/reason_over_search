@@ -99,11 +99,56 @@ The conservative interpretation: M7 producing a measurable lift over the M4.3 un
 
 | Phase | Target start | ETA done | Status |
 |---|---|---|---|
-| M7.0 Setup | 2026-05-12 (this commit) | 30-45 min | ⏳ next |
-| M7.0.5 Verification | After M7.0 | 15 min | pending |
-| M7.0.7 Smoke | After M7.0.5 | 30-60 min on A100 | pending |
-| M7.1 Production | Conditional on smoke pass | 10-13 d | conditional |
+| M7.0 Setup | 2026-05-12 17:30 UTC | 30-45 min | ✅ done |
+| M7.0.5 Verification | 2026-05-12 17:40 UTC | 15 min | ✅ done — see [§"Verification results"](#verification-results-m705) |
+| M7.0.7a Smoke seq=4096 | 2026-05-12 17:40 UTC | 44 min wall | ✅ done — REWARD COLLAPSE confirmed; see [§"Smoke results"](#smoke-results-m707a-seq4096) |
+| M7.0.7b Smoke seq=8192 | 2026-05-12 18:00 UTC | ~40-60 min | ⏳ in flight |
+| M7.0.7c Prod-shape smoke | After M7.0.7b | ~2-3 h (3 steps × ~50 min) | pending |
+| M7.1 Production | Conditional on M7.0.7b/c | 10-13 d | conditional |
 | M7.2 Eval | After M7.1 | 2.5 h | conditional |
+
+## Verification results (M7.0.5)
+
+All 7 verification checkpoints PASS as of 2026-05-12 17:40 UTC.
+
+| Checkpoint | Method | Result |
+|---|---|---|
+| Prompt template render | Compare `tokenizer.apply_chat_template(...)` of `m7_qwen35_base_user.txt` vs `QWEN35_MINIMAL_NO_SYSTEM_TEMPLATE` on the base tokenizer | ✅ **BYTE-IDENTICAL** to M4.3 eval lock, 145 tokens, no system block, open `<think>\n` |
+| Arm dispatch (dataset) | `VALID_ARMS` in [`src/datasets/search_r1.py:30`](../../training_m7_1/src/datasets/search_r1.py) + training log shows `search_r1_qwen_native_no_system` | ✅ wired |
+| Arm dispatch (parser) | `parse_query("qwen_native_no_system", sample)` extracts the search query from the `<tool_call>` block | ✅ regex matches Qwen3.5 nested-XML |
+| Arm dispatch (env) | Tool-response wrap routes to `format_docs_qwen_native`; `_stop_strings_for_arm` returns `["</tool_call>", "</answer>"]` | ✅ same wrap as hybrid |
+| Arm dispatch (processor) | New `elif arm == "qwen_native_no_system"` branch in [`src/processors/search_r1.py`](../../training_m7_1/src/processors/search_r1.py) skips `tools=[SEARCH_TOOL]` in `apply_chat_template` | ✅ auto-inject OFF as designed |
+| Reward function | `compute_search_r1_reward("<answer>Christopher Nolan</answer>", ["Christopher Nolan"])` → `{reward: 1.0, em: 1.0, f1: 1.0}`. Partial: `{reward: 0.667, ...}`. No-extract: `{reward: 0.0, ...}` | ✅ F1-only, no 0.1 floor (matches M5.1 contract) |
+| Model + venv | `/venv/.../python -c "import torch; import nemo_rl"` returns clean; model loads from `/workspace/.../eval/qwen3.5_0.8b_base` | ✅ |
+
+## Smoke results (M7.0.7a, seq=4096)
+
+Ran 2026-05-12 17:14:20 → 17:58:30 UTC, **44 min total wall**, 20 steps × 20 traj/step = 400 rollouts, on 1× A100-80GB. W&B run: `qwen3.5-0.8b-musique-m5_smoke-seed42-20260512T1740Z` (cosmetic — the actual run is the M7 base smoke; the `m5_` prefix is a leftover from M5.1's run.sh that was fixed in this commit but the smoke was already running).
+
+**Headline result: reward collapse confirmed. Truncation is the root cause.**
+
+Per-step trajectory across all 20 steps:
+
+| step | reward mean | pct rew>0 | pct emit `<answer>` | pct truncated | avg `<tool_call>`s |
+|---:|---:|---:|---:|---:|---:|
+| 1 | 0.014 | 10 % | 25 % | 90 % | 1.00 |
+| 5 | 0.000 | 10 % | 40 % | 80 % | 1.20 |
+| 10 | 0.000 | 0 % | 45 % | 65 % | 1.50 |
+| 15 | 0.000 | 0 % | 5 % | 100 % | 1.40 |
+| 20 | 0.004 | 5 % | 15 % | 80 % | 1.45 |
+
+**Findings:**
+
+1. **`<tool_call>` emission rate is ~100 % from step 1.** Untrained base immediately engages the tool — this was the biggest positive surprise. The inlined format spec in the user prompt + the open `<think>\n` generation prefix is sufficient to drive consistent tool use without any post-training prior.
+2. **Truncation rate is 65-100 % throughout.** Rollouts hit the 4096 sequence budget mid-`<think>` or mid-search-loop and never emit `<answer>X</answer>`. Per-rollout decomposition: ~500-800 tok initial `<think>`, ~1024 tok first generation, ~600 tok first `<tool_response>` (top-5 chunks × 120 tok/chunk), ~400-600 tok second `<think>`, optional 2nd search loop — total easily 3500-4500 tok before answer.
+3. **Reward signal is sparse but present.** 5 of 20 steps (1, 5, 6, 11, 18, 20) had at least one rollout with reward > 0. Mean reward across these "lucky" rollouts is 0.005-0.02. When all 5 rollouts in a group hit 0.0, GRPO advantage = 0 → no gradient signal. When one rollout in a group hits 0.087, the positive rollout gets a +0.07 advantage, the others get a -0.017 advantage.
+4. **`<answer>` emission rate trajectory: 25 → 40 → 45 → 5 → 15 %.** Steps 1-10 trend positive (model learning to close with an answer); step 15 collapses; step 20 partial recovery. Not enough signal density for monotonic learning.
+
+**Implications for next smokes:**
+- **M7.0.7b** (seq=8192): hypothesis is that doubling the sequence budget reduces truncation rate from ~80 % to <50 %, raising the `<answer>` emission rate and unlocking F1 reward signal density.
+- **M7.0.7c** (prod-shape, 320 traj/step): even if the per-rollout success rate stays around 10 %, having 320 rollouts per step means ~32 positive-reward rollouts per step (vs ~2 in this smoke), distributed across 64 groups. The expected number of groups containing at least one positive rollout is much higher → much more gradient signal per step.
+
+Result files preserved at `logs/exp_012/train_data_step{1..20}.jsonl`.
 
 **Sequencing vs M5.1-prod-a3**: M5.1-prod-a3 is currently paused awaiting user authorization per [`TODO_2026-05-12.md`](../todo/TODO_2026-05-12.md). M7 runs FIRST on the current box; M5.1-a3 launches afterward (either on same box if M7 fails/completes, or on a second box if budget allows parallelism).
 
