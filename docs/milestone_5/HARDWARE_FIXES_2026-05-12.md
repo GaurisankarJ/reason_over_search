@@ -87,6 +87,30 @@ Further workarounds NOT applied yet (defer until needed):
 - Copy index to compute-node `/tmp` (199 GB free on node875) → all workers read from local fast storage.
 - FAISS mmap mode (`IO_FLAG_MMAP`) — requires editing `retriever_serving.py`, not done.
 
+## 4.5 Plan B results (RECORDED 2026-05-12 ~12:35 CEST)
+
+Plan B (Option B) fired inside srun 2266786 on node875 with `RETRIEVER_NUM_WORKERS=4` (smallmem path to fit the 120 GB srun allocation). All three experiments completed; one false start on M5.6 surfaced one final code bug (env imported `f1_check` instead of `em_check`), fixed and retried.
+
+| Experiment | rc | step 4 reached | ckpt step_2 | ckpt step_4 | WANDB run | HF upload step_2 |
+|---|---:|---|---:|---:|---|---|
+| M5.1 | 0 | ✓ | 6.36 GB | 6.36 GB | `reason_over_search_m5_1/runs/5n2gy5r7` | `pantomiman/qwen3.5-0.8b-grpo-musique-m5_1_smoke-seed42-step2` ✓ |
+| M5.5 | 0 | ✓ | 6.36 GB | 6.36 GB | `reason_over_search_m5_5/runs/<run>` | `pantomiman/qwen3.5-0.8b-grpo-musique-m5_5_smoke-seed42-step2` ✓ |
+| M5.6 (first) | 1 | — | — | — | — | — (ImportError before training) |
+| M5.6 (retry, after env em_check fix) | 0 | ✓ | 6.36 GB | 6.36 GB | `reason_over_search_m5_6/runs/mndyd280` | `pantomiman/qwen3.5-0.8b-grpo-musique-m5_6_smoke-seed42-step2` ✓ |
+
+What this proves end-to-end for the **1× A100** sbatch path (modulo the 4-vs-8 retriever count, math-verified):
+
+- sbatch syntax + pre-checks
+- `/scratchdata` apptainer bind for Ray
+- Retriever boot + `/health`
+- WANDB credential pickup from `.env`
+- Training (4 GRPO steps) completes
+- **Checkpoint save** at step 2 + step 4 with `save_consolidated=true`, `save_optimizer=false`, `metric_name: null`, `keep_top_k: null` (the load-bearing prod fix from research_v2)
+- HF Hub upload daemon launches, picks up at least step 2 (step 4 missed because squashfuse_ll times out mid-run; tracked as a follow-up patch before May 15)
+- cleanup trap kills retriever + HF watcher cleanly
+
+What it does NOT prove: 8-retriever shape under `--mem=240g` (covered by sbatch 2274508 tomorrow on gpu-short) and 2-GPU TP=2 (covered by sbatch 2275683 + srun 2275986 tomorrow).
+
 ## 5. Verification matrix (what we know works vs trust)
 
 | Verification | Status | What it proves | What it does NOT prove |
