@@ -69,11 +69,106 @@ Mirror M7.1's cadence:
 
 Total budget: ~$15-20.
 
+## M7.4 attempt 1 (2026-05-13, 16 steps, killed) — bootstrap failure + porting bug
+
+Launched 2026-05-13 09:20 UTC. Killed at step 16 after the reward-bucket data showed an unfixable signal-density problem under the original walker.
+
+### What we saw
+
+| step | rew_mean | % format-INVALID | floor hits / 320 |
+|---:|---:|---:|---:|
+| 1 | 0.0009 | 99.1% | 3 |
+| 2-5 | 0.0000 | **100.0%** | **0** |
+| 6 | 0.0003 | 99.7% | 1 |
+| 7 | 0.0006 | 99.4% | 2 |
+| 8 | 0.0003 | 99.7% | 1 |
+| 9 | 0.0009 | 99.1% | 3 |
+| 10 | 0.0003 | 99.7% | 1 |
+| 11-16 | 0.0003-0.0009 | 99-100% | 1-3 |
+
+Across 5120 trajectories (16 × 320), only **15** got any non-zero reward — all at the 0.1 floor, **zero** F1>0. Tool-call emission rate steady at 10-14% (M7.1 baseline; no learning). The reward landscape was 99.8% flat zero — GRPO had no gradient direction.
+
+### Diagnosis (the porting bug)
+
+Step-14 breakdown of the 320 rollouts:
+
+- 72% (229) — no `<answer>` block at all (truncated mid-thought)
+- 27% (85) — **HAS `<answer>` but format gate rejects it**  ← the gap
+- 2% (6) — passes format gate
+
+Of the 85 rejected-with-answer rollouts:
+
+| failure reason | count |
+|---|---:|
+| **"no `<think>` block present"** | **43** |
+| **"think tags unbalanced: open=0 close=1"** | **22** |
+| "rollout does not terminate on `</answer>`" | 6 |
+| other think imbalance | 8 |
+| `<answer>` imbalance | 6 |
+
+**86% (73/85) of rejections were `<think>` accounting bugs.** Root cause: the Qwen3.5 chat template with `enable_thinking=True` emits `<think>\n` as the **generation prompt prefix** (in the prompt, not the assistant turn). The env builds `solution_str` via
+
+```python
+solution_str = "".join(m["content"] for m in log if m["role"] != "user")
+```
+
+which skips user turns — and the `<think>\n` opener lives inside the user-prompt rendering. So when a model generates a perfect `"thinking content </think> <answer>X</answer>"`, the format walker sees `<think>` count = 0, `</think>` count = 1, and rejects with "think tags unbalanced". The M5.5 walker was designed for an upstream context where `<think>` is emitted by the model itself; in our `enable_thinking=True` setup it's implicit in the prompt prefix, creating a systematic blind spot.
+
+### Fix (commit `40c9ec3`)
+
+One-line change in `is_valid_format()`:
+
+```python
+# was:
+text = solution_str
+# now:
+text = "<think>\n" + solution_str
+```
+
+Prepending the implicit opener makes the balance walker see what the model actually generated within (effectively starting from `<think>` like the model's POV).
+
+### Fix impact on real attempt-1 step-14 data
+
+| metric | before fix | after fix |
+|---|---:|---:|
+| format-valid rate | 1.9% | **7.2%** (~4×) |
+| "no `<think>` block" failures | 43 | **0** |
+| "think open=0 close=1" failures | 22 | **0** |
+
+Remaining 92.8% format-invalid is genuine model behavior (didn't close `</think>`, ran out of tokens before `<answer>`, etc.) — not a porting bug. **7.2% non-zero density** vs M7.1's step-1 **4.1% F1-positive rate** — almost 2× more rollouts contributing gradient, plus the 0.1 floor adding pressure toward format-valid behavior.
+
+All 4 reward-logic smoke cases still pass:
+- `garbage` → 0.0  fmt=False
+- `valid+F1=0` → 0.1  fmt=True  (the floor)
+- `valid+perfect` → 1.0  fmt=True
+- `valid+partial(NY City vs NY)` → 0.8  fmt=True
+
+## M7.4 attempt 2 (2026-05-13 11:01 UTC, running)
+
+Relaunched with the fix at `40c9ec3`. Run name: `qwen3.5-0.8b-base-musique-m7_m74_short100-seed42-20260513T1101Z`. Watcher PID separate from training PID; status visible at `cat logs/m7_4_status.txt`.
+
+**Decision points unchanged:**
+
+| outcome at step 25-50 | next |
+|---|---|
+| format-valid rate ≥ 10%, reward_mean trending up | continue to step 100 → extend |
+| format-valid plateaus at 5-8%, reward flat | kill; consider multi-tier shaping (option 2) |
+| reward floor 0.1 dominates without F1>0 hits | model is gaming the format gate but not learning to answer — adjust |
+
+### Cost ledger M7.4
+
+| segment | cost |
+|---|---:|
+| Attempt 1 (16 steps, ~2 h, dead) | ~$1.60 |
+| Diagnosis + fix (no GPU) | ~$0 |
+| Attempt 2 (running) | TBD |
+
 ## Pointers
 
 - M5.5 source (experiment_1_alice): `git show origin/experiment_1_alice:training_m5_5/src/rewards/search_r1.py`
 - M7.1 closing finding (the motivation): [`MILESTONE_7.md` §"M7.1 closing finding"](MILESTONE_7.md)
 - M7.3 prompt-only attempt (8-step result; tool-use held but reward died): [`MILESTONE_7_3.md`](MILESTONE_7_3.md)
-- New reward (now in place at training_m7_1/): [`training_m7_1/src/rewards/search_r1.py`](../../training_m7_1/src/rewards/search_r1.py)
-- New config: [`training_m7_1/configs/m7_4_short100.yaml`](../../training_m7_1/configs/m7_4_short100.yaml)
+- Reward (with M7.4 fix): [`training_m7_1/src/rewards/search_r1.py`](../../training_m7_1/src/rewards/search_r1.py)
+- Config: [`training_m7_1/configs/m7_4_short100.yaml`](../../training_m7_1/configs/m7_4_short100.yaml)
 - Launcher: `bash training_m7_1/scripts/run.sh --mode m74_short100`
+- Watcher: `bash training_m7_1/scripts/watch_m7_4.sh <train_pid>`

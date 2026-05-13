@@ -122,20 +122,25 @@ def is_valid_format(solution_str: str) -> Tuple[bool, str]:
 
     Note (M7.4, 2026-05-13): the Qwen3.5 chat template with
     `enable_thinking=True` emits `<think>\\n` as part of the generation
-    prefix in the prompt — NOT in the assistant turn content. The env
-    builds `solution_str` from non-user turns only, which strips that
-    implicit opener. To get a correct balance check (rules 1 + parts of 3
-    that depend on think wrapping), we prepend `<think>\\n` to the joined
-    rollout here. Without this, even well-formed rollouts that emit
-    `[reasoning] </think> [...] <answer>X</answer>` get rejected with
-    "no <think> block present" or "think tags unbalanced: open=0 close=1".
+    prefix in the prompt — NOT in the assistant turn content. In
+    multi-turn rollouts, EACH assistant turn (re-rendered after every
+    tool_response) gets its own `<think>\\n` opener from the template.
+    The env builds `solution_str` from non-user turns only, which strips
+    every one of those implicit openers. To make the balance walker see
+    them, we prepend `<think>\\n` once per assistant turn — i.e.,
+    `1 + count("</tool_response>")` openers. Without the multi-turn
+    correction, single-turn rollouts pass but the ~13% multi-turn rollouts
+    still fail with "think open=1 close=N" for N tool calls.
     """
-    # [M7.4 fix] Account for the implicit `<think>\n` opener emitted by the
-    # chat template's `add_generation_prompt=True + enable_thinking=True`
-    # prefix. The env's join skips user turns, so that opener doesn't reach
-    # us in solution_str. Prepending makes the balance walker see what the
-    # model actually generated within (effectively starting from `<think>`).
-    text = "<think>\n" + solution_str
+    # [M7.4 multi-turn fix] One implicit `<think>\n` opener per assistant
+    # turn. Single-turn rollouts have 1 assistant turn (no tool_response);
+    # N-turn rollouts have N+1 assistant turns separated by N closed
+    # `</tool_response>` blocks. Each opener was emitted by the chat
+    # template's `add_generation_prompt=True + enable_thinking=True` but
+    # lives in the user-prompt rendering, so the env's solution_str (join
+    # of non-user turns) strips all of them.
+    num_implicit_thinks = 1 + solution_str.count("</tool_response>")
+    text = ("<think>\n" * num_implicit_thinks) + solution_str
     stripped = text.rstrip()
 
     # 1. <think> pairing + presence
