@@ -230,6 +230,93 @@ Result files at `logs/exp_014/train_data_step{1,2,3}.jsonl` (~80 MB total).
 2. **Add a small format-gate reward floor for M7** — e.g., reward = max(0.05, f1) if rollout emits `<answer>` (even an empty one). This bootstraps gradient density at the cost of diverging from the M5.1 contract. Quick fix; ~20 LoC.
 3. **Reduce M7.1 to a shorter run** — e.g., 100 or 200 steps instead of 622. Costs ~$30-60. Still meaningful trajectory data even if it doesn't converge.
 
+## M7.1 results (short100 — 100-step probe)
+
+**Run**: `qwen3.5-0.8b-base-musique-m7_short100-seed42-20260512T2040Z` (W&B: `d82xtvwo`).
+Started 2026-05-12 20:40 UTC, finished 2026-05-12 23:31 UTC. Wall: 2 h 51 min for 100 steps × 320 trajectories/step = 32,000 rollouts on 1× A100-80GB.
+
+Per-step pace evolved dramatically (no fixed step time — vLLM AOT compile cache from M5.1 + capture-graphs warming up made it monotonically faster):
+
+| step range | avg step time | reason |
+|---|---:|---|
+| 1-5 | 285 s | warmup, vLLM cudagraph capture, first-batch overhead |
+| 6-25 | 200 s | post-warmup, micro=1 baseline |
+| 26-50 | 110 s | steady-state, AOT cache hits |
+| 51-100 | 70 s | final pace, all caches warm |
+
+Total cost on Vast 1× A100 ≈ $4-5 (against my earlier $30-120 estimate; the AOT compile cache hit collapsed wall-clock).
+
+### Reward trajectory (the headline)
+
+| window | rew_mean | n_pos / 320 | lift vs baseline |
+|---|---:|---:|---:|
+| **steps 1-10 (baseline)** | **0.0104** | ~10 (3.3%) | 1.0× |
+| steps 11-20 | 0.0166 | ~17 (5.3%) | 1.6× |
+| steps 21-30 | 0.0344 | ~38 (12%) | 3.3× |
+| steps 31-40 | 0.0344 | ~50 (16%) | 3.3× |
+| steps 41-50 | 0.0378 | ~57 (18%) | 3.6× |
+| steps 51-60 | 0.0589 | ~70 (22%) | 5.7× |
+| steps 71-80 | 0.0840 | ~73 (23%) | 8.1× |
+| **steps 91-100** | **0.0872** | **~67 (21%)** | **8.4×** |
+
+GRPO is delivering real signal: **8.4× lift in 100 steps**, monotonic except for normal noise. Per-rollout positive rate climbed from 3% → 21%. The model went from "occasionally lucky" to "1 in 5 trajectories has nonzero F1."
+
+Single-trajectory **F1 = 1.000** (perfect MuSiQue answer) appeared first at step 2 and was sustained from step 6 onward — that confirms the parametric capability was there from the start, and training is amplifying its expression.
+
+### Thinking-trace inspection (early vs trained)
+
+The model's reasoning style changed sharply over the 100 steps:
+
+| step | avg response chars | % emit `<answer>` | % emit closing `</answer>` | % emit `<tool_call>` |
+|---:|---:|---:|---:|---:|
+| 1 | 2966 | 31.6% | 28.1% | **14.4%** |
+| 10 | 2693 | 54.4% | 49.7% | 9.1% |
+| 25 | 1743 | 92.2% | 90.3% | 1.2% |
+| 50 | 978 | 100% | 99.4% | **0.0%** |
+| 75 | 804 | 99.7% | 100% | 0.0% |
+| 100 | 1088 | 99.7% | 99.7% | 0.0% |
+
+Three behaviors moved together: response length collapsed 3×, format-closure went near-perfect, and **tool-call emission dropped to 0%**. The first two are unambiguously good. The third is the critical finding.
+
+#### Reward hacking by tool-call bypass
+
+The model learned to **skip the search tool entirely** and answer directly from parametric knowledge.
+
+Concrete step 110 example (extend run; same behavior):
+> Question: *"When did the city the regional office of the World Bank in the country with a constitution is located in first host the Asian Games?"*
+> Model thinking: *"Hmm... the city is Kathmandu. Asian Games were held in 1951. Answer: 1951."*
+> Output: `<answer> 1951</answer>` → F1 = 1.000 (matches MuSiQue's reference). **No `<tool_call>` invoked.**
+
+**Why this happened (mechanism).** Our reward is `f1(extract_answer(rollout), gold_answer)` — F1-only, no format gate, no floor (M5.1 contract inherited from `training_m5_1/src/rewards/search_r1.py`, deliberate per Group-C decision). Tool-call emission carries zero direct reward. GRPO discovered the dominant strategy: emit `<answer>` as soon as the parametric prior coughs up something plausible; never emit `<tool_call>`. On MuSiQue, the 0.8B base apparently has enough world knowledge to F1-match the gold answer ~20% of the time without retrieval, and that's the signal GRPO ratchets.
+
+**Why the original Search-R1 paper avoided this.** Paper uses `reward = f1 + 0.1` for any non-empty `<answer>` rollout, with a format gate. The 0.1 floor + format requirement forces the model to actually emit answers (not nothing) while keeping F1 as the gradient direction. The format gate keeps tool-use behavior alive. We chose F1-only for cleanliness — and lost tool use as a consequence.
+
+**Is this still publishable?** Yes. The finding *"F1-only GRPO on a base model induces tool-call bypass; the model becomes a fast direct-answer retriever rather than a tool-using agent"* is a real result. It's the inverse of what Search-R1 reports and isolates which part of their reward design is load-bearing. It also explains why the M7 trained checkpoint will likely *outperform* untrained on simple-factoid datasets (TriviaQA, NQ) and *underperform* on multi-hop datasets that require fresh retrieval (Bamboogle, 2wiki) — a clean ablation.
+
+### M7.1-extend (resume from step 100 → step 622)
+
+Auto-launched 2026-05-13 05:33 UTC after the step-100 GO criterion passed (`rew_mean(91-100) = 0.0872 ≥ 0.035 AND lift ≥ 2×`). Run name: `qwen3.5-0.8b-base-musique-m7_extend-seed42-20260513T0533Z`. Config: [`m7_1_extend.yaml`](../../training_m7_1/configs/m7_1_extend.yaml) — same as `m7_1_short100.yaml` with `max_num_steps: 622`, `save_period: 100`, `keep_top_k: 2`.
+
+**Interim (through step 115 ≈ 1 h into extend)**: pace stable at ~72 s/step; `rew_mean` averaging 0.10-0.17 (e.g., step 110 = 0.164); tool-call emission still 0%. Target end ETA: 2026-05-13 16:00 CEST.
+
+**Resume caveats:**
+- Optimizer state not saved (`save_optimizer: false` — disk constraint inherited from short100). AdamW moments re-initialized from zero. At constant LR=1e-6 this is a minor perturbation; in practice we see no discontinuity in the reward trajectory across the resume boundary (step 100 short100 final mean 0.087 → step 101 extend 0.13 → step 110 extend 0.16).
+- The `m7_short100/seed42/step_50` ckpt was deleted to recover disk during the extend launch (overlay fill incident; see `log.md` 2026-05-13 entry). `step_100` is preserved.
+
+### Cost ledger to date
+
+| segment | wall | $ |
+|---|---:|---:|
+| Smoke A (20-step seq=4096) | 44 min | ~$1 |
+| Smoke B (20-step seq=8192, partial) | 38 min | ~$1 |
+| Smoke C (3-step prod-shape) | 51 min | ~$1 |
+| Short100 (100 steps) | 2 h 51 min | ~$5 |
+| Idle gap after short100 (auto-launch failed) | 6 h 02 min | ~$8 |
+| Extend (in progress, ~10 h projected) | ~10 h | ~$13 |
+| **Total M7 GPU spend** | ~21 h | **~$29** |
+
+The idle-gap line is the auto-launch failure documented above: short100 completed at 23:31 UTC, extend launched 05:33 UTC — 6+ hours of idle A100 because the auto-continuation was promised but never actually wired as a side-process. Lesson captured in [`memory/feedback_auto_action_promises.md`](file:///root/.claude/projects/-workspace/memory/feedback_auto_action_promises.md).
+
 ## Pointers
 
 - M4 final locks + handoff: [`MILESTONE_4.md` §"Handoff to M5"](../milestone_4/MILESTONE_4.md)
