@@ -100,11 +100,17 @@ if [[ "$prompt_mode" == "qwen35_minimal_nothink" ]]; then
   enable_thinking=False
 fi
 
+# [M7.2] Optional SAVE_NOTE_SUFFIX env appends a tag to save_note so M7
+# evals on trained ckpts don't collide with the M4 untrained-baseline
+# result files (same variant + prompt_mode but different weights via
+# QWEN35_0_8B_BASE_PATH). Empty default = backward-compatible no-op.
+extra_tag="${SAVE_NOTE_SUFFIX:-}"
+
 if [[ -n "$test_sample_num" ]]; then
-  save_note="m4_${variant}${mode_tag}_seed${seed}_n${test_sample_num}"
+  save_note="m4_${variant}${mode_tag}${extra_tag}_seed${seed}_n${test_sample_num}"
   sample_args=(--test_sample_num "$test_sample_num" --random_sample True --seed "$seed")
 else
-  save_note="m4_${variant}${mode_tag}_seed${seed}"
+  save_note="m4_${variant}${mode_tag}${extra_tag}_seed${seed}"
   sample_args=()
 fi
 save_dir="$EVAL_DIR/results/$dataset"

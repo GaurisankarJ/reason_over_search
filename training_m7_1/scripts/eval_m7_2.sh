@@ -26,7 +26,12 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$REPO_ROOT"
 
-CKPT_BASE="results/grpo/m7_short100/seed42"
+# CKPT_BASE may be overridden via env (e.g. CKPT_BASE=results/grpo/m7_m74_short100/seed42).
+# Default targets the M7.1 short100 ckpts.
+CKPT_BASE="${CKPT_BASE:-results/grpo/m7_short100/seed42}"
+# RUN_TAG is used to namespace the materialized HF model dir + eval result files
+# so multiple runs (M7.1, M7.4, ...) don't collide. Default derived from CKPT_BASE.
+RUN_TAG="${RUN_TAG:-$(basename "$(dirname "$CKPT_BASE")")_$(basename "$CKPT_BASE")}"
 ARG_STEP="${1:?missing arg: ckpt step number, or 'latest'}"
 
 # Resolve step number
@@ -49,7 +54,7 @@ echo "[eval_m7_2] target ckpt: step ${STEP}  (${CKPT_DIR})"
 # Materialize an HF model dir (eval/qwen3.5_0.8b_base_m7_step<N>/) combining:
 #   policy/weights/model/consolidated/*  (config.json + safetensors + index)
 #   policy/tokenizer/*                   (tokenizer files + chat template)
-MODEL_DIR="eval/qwen3.5_0.8b_base_m7_step${STEP}"
+MODEL_DIR="eval/qwen3.5_0.8b_base_${RUN_TAG}_step${STEP}"
 SRC_WEIGHTS="${REPO_ROOT}/${CKPT_DIR}/policy/weights/model/consolidated"
 SRC_TOKENIZER="${REPO_ROOT}/${CKPT_DIR}/policy/tokenizer"
 
@@ -85,10 +90,14 @@ echo "[eval_m7_2] retriever OK"
 # PROMPT_MODE=qwen35_minimal_no_system matches the M4.3 base lock (and the training arm).
 export QWEN35_0_8B_BASE_PATH="${REPO_ROOT}/${MODEL_DIR}"
 export PROMPT_MODE="qwen35_minimal_no_system"
+# Namespace save_note so the trained-ckpt eval doesn't collide with the
+# M4 untrained-baseline results (same variant + prompt_mode, different
+# weights). run_m4.sh appends this string after mode_tag.
+export SAVE_NOTE_SUFFIX="_${RUN_TAG}_step${STEP}"
 
 DATASETS=(bamboogle nq triviaqa popqa hotpotqa 2wikimultihopqa musique)
 SEED=1
-LOG_FILE="logs/m7_2_eval.log"
+LOG_FILE="logs/m7_2_eval_${RUN_TAG}_step${STEP}.log"
 
 mkdir -p logs
 {
