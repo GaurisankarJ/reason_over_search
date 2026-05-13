@@ -3,7 +3,7 @@ title: Log
 tags: []
 source: internal
 created: 2026-05-06
-updated: 2026-05-12
+updated: 2026-05-13
 ---
 
 # Wiki log
@@ -28,6 +28,17 @@ Conventions:
 - Don't rewrite past entries; if a fact turns out wrong, add a correcting bullet on the day the correction was made.
 
 ---
+
+## 2026-05-13
+- Ran: **M7.1-short100 (100 GRPO steps × 320 traj/step, ~32k rollouts) launched 20:40 UTC 2026-05-12, completed 23:31 UTC**. Wall 2 h 51 min; per-step pace evolved 333s → 70s as vLLM AOT compile cache + cudagraphs warmed. Final `rew_mean(91-100) = 0.0872`, **8.4× lift over steps 1-10 baseline (0.0104)**. Step_50 + step_100 ckpts saved to `results/grpo/m7_short100/seed42/`. Auto-GO criterion (steps 91-100 avg ≥ 0.035 AND ≥ 2× baseline) cleared by a wide margin.
+- Failure: **6 h 02 min A100 idle gap (~$8)** after short100 finished. Auto-launch of `--mode extend` was promised in chat but wired as a chat-driven monitor instead of a side-process watcher; when conversation went idle, the extend launch never fired. Saved as durable feedback memory at `~/.claude/projects/-workspace/memory/feedback_auto_action_promises.md` — future auto-action promises get built as nohup-detached watcher scripts BEFORE the user is told it's set up. Order: build watcher → test → report.
+- Disk: cleaned 14 GB `/.uv/cache` + 8.6 GB `/workspace/hf_cache` + 6.4 GB `step_50` ckpt + 250 MB `torchinductor_cache` between launch attempts. `/workspace` recovered 511 MB → 16 GB free. `VLLM_CACHE_ROOT=/workspace/vllm_cache` now in launch env to keep vLLM compile artifacts off the 30 GB overlay.
+- Built: `training_m7_1/scripts/watch_extend.sh` (PID poller → `logs/m7_extend_status.txt`), `auto_eval_after_extend.sh` (auto-fires `eval_m7_2.sh` on clean training exit; refuses to fire on traceback / OOM / no-completion-marker), `eval_m7_2.sh` (M4.3 base-lock eval across Plan A 7 datasets — bamboogle/nq/triviaqa/popqa/hotpotqa/2wiki/musique — on a specified trained ckpt via `QWEN35_0_8B_BASE_PATH` env override into `scripts/run_m4.sh`). All side-process; no chat dependency. Commits: [`67279a7`](https://github.com/GaurisankarJ/reason_over_search/commit/67279a7) `--mode extend` wiring + config, [`fabfc5d`](https://github.com/GaurisankarJ/reason_over_search/commit/fabfc5d) M7.1 results doc + auto-eval scaffold.
+- Ran: **M7.1-extend resumed from step_100, launched 05:33 UTC, stopped at step 134 (06:20 UTC)**. 34 steps × 320 traj = ~10.9k rollouts in ~50 min. `rew_mean` averaged 0.1016, max 0.1642 at step 110. **`<tool_call>` rate 0.06% across all 8000 trajectories** (5 stragglers at steps 101/104/108/111, then 0 across steps 112-134 = 23 consecutive steps × 320 traj = **7360 trajectories with zero retrieval**). Stopped early once the pattern was clear — saved ~$10-12 vs continuing to step 622 to re-confirm collapse.
+- Finding (publishable): **F1-only GRPO on a base model induces complete tool-call collapse**. From an untrained baseline of 14.4% tool-call emission, GRPO drives the rate to 0% by step 50 and holds it there through step 134 (~43k rollouts total across short100+extend). Reward keeps climbing (0.006 → 0.16, ~30× lift) because MuSiQue gold answers are recoverable from the 0.8B base's pretraining knowledge for ~20-30% of questions. Inverse of Search-R1 (Wei et al. 2025) — their reward = `f1 + 0.1` floor for non-empty `<answer>` + format gate keeps tool-use alive. M7.1 isolates which part of their reward design is load-bearing. Saved in [`milestone_7/MILESTONE_7.md` §"M7.1 closing finding"](milestone_7/MILESTONE_7.md).
+- Decision: **M7.3 opened** — test whether a 3-hop in-context demonstration in the user prompt prevents the collapse. Single-variable ablation vs M7.1: same reward (F1-only, no floor), same arm (`qwen_native_no_system`), same hyperparams, same data; ONLY the prompt changes. Fresh training start (NOT resumed from `step_100`) to keep variable clean. Planning + proposed demo content (Apple → Steve Jobs → US → Surveyor 1) in [`milestone_7/MILESTONE_7_3.md`](milestone_7/MILESTONE_7_3.md). Either outcome is publishable: (A) demo prevents collapse → "prompt prior dominates F1 gradient"; (B) demo doesn't help → "Search-R1's reward floor is load-bearing".
+- Decision: **M7.2 eval deferred** — scaffold ready at `training_m7_1/scripts/eval_m7_2.sh`. Will run after M7.3 baseline so the M7.1 `step_100` and M7.3 `step_100` ckpts get evaluated back-to-back on the same Plan A 7-dataset suite.
+- Total M7.1 GPU spend: ~$17 (smokes + short100 + idle gap + truncated extend).
 
 ## 2026-05-12
 

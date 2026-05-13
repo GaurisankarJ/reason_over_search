@@ -293,15 +293,41 @@ Concrete step 110 example (extend run; same behavior):
 
 **Is this still publishable?** Yes. The finding *"F1-only GRPO on a base model induces tool-call bypass; the model becomes a fast direct-answer retriever rather than a tool-using agent"* is a real result. It's the inverse of what Search-R1 reports and isolates which part of their reward design is load-bearing. It also explains why the M7 trained checkpoint will likely *outperform* untrained on simple-factoid datasets (TriviaQA, NQ) and *underperform* on multi-hop datasets that require fresh retrieval (Bamboogle, 2wiki) — a clean ablation.
 
-### M7.1-extend (resume from step 100 → step 622)
+### M7.1-extend (resume from step 100 → 134, STOPPED EARLY)
 
 Auto-launched 2026-05-13 05:33 UTC after the step-100 GO criterion passed (`rew_mean(91-100) = 0.0872 ≥ 0.035 AND lift ≥ 2×`). Run name: `qwen3.5-0.8b-base-musique-m7_extend-seed42-20260513T0533Z`. Config: [`m7_1_extend.yaml`](../../training_m7_1/configs/m7_1_extend.yaml) — same as `m7_1_short100.yaml` with `max_num_steps: 622`, `save_period: 100`, `keep_top_k: 2`.
 
-**Interim (through step 115 ≈ 1 h into extend)**: pace stable at ~72 s/step; `rew_mean` averaging 0.10-0.17 (e.g., step 110 = 0.164); tool-call emission still 0%. Target end ETA: 2026-05-13 16:00 CEST.
+**Stopped early at step 134 (2026-05-13 ~06:20 UTC)** because the reward-hacking pattern was clearly stable across the resume boundary — extending further would have spent another ~$10-12 confirming what 34 additional steps already proved. The remaining budget was redirected to M7.3 (see below).
+
+**Extend reward trajectory (34 steps in ~50 min wall):**
+
+| metric | value |
+|---|---:|
+| steps 101-134 mean rew_mean | **0.1016** |
+| min | 0.0639 (step 104) |
+| max | **0.1642** (step 110) |
+| % trajectories emitting ≥1 `<tool_call>` (8000 rollouts) | **0.06% (5/8000)** |
+| % trajectories emitting `<answer>` | **99.2%** |
+| pace (steady-state) | 70-77 s/step |
+
+The first 5 trajectories with tool calls were at steps 101, 104, 108, 111 — residual tail from short100 that finished decaying within ~10 steps of resume. From step 112 onward across 23 consecutive steps, **0 tool calls in 7360 trajectories**. The model is fully committed to direct parametric answering.
 
 **Resume caveats:**
-- Optimizer state not saved (`save_optimizer: false` — disk constraint inherited from short100). AdamW moments re-initialized from zero. At constant LR=1e-6 this is a minor perturbation; in practice we see no discontinuity in the reward trajectory across the resume boundary (step 100 short100 final mean 0.087 → step 101 extend 0.13 → step 110 extend 0.16).
-- The `m7_short100/seed42/step_50` ckpt was deleted to recover disk during the extend launch (overlay fill incident; see `log.md` 2026-05-13 entry). `step_100` is preserved.
+- Optimizer state not saved (`save_optimizer: false` — disk constraint inherited from short100). AdamW moments re-initialized from zero. At constant LR=1e-6 this is a minor perturbation; in practice we see no discontinuity in the reward trajectory across the resume boundary (step 100 short100 final mean 0.087 → step 101 extend 0.10 → step 110 extend 0.16).
+- The `m7_short100/seed42/step_50` ckpt was deleted to recover disk during the extend launch (overlay fill incident). `step_100` is preserved.
+- Because extend was killed before step 200 (the next save_period boundary), no extend checkpoint exists on disk. The `step_100` short100 ckpt remains the canonical M7.1 artifact.
+
+### M7.1 closing finding (publishable)
+
+The combined short100 + extend trajectory (134 steps, ~43,000 rollouts) supports a single clean claim:
+
+> **F1-only GRPO on a base model induces complete tool-call collapse.** From an untrained baseline where 14.4% of trajectories use the retrieval tool, after just 50 training steps the rate drops to 0% and stays there through step 134. The reward function (F1 on `<answer>X</answer>` content, no format gate, no floor) gives GRPO no gradient toward tool-use; the model converges on direct parametric answering and `rew_mean` keeps growing (0.006 → 0.16, ~30× lift) because MuSiQue's gold answers are recoverable from the 0.8B base's pretraining knowledge alone for ~20-30% of questions.
+
+This is the inverse of what Search-R1 (Wei et al., 2025) reports — their format-gated + 0.1-floor reward keeps tool-use behavior alive. M7.1 isolates which part of their reward design is load-bearing.
+
+**M7.2 (eval on Plan A 7-dataset suite) is still on the roadmap** as a follow-up to quantify the impact of tool-bypass on multi-hop vs single-hop evaluation. See [`training_m7_1/scripts/eval_m7_2.sh`](../../training_m7_1/scripts/eval_m7_2.sh) — scaffold is ready to run against `step_100` whenever the user authorizes.
+
+**M7.3** picks up here: tests whether adding a worked 3-hop in-context demonstration to the prompt prevents the collapse. See [`MILESTONE_7_3.md`](MILESTONE_7_3.md).
 
 ### Cost ledger to date
 
@@ -312,10 +338,12 @@ Auto-launched 2026-05-13 05:33 UTC after the step-100 GO criterion passed (`rew_
 | Smoke C (3-step prod-shape) | 51 min | ~$1 |
 | Short100 (100 steps) | 2 h 51 min | ~$5 |
 | Idle gap after short100 (auto-launch failed) | 6 h 02 min | ~$8 |
-| Extend (in progress, ~10 h projected) | ~10 h | ~$13 |
-| **Total M7 GPU spend** | ~21 h | **~$29** |
+| Extend (stopped at step 134) | 50 min | ~$1 |
+| **Total M7.1 GPU spend** | ~12 h | **~$17** |
 
 The idle-gap line is the auto-launch failure documented above: short100 completed at 23:31 UTC, extend launched 05:33 UTC — 6+ hours of idle A100 because the auto-continuation was promised but never actually wired as a side-process. Lesson captured in [`memory/feedback_auto_action_promises.md`](file:///root/.claude/projects/-workspace/memory/feedback_auto_action_promises.md).
+
+Extend was killed early once tool-use collapse was confirmed at step 134 — saved ~$10-12 vs continuing to step 622 to re-confirm the same pattern.
 
 ## Pointers
 
