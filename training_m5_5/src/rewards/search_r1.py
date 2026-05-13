@@ -123,13 +123,25 @@ def is_valid_format(solution_str: str) -> Tuple[bool, str]:
     text = solution_str
     stripped = text.rstrip()
 
-    # 1. <think> pairing + presence
+    # 1. <think> pairing + presence.
+    # Qwen3.5 chat template (enable_thinking=True) auto-prepends `<think>\n`
+    # at the start of each assistant turn. The model's generated content (the
+    # `solution_str` we receive) only includes content AFTER that prefix, so
+    # the opening `<think>` tag is NOT in the rollout text — only the closing
+    # `</think>` and any additional explicit opens the model emits mid-content.
+    # Effective open count = explicit_opens + template_injected_opens (one per
+    # assistant turn = one per closing `</think>`, since the model must close
+    # thinking before any tool_call or answer). Validation: model emitted at
+    # least one close, and any explicit opens are balanced (each followed by
+    # its own close). Single-prepend would only handle single-turn rollouts;
+    # multi-turn (K tool calls → K+1 assistant turns → K+1 closes) needs this
+    # template-injection-aware accounting.
     think_open = text.count("<think>")
     think_close = text.count("</think>")
-    if think_open != think_close:
-        return False, f"think tags unbalanced: open={think_open} close={think_close}"
-    if think_open == 0:
-        return False, "no <think> block present"
+    if think_close == 0:
+        return False, "no </think> close present (model never closed thinking)"
+    if think_open > think_close:
+        return False, f"think tags unbalanced: explicit opens={think_open} > closes={think_close}"
 
     # 2. <tool_call> pairing
     tc_open = text.count("<tool_call>")

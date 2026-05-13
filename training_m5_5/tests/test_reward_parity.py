@@ -147,9 +147,37 @@ def test_format_green_trailing_whitespace_after_answer():
     assert ours.is_valid_format(text)[0]
 
 
+def test_format_green_template_injected_open_single_turn():
+    """Qwen3.5 chat template auto-prepends `<think>\\n` at each assistant turn
+    start; that prefix is NOT in `solution_str` (which is built from
+    `m["content"]` only). So a well-formed single-turn rollout has 0 explicit
+    `<think>` opens but 1 `</think>` close. Must still validate."""
+    text = "plan: I know this</think><answer>Shakespeare</answer>"
+    is_valid, reason = ours.is_valid_format(text)
+    assert is_valid, f"expected valid; got reason={reason!r}"
+
+
+def test_format_green_template_injected_open_multi_turn():
+    """Multi-turn rollout with K=2 tool calls → 3 assistant turns → 3
+    template-injected opens + 3 closes. The concatenated `solution_str` will
+    show 0 explicit opens and 3 closes."""
+    text = (
+        "plan: search for author</think>"
+        f"{TC}{TR}"
+        "need nationality</think>"
+        f"{TC2}{TR2}"
+        "got it</think>"
+        "<answer>Shakespeare</answer>"
+    )
+    is_valid, reason = ours.is_valid_format(text)
+    assert is_valid, f"expected valid; got reason={reason!r}"
+
+
 # ----- 3. Format walker: red cases (one per failure mode) ----------------
 
 def test_format_red_missing_think():
+    """No `</think>` close anywhere — model never closed its (template-injected
+    or explicit) thinking block. Invalid."""
     text = f"{TC}{TR}<answer>X</answer>"
     is_valid, reason = ours.is_valid_format(text)
     assert not is_valid
