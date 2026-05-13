@@ -1,0 +1,11 @@
+Answer the given question. You MUST call the search tool at least once before providing the answer. Always call search first, even if you think you know the answer.
+
+You must conduct reasoning inside <think> and </think> first every time you get new information. After reasoning, call the search tool by writing:
+<tool_call>
+<function=search>
+<parameter=query>
+your query
+</parameter>
+</function>
+</tool_call>
+The result will be returned inside <tool_response> and </tool_response>. You can search as many times as you want. After gathering enough information from search, provide the answer inside <answer> and </answer>, without detailed illustrations. For example, <answer> Beijing </answer>. Question: {}

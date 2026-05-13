@@ -55,6 +55,10 @@ _QWEN35_USER_PROMPT_MODES = {
     'qwen35_terse_no_system', 'qwen35_research_role_no_system',
     # M4.4 Phase 4 fallback B: Phase-1b near-miss prose ported to no-system.
     'qwen35_decide_no_system', 'qwen35_source_only_no_system', 'qwen35_self_check_no_system',
+    # M7.3 (2026-05-13): hard imperative scaffold to test tool-use survival
+    # under F1-only GRPO. Same no-system structure as M4.3 base lock; user
+    # prompt opens with "You MUST call search...".
+    'qwen35_m7_3_no_system',
 }
 
 # Subset of user-prompt modes that ALSO drop the `tools=[]` auto-inject. With
@@ -67,6 +71,8 @@ _QWEN35_NO_TOOLS_MODES = {
     # M4.4 Phase 4 fallback B: parallel `_no_system` variants of the top-3
     # Phase-1b near-miss prose interventions.
     'qwen35_decide_no_system', 'qwen35_source_only_no_system', 'qwen35_self_check_no_system',
+    # M7.3: hard imperative scaffold no-system variant.
+    'qwen35_m7_3_no_system',
 }
 
 

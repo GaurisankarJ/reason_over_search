@@ -7,6 +7,7 @@
 #   --mode prod_shape  → configs/m7_prod_shape_smoke.yaml  (320 traj × 3 steps; prod shape)
 #   --mode short100    → configs/m7_1_short100.yaml        (100-step prod probe, ckpts at 50+100)
 #   --mode extend      → configs/m7_1_extend.yaml          (resume short100 step 100 → 622, save_period=100, keep_top_k=2)
+#   --mode m73_short100 → configs/m7_3_short100.yaml       (M7.3 hard-imperative-prompt 100-step probe)
 #   --mode prod        → configs/m7_1_research_paper.yaml  (full 622-step ReSearch recipe)
 #
 # Common knobs:
@@ -51,9 +52,10 @@ case "$MODE" in
     prod_shape)      CONFIG="training_m7_1/configs/m7_prod_shape_smoke.yaml" ;;       # [M7.0.7c] prod batch (320 traj) × 3 steps
     short100)        CONFIG="training_m7_1/configs/m7_1_short100.yaml" ;;             # [M7.1] 100-step probe, ckpts at 50+100
     extend)          CONFIG="training_m7_1/configs/m7_1_extend.yaml" ;;                # [M7.1] resume short100 step 100 → 622, save_period=100, keep_top_k=2
+    m73_short100)    CONFIG="training_m7_1/configs/m7_3_short100.yaml" ;;              # [M7.3] hard-imperative-prompt 100-step probe
     prod)            CONFIG="training_m7_1/configs/m7_1_research_paper.yaml" ;;
-    "")              echo "error: --mode is required (smoke|smoke_8192|prod_shape|short100|extend|prod)" >&2; exit 2 ;;
-    *)               echo "error: --mode must be smoke|smoke_8192|prod_shape|short100|extend|prod (got: $MODE)" >&2; exit 2 ;;
+    "")              echo "error: --mode is required (smoke|smoke_8192|prod_shape|short100|extend|m73_short100|prod)" >&2; exit 2 ;;
+    *)               echo "error: --mode must be smoke|smoke_8192|prod_shape|short100|extend|m73_short100|prod (got: $MODE)" >&2; exit 2 ;;
 esac
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

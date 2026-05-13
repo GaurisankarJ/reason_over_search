@@ -490,6 +490,36 @@ QWEN35_SELF_CHECK_NO_SYSTEM_TEMPLATE = (
 )
 QWEN35_TEMPLATES["qwen35_self_check_no_system"] = QWEN35_SELF_CHECK_NO_SYSTEM_TEMPLATE
 
+# ─── M7.3 (2026-05-13) — hard imperative scaffold for tool-use survival ──────
+# Tests whether a strong "you MUST call search" opener prevents the F1-only
+# GRPO tool-call collapse observed in M7.1 (14.4% emission at step 1 → 0% by
+# step 50, stable through step 134). Same body as M4.3 base lock but with:
+#   - prepended imperative ("You MUST ... Always ... even if you think")
+#   - removed "if you find you lack some knowledge" escape clause
+#   - removed "If you find no further external knowledge needed" escape clause
+#   - "After gathering enough information from search" links the answer to search
+# Untested in M4 Phase 4 (those screened SOFT scaffolds at eval-time on the
+# untrained model). M7.3 question is different: does the prompt shift the
+# initial tool-call propensity high enough that GRPO can't easily train it out?
+# Companion training file: training_m7_1/src/prompts/m7_3_qwen35_base_user.txt
+# Render must be byte-equal between training + eval (verified at M7.3.0).
+QWEN35_M7_3_NO_SYSTEM_TEMPLATE = (
+    "Answer the given question. "
+    "You MUST call the search tool at least once before providing the answer. "
+    "Always call search first, even if you think you know the answer.\n"
+    "\n"
+    "You must conduct reasoning inside <think> and </think> first every time you get new information. "
+    "After reasoning, call the search tool by writing:\n"
+    "<tool_call>\n<function=search>\n<parameter=query>\nyour query\n</parameter>\n</function>\n</tool_call>\n"
+    "The result will be returned inside <tool_response> and </tool_response>. "
+    "You can search as many times as you want. "
+    "After gathering enough information from search, provide the answer inside "
+    "<answer> and </answer>, without detailed illustrations. "
+    "For example, <answer> Beijing </answer>. "
+    "Question: {prompt}\n"
+)
+QWEN35_TEMPLATES["qwen35_m7_3_no_system"] = QWEN35_M7_3_NO_SYSTEM_TEMPLATE
+
 # ─── Search-R1 paper user-message template (M1 baseline reproduction) ────────
 SEARCH_R1_TEMPLATE = (
         "Answer the given question. "
