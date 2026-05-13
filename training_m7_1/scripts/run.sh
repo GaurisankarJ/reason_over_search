@@ -53,9 +53,10 @@ case "$MODE" in
     short100)        CONFIG="training_m7_1/configs/m7_1_short100.yaml" ;;             # [M7.1] 100-step probe, ckpts at 50+100
     extend)          CONFIG="training_m7_1/configs/m7_1_extend.yaml" ;;                # [M7.1] resume short100 step 100 → 622, save_period=100, keep_top_k=2
     m73_short100)    CONFIG="training_m7_1/configs/m7_3_short100.yaml" ;;              # [M7.3] hard-imperative-prompt 100-step probe
+    m74_short100)    CONFIG="training_m7_1/configs/m7_4_short100.yaml" ;;              # [M7.4] F1+format reward ablation (M4.3 prompt, M5.5-style reward)
     prod)            CONFIG="training_m7_1/configs/m7_1_research_paper.yaml" ;;
-    "")              echo "error: --mode is required (smoke|smoke_8192|prod_shape|short100|extend|m73_short100|prod)" >&2; exit 2 ;;
-    *)               echo "error: --mode must be smoke|smoke_8192|prod_shape|short100|extend|m73_short100|prod (got: $MODE)" >&2; exit 2 ;;
+    "")              echo "error: --mode is required (smoke|smoke_8192|prod_shape|short100|extend|m73_short100|m74_short100|prod)" >&2; exit 2 ;;
+    *)               echo "error: --mode must be smoke|smoke_8192|prod_shape|short100|extend|m73_short100|m74_short100|prod (got: $MODE)" >&2; exit 2 ;;
 esac
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
