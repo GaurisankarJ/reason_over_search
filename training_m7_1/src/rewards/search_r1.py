@@ -119,8 +119,23 @@ def is_valid_format(solution_str: str) -> Tuple[bool, str]:
          (terminal answer; corresponds to ReSearch's "last response contains
          \\boxed" + EOS gate, adapted to our `</answer>`-as-vLLM-stop-string
          convention).
+
+    Note (M7.4, 2026-05-13): the Qwen3.5 chat template with
+    `enable_thinking=True` emits `<think>\\n` as part of the generation
+    prefix in the prompt — NOT in the assistant turn content. The env
+    builds `solution_str` from non-user turns only, which strips that
+    implicit opener. To get a correct balance check (rules 1 + parts of 3
+    that depend on think wrapping), we prepend `<think>\\n` to the joined
+    rollout here. Without this, even well-formed rollouts that emit
+    `[reasoning] </think> [...] <answer>X</answer>` get rejected with
+    "no <think> block present" or "think tags unbalanced: open=0 close=1".
     """
-    text = solution_str
+    # [M7.4 fix] Account for the implicit `<think>\n` opener emitted by the
+    # chat template's `add_generation_prompt=True + enable_thinking=True`
+    # prefix. The env's join skips user turns, so that opener doesn't reach
+    # us in solution_str. Prepending makes the balance walker see what the
+    # model actually generated within (effectively starting from `<think>`).
+    text = "<think>\n" + solution_str
     stripped = text.rstrip()
 
     # 1. <think> pairing + presence
