@@ -168,7 +168,7 @@ The drop from 7.2% to 5.9% is the truth: the single-prepend was being permissive
 
 Relaunched with the multi-turn fix at `a964b4c`. Run name: `qwen3.5-0.8b-base-musique-m7_m74_short100-seed42-20260513T1247Z`.
 
-### Trajectory through step 17 (~50 min wall)
+### Trajectory through step 68 (~2 h wall, step_50 ckpt saved)
 
 | step | rew_mean | %fmt_valid | %tool_call | F1>0 hits | floor (0.1) | wall (s) |
 |---:|---:|---:|---:|---:|---:|---:|
@@ -179,6 +179,24 @@ Relaunched with the multi-turn fix at `a964b4c`. Run name: `qwen3.5-0.8b-base-mu
 | 13 | 0.1273 | 92.8% | 0.6% | 43 | 254 | 109 |
 | 15 | 0.1475 | 95.9% | 0.3% | 59 | 248 | 93 |
 | 17 | 0.1235 | 94.7% | **0.0%** | 35 | 268 | 94 |
+| 25 | 0.1437 | 99.1% | 0.0% | 32 | 285 | 87 |
+| 30 | 0.1349 | 99.7% | 0.0% | 37 | 282 | 81 |
+| 40 | 0.1712 | 100.0% | 0.0% | 57 | 263 | 83 |
+| 50 | 0.1369 | 100.0% | 0.0% | 31 | 289 | 79 |
+| 55 | 0.1438 | 100.0% | 0.0% | 43 | 277 | 82 |
+| 60 | 0.1873 | 100.0% | 0.0% | 64 | 256 | 77 |
+| 65 | 0.1643 | 99.7% | 0.0% | 54 | 265 | 87 |
+| 68 | 0.1622 | 100.0% | 0.0% | 60 | 260 | 92 |
+
+**Tool-call rate has been 0.0% for 52 consecutive steps (step 17 → 68 = 16,640 trajectories with zero retrieval).** The collapse is permanent. Reward oscillates in 0.13-0.19 band — slow stochastic drift, no further learning trend visible. The model has converged to "single-turn well-formed parametric answering" and is now mining the easy MuSiQue questions repeatedly.
+
+### Step 50 checkpoint
+
+Saved at `results/grpo/m7_m74_short100/seed42/step_50/` (~3.4 GB consolidated weights + tokenizer). Uploaded to HF Hub for VM-crash insurance:
+
+- `huggingface.co/pantomiman/qwen3.5-0.8b-base-grpo-musique-m7_4-step_50` (model repo, private)
+
+Pairs cleanly with the M7.1 `step_100` ckpt for the M7.2 Plan A 7-dataset eval.
 
 ### The dual finding
 
