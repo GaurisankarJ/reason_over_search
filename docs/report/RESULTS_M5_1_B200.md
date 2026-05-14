@@ -651,6 +651,119 @@ The reward broke through A100's recorded ceiling (~0.20) starting at step 35. A1
 
 **Next cadence**: Step 40 (~3 h from now). I'll trigger it on time, not after the fact.
 
+---
+
+### Cadence 4 — Steps 31-40 (2026-05-14 ~22:25 UTC; triggered late at step 42, ~25 min after step 40 landed)
+
+**Cadence-4 step log** (steps 31-42 to extend through current):
+
+| Step | Wall (s) | Reward | Gen len | A100 ref (s) | B200/A100 | Notes |
+|---:|---:|---:|---:|---:|---:|---|
+| 31 | 534 | 0.1231 | 1037 | 1035 | 1.94× | |
+| 32 | 533 | 0.1621 | 1048 | 968 | 1.82× | |
+| 33 | 579 | 0.0874 | 1076 | 1091 | 1.88× | |
+| 34 | 538 | 0.1810 | 987 | 1099 | 2.04× | new high (steps 1-33) |
+| 35 | 588 | 0.1998 | 1039 | 1155 | 1.96× | |
+| 36 | 583 | 0.1403 | 981 | 1311 | 2.25× | |
+| 37 | 591 | **0.2117** | 976 | 1314 | 2.22× | **run high** |
+| 38 | 583 | 0.1337 | 980 | 1266 | 2.17× | |
+| 39 | 590 | 0.2054 | 996 | 1187 | 2.01× | |
+| 40 | 625 | 0.1798 | 1014 | 1607 | 2.57× | |
+| 41 | 619 | 0.1522 | 1023 | 1681 | 2.71× | |
+| 42 | 472 | **0.2126** | 1018 | 1362 | 2.89× | **new high** |
+
+**Trajectory commentary**: Reward broke 0.20 three times in 12 steps (35, 37, 42). The new run-high is 0.2126 at step 42. Step time fluctuated 472-625s — variable but mean 561s. **B200/A100 speedup grew to 2.71-2.89× past step 40** as A100 climbed dramatically (1607-1681s/step) while we stayed in the 470-625s band.
+
+**Note**: gen length stable ~980-1040 (model neither shrinking nor growing further), but tool calls slowly climbing (3.5 → 4.2). The model is doing MORE searches per question on average, not fewer — this is A100's "re-exploration regime" emerging in our run too, just at lower absolute cost.
+
+#### Window aggregate (cadence 4: 3200 trajectories across steps 31-40)
+
+| Metric | Cadence 3 (21-30) | **Cadence 4 (31-40)** | Δ |
+|---|---:|---:|---:|
+| Reward — mean | 0.1449 | **0.1624** | +12% |
+| Reward — % nonzero | 25.6% | **28.0%** | +9% |
+| Turns — mean | 4.09 | **4.70** | +15% |
+| Tool calls — mean | 3.12 | **3.76** | **+21%** |
+| **Completion rate** | 92.0% | 90.6% | −1.4 pp (slight regression) |
+| **Truncation rate** | 8.0% | 9.4% | +1.4 pp |
+| Response chars — mean | 4719 | 4355 | (slightly tighter) |
+
+**Reward keeps climbing (+12% vs cadence 3)** but **tool calls grew faster (+21%)**. The policy is buying reward at the cost of more search operations — exactly the "re-exploration regime" the paper describes (and A100 went through at steps 30+).
+
+**Completion rate dipped slightly (−1.4 pp)** — small regression from cadence 3's 92.0%. Watch for this; if it keeps dropping the policy may be over-investing in tool calls.
+
+#### 3 hand-analyzed examples (BEST / WORST / MEAN), step 40
+
+##### BEST — idx 300, step 40
+
+**Q**: *"Who piloted the plane that dropped the bomb over the city where Little Boy detonated?"*
+**Reward**: 1.0 / 3 turns / 2 tool calls / 1401 chars
+
+**Trajectory**:
+1. **Hallucinated context in initial `<think>`**: *"This is a historical question about the Battle of Курсок (Kursk) in the Russian-Soviet war"* — totally wrong. The model thought Little Boy was a WW2 Eastern Front bombing.
+2. Search 1: `"Little Boy detonation city"` → retriever returns Wikipedia "Little Boy" article, confirms **Hiroshima**.
+3. Model self-corrects in next `<think>`: *"I know Little Boy was dropped on August 6, 1945, over Hiroshima."*
+4. Search 2: `"Hiroshima bomb pilot"` → retrieves Wikipedia "Paul Tibbets" + "Enola Gay" articles.
+5. `<answer>Paul Tibbets</answer>` ✓
+
+**My commentary**: This is interesting because the **initial parametric knowledge was wrong** (Battle of Kursk) but **the model still recovered**. The search-then-verify pattern saved it. This is exactly the resilience GRPO is supposed to teach: trust retrieval over priors when the priors are unreliable. The fact that the model didn't fight the retrieval (didn't try to force "Kursk" into the answer) shows the policy has learned to override hallucinated context. **More valuable as evidence of robustness than the cleaner BEST examples from earlier cadences.**
+
+##### WORST — idx 85, step 40
+
+**Q**: *"What amount of TEUs did the location of Hagia Sophia handle in 2010?"*
+**Reward**: 0.0 / 10 turns / 9 tool calls / 4598 chars / **truncated**
+
+**Trajectory**:
+- 10 searches: all variations of Hagia Sophia, never pivoted to Istanbul port / TEU traffic
+- Final `<think>`: *"I've gathered a lot of search results about Hagia Sophia but I'm still unable to find specific information about the TEU handling capacity in 2010..."*
+- Truncated at max_turns
+
+**My commentary**: **Failed to pivot from hop 1 to hop 2.** This is a 2-hop question: (a) Hagia Sophia is in Istanbul, (b) Istanbul's port TEU volume in 2010. The model successfully identified Istanbul in the first search (Hagia Sophia → Istanbul, Turkey) but **never made the leap that "TEUs" is shipping container terminology and needs a search like "Port of Istanbul TEU 2010"**. The policy seems to lack the cross-domain knowledge that TEU = port metric, not a museum metric. **The retrieval is fine; the bridge reasoning is the failure point.**
+
+##### MEAN — idx 12, step 40
+
+**Q**: *"What major nationalist movement has the largest economy in Africa had?"*
+**Reward**: 0.0 / 5 turns / 4 tool calls / 4380 chars / answered (wrong)
+
+**Trajectory**:
+- Searched for largest African economy → found **Nigeria**
+- Searched for major nationalist movements (general) → got various African nationalist movements
+- Final answer: `<answer>Nigeria</answer>` — wrong, that's a country not a movement
+
+**My commentary**: **Answered the wrong question.** The model identified Nigeria correctly (largest economy in Africa ✓) but then answered "Nigeria" as the answer to the whole question, instead of "Nigeria's major nationalist movement" (which would be the Biafran independence movement, or various others). **The model executed the first hop correctly and stopped** — it didn't realize the question asked for an entity *related to* Nigeria, not Nigeria itself. **Bridge-skipping failure**: the model treated a 2-hop question as a 1-hop. This is a new failure mode I haven't seen in earlier cadences.
+
+#### Four observations from cadence 4
+
+1. **Reward keeps climbing (+12%)** — now at 0.16 mean for the window, with three step-level peaks above 0.20 (steps 35, 37, 42). No plateau yet.
+2. **Tool calls per sample grew +21% (3.1 → 3.8)** — the policy is re-investing in retrieval rather than getting more efficient. This is the paper-predicted "search calls grow during training" pattern.
+3. **Completion rate dipped slightly (−1.4 pp)** — small but worth watching. If it falls below 88% in cadence 5 we'd want to investigate.
+4. **New failure mode: bridge-skipping** (MEAN above). Model answers the first-hop entity instead of the second-hop. Distinct from cadence-3's "bridge corruption" (model commits to wrong first-hop fact). Watching to see if this pattern grows.
+
+#### System health snapshot — 2026-05-14 22:25 UTC
+
+| Component | Value |
+|---|---|
+| Steps complete | 42 / 622 (6.8%) |
+| Elapsed wall | 7h 22m |
+| Spend | ~$28.20 |
+| GPU mem (training peak) | 178 GB / 179 GB |
+| GPU power | 320-590 W |
+| Retriever | Healthy, 8 workers |
+| Uploader | ✓ healthy |
+| Wrapper | ✓ alive |
+| Training | ✓ alive |
+| **ETA to step 50 (first ckpt)** | ~70 min from now (~23:35 UTC = 01:35 CEST) |
+| **ETA to step 311 (1 epoch)** | ~42 h from now (~Sat 16:00 CEST) |
+| **ETA to step 622 (full run)** | ~88 h from now (~Mon 14:00 CEST) |
+
+#### Git + HF action
+
+- Cadence 4 doc committed (this commit) and pushed
+- HF README sync'd
+- Rollout JSONLs for steps 31-42 uploaded to HF Hub
+
+**Next cadence**: **Step 50** (first ckpt save). Triggering it on the exact step landing this time.
+
 ### 6.2 Cost / wall-clock estimation — actively unresolved
 
 **Two estimates have been on the table; one wide range until step 1 lands:**
