@@ -23,7 +23,11 @@ status: live
 | W&B project | `reason_over_search_b200` |
 | HF Hub repo | [`pantomiman/qwen3.5-0.8b-grpo-musique-b200-a3-seed42`](https://huggingface.co/pantomiman/qwen3.5-0.8b-grpo-musique-b200-a3-seed42) |
 | Git branch | `experiment_1_b200` (locally + remote) |
-| Started commit | (filled in at launch) |
+| Started commit | `f0f960e` |
+| Launch time (UTC) | 2026-05-14T15:03:36Z |
+| W&B run | [`qwen3.5-0.8b-musique-m5_prod-seed42-20260514T1503Z`](https://wandb.ai/gaurisankarj1996-leiden-university/reason_over_search_b200/runs/h68uskz6) (run id `h68uskz6`) |
+| Process pids | wrapper 7942, training 7961, uploader 7919 |
+| Container | `m5_b200_a3` on host `46.243.145.4` |
 | Seed | 42 |
 | Hardware | 1× NVIDIA B200 SXM6, 192 GB VRAM (Spheron ES, ME West 1, $3.83/h spot) |
 | Driver / CUDA host | 580.126.09 / 13.0 |
@@ -123,8 +127,30 @@ Per-step times will be logged here as they land. Anchor for extrapolation: smoke
 
 Following user spec (Q6 = every 25 steps): full analysis update + git commit + HF push at step 25, 50, 75, 100, ... Each entry below is added live.
 
-#### 2026-05-14 ~15:00 UTC — Launch
-(Filled in at launch.)
+#### 2026-05-14 15:03 UTC — Launch ✓
+
+| Item | Value |
+|---|---|
+| Wrapper started | 2026-05-14T15:03:36Z (via `run_prod_a3_resilient.sh`, attempt 1/6 fresh) |
+| Training process | pid 7961, `python run_grpo.py --config m5_1_research_paper.yaml grpo.seed=42 ...` |
+| W&B project | `reason_over_search_b200` ✓ |
+| W&B run id | `h68uskz6` |
+| W&B run name (auto-set by run.sh) | `qwen3.5-0.8b-musique-m5_prod-seed42-20260514T1503Z` (overrides yaml's `b200-a3-seed42` — known cosmetic issue, distinguishable via project + timestamp) |
+| Training samples loaded | **311** ✓ (= floor(19,938 / 64), 1 epoch; max_num_steps=622 = 2 epochs) |
+| Compute cluster | Ray, 1 node, colocated mode |
+| Worker init mode | sequential (colocated; vLLM and DTensor share GPU via sleep/wake) |
+| Setup phase observed at this snapshot | Building `VllmAsyncGenerationWorker` venv (~5 min one-time install of 468 packages on first prod use; cached after) |
+
+**Pre-launch artifacts pushed**:
+- HF repo created (private): https://huggingface.co/pantomiman/qwen3.5-0.8b-grpo-musique-b200-a3-seed42
+- README.md (this doc) + config_snapshot.yaml uploaded to HF
+- prod.log initialized at /workspace/prod.log with launch metadata
+- Upload watcher (pid 7919) polling every 60 s
+
+**Watch-points for first step** (per smoke baseline):
+- vLLM async engine setup: should complete in ~5-8 min on first prod use (smoke used `VllmGenerationWorker`, prod uses `VllmAsyncGenerationWorker` — additional one-time venv build)
+- Total setup time on smoke was 182.7 s; prod will likely be 5-10 min total because the async worker venv builds + larger model context init
+- First step wall: paper-shape (320 traj × seq=8192 × micro=2) extrapolates from smoke step 3 (43 s at 20 traj × seq=4096) by ~15× → **~10-12 min estimated**. Real number lands within the hour.
 
 ## 7. Spend tracker
 
