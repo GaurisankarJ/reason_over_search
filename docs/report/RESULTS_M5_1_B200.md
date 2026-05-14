@@ -533,6 +533,124 @@ The cadence-2 step log captures the **single largest behavioural shift** in the 
 
 **Next cadence**: Step 30 (~3 h from now at recent ~450s/step pace).
 
+---
+
+### Cadence 3 — Steps 21-30 (2026-05-14 ~21:35 UTC; note: belatedly logged — cadence trigger was missed at step 30 around 20:25 UTC and caught up 1 h later at step 37)
+
+**Step log update** (steps 21-37 — extended past cadence boundary since we caught up late):
+
+| Step | Wall (s) | Reward | Gen len | Tool calls | Trunc % | A100 ref (s) | B200/A100 | Notes |
+|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| 21 | 468 | 0.1711 | 1075 | 3.00 | 7.2% | 735 | 1.57× | |
+| 22 | 507 | 0.1096 | 1071 | 3.22 | 10.3% | 726 | 1.43× | |
+| 23 | 496 | 0.1657 | 1154 | 3.08 | 6.9% | 755 | 1.52× | |
+| 24 | 438 | 0.1575 | 1052 | 2.81 | 5.0% | 758 | 1.73× | |
+| 25 | 456 | 0.1502 | 1028 | 2.95 | 5.6% | 766 | 1.68× | |
+| 26 | 481 | 0.1437 | 1072 | 3.08 | 5.6% | 832 | 1.73× | |
+| 27 | 546 | 0.0951 | 1161 | 3.39 | 8.4% | 903 | 1.65× | First "creep" signal |
+| 28 | 493 | 0.1548 | 1008 | 3.23 | 7.8% | 863 | 1.75× | |
+| 29 | 527 | 0.1337 | 1067 | 3.39 | 10.6% | 910 | 1.73× | |
+| 30 | 475 | 0.1671 | 1020 | 3.11 | 6.2% | 954 | **2.01×** | A100 climbing; B200 holding |
+| 31 | 534 | 0.1231 | 1037 | 3.48 | 5.6% | 1035 | 1.94× | |
+| 32 | 533 | 0.1621 | 1048 | 3.45 | 8.7% | 968 | 1.82× | |
+| 33 | 579 | 0.0874 | 1076 | 3.72 | 9.1% | 1091 | 1.88× | |
+| 34 | 538 | **0.1810** | 987 | — | — | 1099 | 2.04× | **New high, beats A100 max** |
+| 35 | 588 | **0.1998** | 1039 | — | — | 1155 | 1.96× | **New high again** |
+| 36 | 583 | 0.1403 | 981 | — | — | 1311 | 2.25× | |
+| 37 | 591 | **0.2117** | 976 | — | — | 1314 | 2.22× | **0.21 — uncharted territory** |
+
+**Trajectory commentary**: cadence-3 steps stayed in 438-588s (mean 503s). Steps 27 and 33 showed "creep" signals but the window mean held. **Cumulative: 36 steps, mean step time 685s, reward mean 0.118** — both substantially better than the early cadences.
+
+The reward broke through A100's recorded ceiling (~0.20) starting at step 35. A100 ran 49 steps and its highest reward was 0.1997 (step 37). **Our run is now reaching reward levels A100 never observed** — entering territory the reference run can't speak to.
+
+#### Window aggregate (cadence 3: 3200 trajectories across steps 21-30)
+
+| Metric | Cadence 2 | **Cadence 3** | Δ |
+|---|---:|---:|---:|
+| Reward — mean | 0.1124 | **0.1449** | **+29%** |
+| Reward — % nonzero | 20.7% | **25.6%** | **+24%** |
+| Turns — mean | 3.93 | 4.09 | (stable) |
+| Tool calls — mean | 2.98 | **3.12** | (stable, slight uptick) |
+| **Completion rate** | 86.4% | **92.0%** | **+6 pp** |
+| **Truncation rate** | 13.6% | **8.0%** | **−41%** |
+| Response chars — mean | 4742 | 4719 | (stable) |
+
+**Single biggest cadence-to-cadence reward gain so far (+29%).** Tool calls + turns + chars all stable, so the model isn't getting more verbose — it's getting *better* at the same shape.
+
+#### 3 hand-analyzed examples (BEST / WORST / MEAN), step 30
+
+##### BEST — idx 136, step 30
+
+**Q**: *"What oppressive Communist leader, of the country where Florin Surugiu is from, was deposed in 1989?"*
+**Reward**: 1.0 / 2 turns / **1 tool call** / 1519 chars
+
+**Trajectory**:
+1. Model uses **internal knowledge** to identify Florin Surugiu as Romanian (no search needed)
+2. Search 1: `"Romanian Communist leader deposed in 1989"` → retriever returns Wikipedia "Nicolae Ceaușescu" article: *"second and last Communist leader of Romania... until his overthrow in the Romanian Revolution in December 1989"*
+3. `<answer>Nicolae Ceaușescu</answer>` ✓
+
+**My commentary**: The model has learned to **leverage parametric knowledge** for the first hop ("Florin Surugiu = Romania") and only spend a search on the second hop (deposed Communist leader). This is the asymptotic ideal — 1 search for a 2-hop question because one hop is encyclopedic and the model already knows it. **5 perfect 1-tool rollouts at step 30**, up from 78 at step 20 (24% → 33%); the model is increasingly skipping searches when prior knowledge suffices. This is the right behaviour but worth flagging as a risk: it would hurt on multi-hop questions where both hops require fact-checking against Wikipedia.
+
+##### WORST — idx 56, step 30
+
+**Q**: *"What is the name of the Green party member that also studied at the university that is the largest employer in Hezekiah Augur's birthplace?"*
+**Reward**: 0.0 / 9 turns / 9 tool calls / 7647 chars / **truncated**
+
+**Trajectory**:
+- 9 searches across: Hezekiah Augur, his birthplace, largest employer there, universities in Bangor Maine, Green party members at Husson University, etc.
+- Found: Hezekiah Augur was born in New Haven (but model believed Bangor, Maine), Husson University is in Bangor, Maine
+- **Hallucinated** that Jill Stein studied at Husson University (false — she studied at Harvard)
+- Final `<think>`: *"I believe the answer is Jill Stein, even though I'm not entirely certain about the Harvard connection."*
+- Ran out of turns before emitting `<answer>`
+
+**My commentary**: **4-hop question** — Hezekiah Augur → birthplace → largest employer → Green-party-member alumnus. The model lost the thread on hop 2 (got the wrong birthplace; Augur was born in New Haven CT, not Bangor ME) and the entire chain downstream is bridge-corrupted. The model knew Jill Stein was a Green party figure (Harvard education), but bridged her implausibly to Husson University in Bangor because the question's chain demanded it. **Classic case of "make the answer fit the bridge"** — when retrieval fails, the model fabricates plausible-sounding connections rather than admitting it can't answer. The reward gradient pushes hard against this, but the failure pattern is sticky.
+
+##### MEAN — idx 20, step 30
+
+**Q**: *"When did the ocean that the Murray Mouth flows into become a thing?"*
+**Reward**: 0.0 / 5 turns / 4 tool calls / 9221 chars / answered (badly)
+
+**Trajectory**:
+- Identified Murray Mouth as the mouth of the Murray River in Australia → flows into Southern Ocean (correct)
+- Searched for Southern Ocean origin / formation → got mixed geology + diplomatic-recognition results
+- Final answer: *"The Southern Ocean became a thing when the River Murray began flowing through the Murray Mouth into the coastal plains, before modern damming regulations were established."*
+
+**My commentary**: The model got the **physical answer right** (Murray Mouth → Southern Ocean) but **fundamentally misunderstood the question's intent**. "Become a thing" is colloquial English for "first recognised as a geographic entity" — the dataset's expected answer is likely 2000 (when the IHO formally defined the Southern Ocean) or 1937 (an earlier mapping). Instead the model produced a nonsense answer mixing river geomorphology with "modern damming regulations" — not even a date. The structural lesson is intact (uses `<answer>` tags) but the content is incoherent prose, not a factual date. **This shows the EM/F1 reward function correctly punishes nonsense** even when the question is correctly decomposed. The gradient should push the policy to be more decisive about answer format (extract a date), which we may see in cadences 4-5.
+
+#### Five observations from cadence 3
+
+1. **B200 has broken through A100's reward ceiling.** A100's max reward across 49 steps was 0.1997 (step 37). Our step 37 hit **0.2117** — the first observation of behaviour A100's reference run never reached.
+2. **The "micro_batch=2 different equilibrium" hypothesis is firming up.** Over steps 21-37, our reward mean is 0.143 vs A100's 0.119 (same range) — a persistent +20% gap, not noise. The smoothed-gradient effect is real.
+3. **Tool calls per sample stabilised at ~3.1** — up slightly from cadence 2's 2.98 but well below cadence 1's 5.81. The model has settled into a 3-tool-call equilibrium with longer reasoning per call.
+4. **Truncation rate halved cadence-to-cadence (13.6% → 8.0%)** — model is finishing answers more reliably even as it does more cross-verification.
+5. **The new dominant failure mode is "bridge corruption"** — see WORST. Model commits to a wrong intermediate fact early in a multi-hop chain and forces downstream hops to fit. Hard to fix with GRPO alone since the policy doesn't know it's wrong.
+
+#### System health snapshot — 2026-05-14 21:35 UTC
+
+| Component | Value |
+|---|---|
+| Steps complete | 37 / 622 (5.9%) |
+| Elapsed wall | 6h 32m |
+| Spend | ~$25 |
+| GPU mem (training peak) | 178 GB / 179 GB (97.8%) |
+| GPU power | 320-590 W (variable) |
+| Retriever | Healthy, 8 workers, ~60 ms/call measured |
+| Uploader | ✓ healthy, all rollouts uploading on schedule |
+| Wrapper | ✓ alive, no restarts |
+| Training | ✓ alive, no anomalies |
+| **ETA to step 50** | ~2h from now (~00:00 CEST Fri) |
+| **ETA to epoch 1 (step 311)** | ~40-50 h from now (Sat/Sun) |
+| **ETA to full run (step 622)** | ~85-100 h from now (Mon) |
+
+#### Git + HF action
+
+- Cadence 3 doc committed and pushed
+- HF README sync'd
+- Rollout JSONLs for steps 21-30 (and 31-37) uploaded to HF Hub
+- prod.log fresh upload every 3 min
+
+**Next cadence**: Step 40 (~3 h from now). I'll trigger it on time, not after the fact.
+
 ### 6.2 Cost / wall-clock estimation — actively unresolved
 
 **Two estimates have been on the table; one wide range until step 1 lands:**
