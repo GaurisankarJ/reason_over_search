@@ -25,7 +25,7 @@ status: live
 | Git branch | `experiment_1_b200` (locally + remote) |
 | Started commit | `f0f960e` |
 | Launch time (UTC) | 2026-05-14T15:03:36Z |
-| W&B run | [`qwen3.5-0.8b-musique-m5_prod-seed42-20260514T1503Z`](https://wandb.ai/gaurisankarj1996-leiden-university/reason_over_search_b200/runs/h68uskz6) (run id `h68uskz6`) |
+| W&B run | [`qwen3.5-0.8b-musique-b200-a3-seed42-20260514T1503Z`](https://wandb.ai/gaurisankarj1996-leiden-university/reason_over_search_b200/runs/h68uskz6) (run id `h68uskz6`; renamed via API post-launch from the auto-generated `m5_prod` name) |
 | Process pids | wrapper 7942, training 7961, uploader 7919 |
 | Container | `m5_b200_a3` on host `46.243.145.4` |
 | Seed | 42 |
@@ -135,7 +135,7 @@ Following user spec (Q6 = every 25 steps): full analysis update + git commit + H
 | Training process | pid 7961, `python run_grpo.py --config m5_1_research_paper.yaml grpo.seed=42 ...` |
 | W&B project | `reason_over_search_b200` ✓ |
 | W&B run id | `h68uskz6` |
-| W&B run name (auto-set by run.sh) | `qwen3.5-0.8b-musique-m5_prod-seed42-20260514T1503Z` (overrides yaml's `b200-a3-seed42` — known cosmetic issue, distinguishable via project + timestamp) |
+| W&B run name | initially `qwen3.5-0.8b-musique-m5_prod-seed42-20260514T1503Z` (run.sh override); **renamed via wandb API to `qwen3.5-0.8b-musique-b200-a3-seed42-20260514T1503Z` shortly after launch** |
 | Training samples loaded | **311** ✓ (= floor(19,938 / 64), 1 epoch; max_num_steps=622 = 2 epochs) |
 | Compute cluster | Ray, 1 node, colocated mode |
 | Worker init mode | sequential (colocated; vLLM and DTensor share GPU via sleep/wake) |
@@ -151,6 +151,19 @@ Following user spec (Q6 = every 25 steps): full analysis update + git commit + H
 - vLLM async engine setup: should complete in ~5-8 min on first prod use (smoke used `VllmGenerationWorker`, prod uses `VllmAsyncGenerationWorker` — additional one-time venv build)
 - Total setup time on smoke was 182.7 s; prod will likely be 5-10 min total because the async worker venv builds + larger model context init
 - First step wall: paper-shape (320 traj × seq=8192 × micro=2) extrapolates from smoke step 3 (43 s at 20 traj × seq=4096) by ~15× → **~10-12 min estimated**. Real number lands within the hour.
+
+**Progress 2026-05-14T15:07 UTC** (~3.5 min post-launch):
+- vLLM async worker venv build complete (75 packages, 59.1 s)
+- vLLM async engine V1 initialized at max_seq_len=8192 ✓ (paper-faithful)
+- Qwen3.5-0.8B model loaded (1.72 GB, 1.09 s) ✓
+- FlashInfer attention backend selected ✓
+- Mamba+attention hybrid page alignment configured (HND KV layout)
+- Asynchronous scheduling enabled ✓ (the `async_engine: true` we set)
+- Architecture: `Qwen3_5ForConditionalGeneration` ✓
+- max_cudagraph_capture_size: 256 (larger than smoke's 51 — prod has more dynamic batching shapes; CUDA graph capture is in progress now)
+- No errors
+
+Next observable: CUDA graph capture completion → vLLM ready → DTensor v2 init (~35 s) → step 1 starts.
 
 ## 7. Spend tracker
 
