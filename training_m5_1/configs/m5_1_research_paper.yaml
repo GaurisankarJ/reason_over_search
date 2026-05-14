@@ -184,7 +184,7 @@ policy:
   # log_softmax (~7 GB) and the training activations peak. Effectively
   # the same memory pressure as smoke v6 (micro=2 × seq=4096). Compute
   # is unchanged — just more micro-batches per step.
-  train_micro_batch_size: 1
+  train_micro_batch_size: 2
   generation_batch_size: 32
   logprob_batch_size: ${policy.train_micro_batch_size}
   # [paper] verl max_prompt_length=8192. Matches Search-R1 production budget.
@@ -391,7 +391,7 @@ policy:
       # [memory] Same value as smoke (0.5). vLLM holds ~10% as resident
       # while "asleep"; at 0.5 that's ~4 GB. Combined with policy worker's
       # log_softmax peak at seq=8192 (~8 GB), leaves headroom on 1× A100.
-      gpu_memory_utilization: 0.5
+      gpu_memory_utilization: 0.7
       max_model_len: ${policy.max_total_sequence_length}
       enforce_eager: false
       use_deep_gemm: false
@@ -457,15 +457,15 @@ logger:
   swanlab_enabled: false
   monitor_gpus: true
   wandb:
-    project: "reason_over_search_m5_1"
-    name: "qwen3.5-0.8b-musique-m5_prod-seed42"
+    project: "reason_over_search_b200"
+    name: "qwen3.5-0.8b-musique-b200-a3-seed42"
   swanlab:
-    project: "reason_over_search_m5_1"
-    name: "qwen3.5-0.8b-musique-m5_prod-seed42"
+    project: "reason_over_search_b200"
+    name: "qwen3.5-0.8b-musique-b200-a3-seed42"
   tensorboard: {}
   mlflow:
-    experiment_name: "reason_over_search_m5_1"
-    run_name: "qwen3.5-0.8b-musique-m5_prod-seed42"
+    experiment_name: "reason_over_search_b200"
+    run_name: "qwen3.5-0.8b-musique-b200-a3-seed42"
     tracking_uri: "http://localhost:5000"
   gpu_monitoring:
     collection_interval: 10
