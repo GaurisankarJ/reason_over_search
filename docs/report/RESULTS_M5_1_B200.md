@@ -409,6 +409,130 @@ Common pattern: 3-4 turns, 2-3 search calls per question, ending in `<answer>...
 
 **Next cadence**: Step 20 (~3 h from now if step time holds at ~700-900s).
 
+---
+
+### Cadence 2 — Steps 11-20 (2026-05-14 ~19:17 UTC)
+
+**Step log update**:
+
+| Step | Wall (s) | Reward | Gen len | Tool calls | Trunc % | A100 ref (s) | B200/A100 | Notes |
+|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| 11 | 705.31 | 0.0646 | 1357 | 4.18 | 31.2% | 1163 | 1.65× | |
+| 12 | 523.09 | 0.0744 | 1153 | 3.18 | 22.5% | 942 | 1.80× | First sub-600s |
+| 13 | 491.12 | 0.1061 | 1096 | 3.07 | 17.5% | 881 | 1.79× | First reward >0.10 |
+| 14 | 446.80 | 0.1148 | 1020 | 2.91 | 10.9% | 730 | 1.63× | **Caught up to A100 on reward** |
+| 15 | 441.26 | 0.1349 | 1057 | 2.74 | 11.6% | 683 | 1.55× | **Exceeded A100 reward** |
+| 16 | 452.39 | 0.1225 | 1028 | 2.85 | 11.2% | 608 | 1.34× | |
+| 17 | 456.81 | 0.1125 | 1049 | 2.94 | 7.5% | 625 | 1.37× | |
+| 18 | 396.11 | **0.1458** | 940 | 2.61 | 8.8% | 628 | 1.59× | Fastest <400s |
+| 19 | 445.30 | 0.1334 | 1000 | 2.94 | 10.0% | 676 | 1.52× | |
+| 20 | 405.38 | 0.1154 | 969 | 2.63 | **4.4%** | 607 | 1.50× | Completion 95.6% |
+
+The cadence-2 step log captures the **single largest behavioural shift** in the run so far. Step times dropped from 705s → 405s (−43%); reward climbed from 0.065 → 0.115 with a 0.146 peak at step 18; tool calls collapsed from 4.2 → 2.6; truncation dropped from 31% to 4.4%. This is the **tool-collapse regime in full motion**.
+
+**Speedup vs A100 has shrunk** (1.65× → 1.50×) — not because B200 slowed down, but because A100 was also dropping fast in this window (1163s → 607s on its end). The absolute B200 advantage stays at ~300-400s/step.
+
+#### Window aggregate (3200 trajectories across 10 steps)
+
+| Metric | Cadence 1 (1-10) | **Cadence 2 (11-20)** | Δ |
+|---|---:|---:|---:|
+| Reward — mean | 0.0544 | **0.1124** | **+106%** |
+| Reward — std | 0.2043 | 0.2767 | (wider, more wins) |
+| Reward — % nonzero | 10.4% | **20.7%** | **+99%** |
+| Turns — mean / p50 / p95 | 6.41 / 7 / 9 | **3.93 / 3 / 8** | −38% |
+| Tool calls — mean / p50 / p95 | 5.81 / 7 / 9 | **2.98 / 2 / 7** | **−49%** |
+| **Completion rate** | 40.7% | **86.4%** | **+112%** |
+| **Truncation rate** | 59.3% | **13.6%** | **−77%** |
+| Response chars — mean | 6179 | 4742 | −23% |
+| Input length — mean | 6255 | 3816 | −39% |
+
+**Two metrics doubled, one halved, one collapsed.** Reward doubled, completion rate doubled, tool calls halved, truncation collapsed. This is what "the model learned the lesson" looks like in data.
+
+#### Per-step completion-rate trajectory (cadence 2)
+
+| Step | % with `</answer>` | Avg tools | Avg turns |
+|---:|---:|---:|---:|
+| 11 | 68.8% | 4.2 | 5.0 |
+| 12 | 77.5% | 3.2 | 4.1 |
+| 13 | 82.5% | 3.1 | 4.0 |
+| 14 | 89.1% | 2.9 | 3.8 |
+| 15 | 88.4% | 2.7 | 3.7 |
+| 16 | 88.8% | 2.9 | 3.8 |
+| 17 | 92.5% | 2.9 | 3.8 |
+| 18 | 91.2% | 2.6 | 3.6 |
+| 19 | 90.0% | 2.9 | 3.8 |
+| **20** | **95.6%** | **2.6** | **3.6** |
+
+**Step 20: 95.6% completion rate.** Almost every rollout now emits a valid `<answer>` tag. The structural lesson is essentially solved.
+
+#### 3 hand-analyzed examples (BEST / WORST / MEAN), step 20
+
+##### BEST — idx 144, step 20
+
+**Q**: *"What is the record label of the performer who released Graceland?"*
+**Reward**: 1.0 / 2 turns / **1 tool call** / 744 chars
+
+**Trajectory**:
+1. Search 1: `"Graceland record label information"` → retriever returns Wikipedia "Graceland (album)" article → text contains "released on August 25, 1986, by Warner Bros. Records"
+2. `<answer>Warner Bros.</answer>` ✓
+
+**My commentary**: This is even tighter than cadence 1's BEST (3 turns / 2 tools). The model identified that the question's 2-hop ("performer who released Graceland" → "their label") could be resolved with a single well-chosen search because Wikipedia's album page mentions the label directly. **One search, one answer.** This is the asymptotic ideal — minimum tool calls, minimum tokens, correct answer. By cadence 2 this pattern is common (78 single-tool perfect rollouts in step 20 — 24% of all rollouts).
+
+##### WORST — idx 230, step 20
+
+**Q**: *"Who founded Arthur Fear's alma mater?"*
+**Reward**: 0.0 / 9 turns / 9 tool calls / 5638 chars / **truncated**
+
+**Trajectory**:
+1-9. Repeated searches for "Arthur Fear" → retriever returned mixed entities (Arthur Fear 1990 film, Arthur M. Banta, Arthur Adamson, etc.). The model hallucinated details from these mismatched results: "Arthur Fear studied at University at Buffalo, Oklahoma and later transferred to San Francisco State University" — none of which appears in the retrievals.
+10. Final search "Adamson College Edinburgh" → got "John Adamson (university principal)" article about the principal of University of Edinburgh in 1623 — no help on Arthur Fear or his alma mater.
+11. Truncated at max_turns without emitting `<answer>`.
+
+**My commentary**: **Entity disambiguation failure at retrieval level + hallucination at synthesis level.** Arthur Fear is genuinely obscure (likely no single dominant Wikipedia article), so the retriever returned semantically-adjacent but factually-irrelevant matches. The model didn't recognise the mismatch and instead hallucinated coherent-sounding facts to bridge the gap. The hallucination is particularly visible in the `<think>` blocks — confident statements about Arthur Fear's biography that don't appear in any retrieval. This failure mode is **inherent to RAG on a fixed corpus**: if Wikipedia doesn't have the entity, no amount of retraining the policy will fix it. The reward signal correctly says 0 here, but the gradient won't actually teach the model to "give up gracefully" because giving up is also reward 0.
+
+##### MEAN — idx 10, step 20
+
+**Q**: *"When did Danny Welch's employer start issuing degrees in engineering?"*
+**Reward**: 0.0 / 5 turns / 4 tool calls / 6650 chars / answered (but wrong)
+
+**Trajectory**:
+1. Search 1: `"Danny Welch"` → retriever returned **Danny Kirwan** (Fleetwood Mac guitarist), not the correct Danny Welch
+2-4. Three follow-up searches that all drifted further into Fleetwood Mac biographical detail
+5. Final `<think>` block hallucinates wildly: claims "his employer likely began issuing engineering degrees around 1968-1970" based on a fabricated chain ("collaborated with Fleetwood Mac guitar, singer, and songwriter (which at that time included the Düsseldorf, Cologne, and Hamburg composers who were instrumental in developing formal educational structures in the medical field)")
+6. `<answer>1968-1970</answer>` — **hallucinated number based on Danny Kirwan facts, not Danny Welch**
+
+**My commentary**: Classic **wrong-entity retrieval + downstream hallucination**. The model never noticed it was looking at Danny Kirwan, not Danny Welch. Once it had Kirwan's Wikipedia article, it generated a plausible-sounding answer by chaining unrelated facts (Fleetwood Mac → European composers → medical degrees → engineering degrees → 1968-1970). The structural behaviour is correct (5 turns, 4 tools, emits `<answer>`), but the content is fabricated. This is the **new dominant failure mode** at this stage — the model is structurally trained but is generating confident wrong answers from misaligned retrievals. Improving this requires either (a) a better retriever for entity disambiguation, or (b) longer training so the policy learns to detect-and-redo when retrieval returns the wrong entity.
+
+#### Three observations from cadence 2
+
+1. **The structural lesson is solved.** Completion rate at 95.6% by step 20 means the model almost always emits `<answer>` tags. Truncation rate is in single digits. The remaining failure mass is content (correct answer), not format.
+2. **The new dominant failure mode is hallucination from misaligned retrievals.** Both WORST (Arthur Fear) and MEAN (Danny Welch) show the same pattern: retriever returns the wrong entity (or no good entity), and the model fabricates confident details to bridge the gap. This is a known limit of RAG that GRPO alone cannot easily fix. The eval will tell us how much this caps final reward.
+3. **The reward "sweet spot" of 2-3 tool calls solidified.** Cadence 1 showed it as a hypothesis; cadence 2 confirms it (mean tool calls 2.98, median 2). The model has internalised that more searches usually means it's confused, not that it's being thorough.
+
+#### System health snapshot — 2026-05-14 19:17 UTC
+
+| Component | Value |
+|---|---|
+| Steps complete | 21 / 622 (3.4%) |
+| Elapsed wall | 4h 14m |
+| Spend | ~$16.20 |
+| GPU mem (current) | 158 GB / 179 GB |
+| GPU power | 320-515 W (variable by phase) |
+| Retriever | Healthy, 8/8 workers available, ~60 ms/call measured |
+| Uploader (pid 16526) | ✓ healthy, last upload step 20 jsonl at ~19:08 UTC |
+| Wrapper (pid 7942) | ✓ alive, no restarts |
+| Training (pid 7961) | ✓ alive |
+| ETA to step 50 | ~01:00-01:30 CEST Friday (2026-05-15) |
+
+#### Git + HF action
+
+- Cadence 2 doc committed and pushed
+- HF README sync'd
+- Rollout JSONLs for steps 11-20 uploaded to HF Hub
+- prod.log fresh upload every 3 min
+
+**Next cadence**: Step 30 (~3 h from now at recent ~450s/step pace).
+
 ### 6.2 Cost / wall-clock estimation — actively unresolved
 
 **Two estimates have been on the table; one wide range until step 1 lands:**
