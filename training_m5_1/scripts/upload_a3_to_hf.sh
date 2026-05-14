@@ -55,11 +55,13 @@ mark_uploaded() {
 }
 
 # Python helper for HF upload using huggingface_hub API.
-# Uses conda 'retriever' env (has hf cli + huggingface_hub installed by bootstrap).
+# Uses miniforge3 base python (hf_hub installed by bootstrap on first prod launch).
+# Fallback to nemo venv if base is missing it.
+HF_PY="${HF_PY:-/opt/miniforge3/bin/python}"
 hf_upload_folder() {
   local local_path="$1"
   local repo_path="$2"
-  /opt/miniforge3/envs/retriever/bin/python - <<EOF 2>&1 | tail -10
+  "$HF_PY" - <<EOF 2>&1 | tail -10
 from huggingface_hub import HfApi
 import os, sys
 api = HfApi(token="$HF_TOKEN")
@@ -81,7 +83,7 @@ EOF
 hf_upload_file() {
   local local_path="$1"
   local repo_path="$2"
-  /opt/miniforge3/envs/retriever/bin/python - <<EOF 2>&1 | tail -5
+  "$HF_PY" - <<EOF 2>&1 | tail -5
 from huggingface_hub import HfApi
 import os, sys
 api = HfApi(token="$HF_TOKEN")
@@ -130,27 +132,29 @@ while true; do
     last_size_file="${STATE_FILE}.log_size"
     last_size=$(cat "$last_size_file" 2>/dev/null || echo 0)
     if [[ "$log_size" != "$last_size" ]] && [[ "$log_size" -gt 0 ]]; then
-      if result=$(hf_upload_file "$PROD_LOG" "logs/prod.log"); then
-        if echo "$result" | grep -q "^OK"; then
-          echo "$log_size" > "$last_size_file"
-          log "  ✓ prod.log uploaded (${log_size} bytes)"
-        fi
+      result=$(hf_upload_file "$PROD_LOG" "logs/prod.log")
+      if echo "$result" | grep -q "^OK"; then
+        echo "$log_size" > "$last_size_file"
+        log "  ✓ prod.log uploaded (${log_size} bytes)"
+      else
+        log "  ✗ prod.log upload FAILED: $result"
       fi
     fi
   fi
 
   # 3. Upload any new per-step rollout JSONLs in logs/exp_*/
   if [[ -d "$ROLLOUT_DIR" ]]; then
-    for jsonl in "$ROLLOUT_DIR"/exp_*/train_data_step_*.jsonl; do
+    for jsonl in "$ROLLOUT_DIR"/exp_*/train_data_step*.jsonl; do
       [[ -f "$jsonl" ]] || continue
       relpath="${jsonl#$ROLLOUT_DIR/}"
       key="rollout:$relpath"
       if is_uploaded "$key"; then continue; fi
-      if result=$(hf_upload_file "$jsonl" "logs/train_data/$relpath"); then
-        if echo "$result" | grep -q "^OK"; then
-          mark_uploaded "$key"
-          log "  ✓ $relpath uploaded"
-        fi
+      result=$(hf_upload_file "$jsonl" "logs/train_data/$relpath")
+      if echo "$result" | grep -q "^OK"; then
+        mark_uploaded "$key"
+        log "  ✓ $relpath uploaded"
+      else
+        log "  ✗ $relpath upload FAILED: $result"
       fi
     done
   fi
@@ -162,11 +166,12 @@ while true; do
     t_last_file="${STATE_FILE}.timings_size"
     t_last=$(cat "$t_last_file" 2>/dev/null || echo 0)
     if [[ "$t_size" != "$t_last" ]] && [[ "$t_size" -gt 0 ]]; then
-      if result=$(hf_upload_file "$TIMINGS_FILE" "timings.csv"); then
-        if echo "$result" | grep -q "^OK"; then
-          echo "$t_size" > "$t_last_file"
-          log "  ✓ timings.csv uploaded"
-        fi
+      result=$(hf_upload_file "$TIMINGS_FILE" "timings.csv")
+      if echo "$result" | grep -q "^OK"; then
+        echo "$t_size" > "$t_last_file"
+        log "  ✓ timings.csv uploaded"
+      else
+        log "  ✗ timings.csv upload FAILED: $result"
       fi
     fi
   fi
