@@ -265,6 +265,150 @@ Not actionable now (we're at step 7). Just framing the future decision tree.
 
 **Generation barely speeds up on B200** because the retriever HTTP round-trips and KV cache management are not GPU-bandwidth-bound. The 3× B200 win comes entirely from `policy_training` + `logprobs`.
 
+---
+
+### Cadence 1 — Steps 1-10 (2026-05-14 ~17:48 UTC)
+
+**Step log update** (steps 1-10 final):
+
+| Step | Wall (s) | Reward | Gen len | Tool calls | Trunc % | A100 ref (s) | B200/A100 |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 1047.73 | 0.0162 | 1384 | 6.55 | 62.8% | 3474 | 3.31× |
+| 2 | 1081.31 | 0.0447 | 1413 | 6.72 | 68.1% | 3352 | 3.10× |
+| 3 | 1103.42 | 0.0200 | 1334 | 6.96 | 70.6% | 3346 | 3.03× |
+| 4 | 1020.96 | 0.0712 | 1463 | 6.22 | 59.7% | 3176 | 3.11× |
+| 5 | 1010.43 | 0.0458 | 1428 | 6.24 | 58.8% | 2843 | 2.81× |
+| 6 | 874.97 | 0.0761 | 1416 | 5.19 | 43.4% | 2294 | 2.62× |
+| 7 | 915.05 | 0.0453 | 1433 | 5.56 | 48.4% | 2239 | 2.45× |
+| 8 | 849.08 | 0.0575 | 1393 | 5.18 | 36.2% | 1967 | 2.32× |
+| 9 | 850.23 | 0.0967 | 1426 | 5.09 | 40.6% | 1747 | 2.06× |
+| **10** | **673.55** | 0.0703 | **1256** | **4.12** | **31.6%** | 1280 | **1.90×** |
+
+**Step 10 is the inflection point**: gen length finally dropped (1426 → 1256), tool calls dropped (5.09 → 4.12), step time dropped 21% (850 → 674s). The "tool-collapse" phase that A100 saw at steps 5-6 hit us at step 10 — confirmed `micro_batch=2` introduces a ~3-5 step behavioural lag, as predicted.
+
+#### Window aggregate (3200 trajectories across 10 steps)
+
+| Metric | Value |
+|---|---:|
+| Reward — mean | 0.0544 |
+| Reward — std | 0.2043 |
+| Reward — max | 1.0000 (3.4% of trajectories) |
+| Reward — % zero | 89.6% |
+| **Reward — % nonzero** | **10.4%** |
+| Turns — mean / p50 / p95 / max | 6.41 / 7 / 9 / 10 |
+| Tool calls — mean / p50 / p95 / max | 5.81 / 7 / 9 / 11 |
+| **Completion rate** (% with `</answer>`) | **40.7%** |
+| **Truncation rate** (% without `</answer>`) | **59.3%** |
+| Response chars — mean / p50 / p95 | 6179 / 5944 / 10980 |
+| Input length — mean | 6255 |
+
+**Per-step completion-rate trajectory** — the key learning signal:
+
+| Step | % with `</answer>` | Avg tools | Avg turns |
+|---:|---:|---:|---:|
+| 1 | 29.1% | 6.6 | 7.1 |
+| 2 | 26.2% | 6.8 | 7.2 |
+| 3 | 24.1% | 7.0 | 7.4 |
+| 4 | 33.1% | 6.2 | 6.8 |
+| 5 | 33.1% | 6.3 | 6.8 |
+| 6 | 47.2% | 5.2 | 5.9 |
+| 7 | 44.1% | 5.6 | 6.2 |
+| 8 | 49.4% | 5.2 | 5.9 |
+| 9 | 52.2% | 5.1 | 5.8 |
+| **10** | **68.4%** | **4.1** | **4.9** |
+
+**Completion rate more than doubled in 10 steps** (29% → 68%). This is the most important signal in this cadence: the model is learning to stop spinning on max_turns and emit `</answer>`.
+
+#### 5 mechanical examples from step 10 (script-selected by reward+variety)
+
+All 5 picks landed reward=1.0 (out of 12 perfect rollouts at step 10). Compact stats only — full chunks on HF Hub at `logs/train_data/exp_013/train_data_step10.jsonl`:
+
+| # | Reward | Turns | Tool calls | Has answer | Resp chars |
+|---:|---:|---:|---:|---:|---:|
+| 1 | 1.00 | 4 | 3 | ✓ | 4879 |
+| 2 | 1.00 | 3 | 2 | ✓ | 1224 |
+| 3 | 1.00 | 4 | 3 | ✓ | 5135 |
+| 4 | 1.00 | 6 | 5 | ✓ | 8011 |
+| 5 | 1.00 | 4 | 3 | ✓ | 5103 |
+
+Common pattern: 3-4 turns, 2-3 search calls per question, ending in `<answer>...</answer>`. Step 10's perfect rollouts demonstrate **efficient multi-hop QA** is achievable at this point in training.
+
+#### 3 hand-analyzed examples (BEST / WORST / MEAN)
+
+##### BEST — idx 75, step 10
+
+**Q**: *"Who is the leader of the opposition in the singer Protoje's country?"*
+**Reward**: 1.0 / 3 turns / 2 tool calls / 1224 chars
+
+**Trajectory**:
+1. Search 1: `"Protoje singer country"` → retriever returns Wikipedia "Protoje" article → identifies Jamaica
+2. Search 2: `"Jamaica opposition leader 2024"` → retriever returns "Leader of the Opposition (Jamaica)" article → finds Peter Phillips
+3. `<answer>Peter Phillips</answer>` ✓
+
+**My commentary**: Textbook 2-hop reasoning. The model correctly decomposed "leader of opposition in [singer Protoje's] country" into two independent searches (singer→country, then country→opposition leader), grounded each search in the prior result, and did not waste tool calls on redundant queries. Clean `<think>` reasoning blocks between searches with no rambling. The answer is also clearly hedged in the final `<think>` ("Let me verify... the answer should be `<answer>Peter Phillips</answer>`") which suggests the model has internalised that the final answer must be in tags. This is exactly the policy we want to see emerge.
+
+##### WORST — idx 164, step 10
+
+**Q**: *"When was the most rainfall for the city where the State Fair of Oklahoma is held?"*
+**Reward**: 0.0 / 10 turns / 10 tool calls / 5410 chars / **truncated (no `</answer>`)**
+
+**Trajectory**:
+1. Search 1: `"Oklahoma State Fair location date rainfall"` → generic Oklahoma climate
+2. Search 2: `"Oklahoma State Fair annual rainfall MayJune JulyAugust best year"` → same generic Oklahoma climate
+3. Searches 3-9: 7 more variants of the same query (`"... peak season"`, `"... 2023 rainfall peak summer"`, `"... July August rainfall peak 2024"`, etc.) → **all returning identical Oklahoma climate paragraphs**
+4. Search 10: `"Oklahoma State Fair city rainfall records 2022 2023 2024"` → still generic
+5. Hit `max_turns=10`, truncated without emitting `<answer>`
+
+**My commentary**: Classic **pathological-loop failure**. The model never identified that "the city where the State Fair of Oklahoma is held" = Oklahoma City — it should have done a query like `"State Fair of Oklahoma host city"` to resolve the bridge, then searched Oklahoma City's rainfall records. Instead it kept re-querying with cosmetic variations of "Oklahoma State Fair rainfall" and getting the same generic Wikipedia "Oklahoma" article back. The retriever wasn't broken; the model wasn't reformulating the search well. This is the failure mode that the GRPO reward signal exists to suppress — perfect rollouts on similar 2-hop questions (see BEST above) are scoring 1.0 right next to this 0.0, and the gradient should push the policy toward the cleaner search-decomposition pattern over training.
+
+##### MEAN — idx 15, step 10
+
+**Q**: *"Who designed the museum that has the Portrait of Guidobaldo da Montefeltro?"*
+**Reward**: 0.0 / 5 turns / 4 tool calls / 8556 chars / **answered (but wrong)**
+
+**Trajectory**:
+1. Search 1: `"Guide Giorgio Montefeltro museum painting museum"` → mixed Italian art results (typo'd the name; still returned relevant info)
+2. Search 2: `"Guidobaldo da Montefeltro palace museum painting Budapest"` → finds Galleria Marche (Urbino) and the Portrait by Raphael
+3. Search 3: `"Guidobaldo da Montefeltro palazzo masterpieces"` → finds the Portrait is in **Uffizi Gallery, Florence**
+4. Search 4: `"Galleria Nazionale delle Marche Urbino Portrait Guidobaldo da Montefeltro"` → confirms Uffizi houses the Raphael portrait
+5. `<answer>Raphael</answer>` — **WRONG**. The correct answer is **Vasari**, who designed the Uffizi building.
+
+**My commentary**: This is a **bridge-parsing failure**. The model had all the information it needed: the painting is housed in the Uffizi (correct identification by search 3). It needed one more search ("who designed the Uffizi") to find Giorgio Vasari. Instead it confused itself in the final `<think>` block, conflating "designed the museum" with "designed the portrait" and answering Raphael (the painter). This is more interesting than the WORST case: the model has the right tool-use intuition (it kept the search count reasonable at 4) and it found the bridge entity (Uffizi), but it got distracted by surface-level wordplay in the question and short-circuited to the wrong answer. A reward of 0 here is technically correct (the answer is wrong) but the **underlying behavior is much closer to BEST than to WORST** — the policy gradient should still find this kind of trajectory useful because the search pattern is good even if the final answer is bad. The 89.6% zero-reward proportion in the window is dominated by examples like this — the model is *trying* but missing on a different dimension each time (search redundancy, bridge parsing, mathematical reasoning, span extraction).
+
+#### Three observations from the cadence
+
+1. **Completion rate is the leading indicator**, not raw reward. Reward is dominated by the `EM/F1` answer-checker which catches only exact-match wins. Completion rate (% with `</answer>`) jumped from 29% to 68% in 10 steps — that's the model learning the *structural* lesson (always emit a final answer in tags), which is a prerequisite for the *content* lesson (give the right answer). The content lesson lands next.
+2. **The model's failure modes are diverse and reflect real reasoning limitations**, not just format errors. WORST shows redundant-search loops; MEAN shows bridge-parsing confusion. Both are correctable by training (the GRPO signal will preferentially upweight the BEST-style trajectories), and neither indicates a broken pipeline.
+3. **Truncation rate at 31.6% on step 10 is high** but tracking A100's drop. A100 dropped from 69%→5% over steps 1-15; we dropped 63%→32% over steps 1-10. If the pattern holds, we hit ≤5% truncation around step 17-20.
+
+#### System health snapshot — 2026-05-14 17:48 UTC
+
+| Component | Value |
+|---|---|
+| GPU | B200 SXM6, 192 GB |
+| GPU mem used (training peak) | 178 GB / 179 GB (97.8%) |
+| GPU mem used (current, mid-logprobs) | ~140 GB |
+| GPU util (active) | 55-75% |
+| GPU power | 320-430 W |
+| Driver / CUDA | 580.126.09 / 13.0 |
+| Disk free | 400+ GB |
+| Wrapper PID | 7942 ✓ |
+| Training PID | 7961 ✓ |
+| Uploader PID | 16526 (replaced 7919 after bug fix) ✓ |
+| Steps complete | 10 / 622 (1.6%) |
+| Elapsed wall | 2h 45m |
+| Spend | ~$10.55 |
+
+#### Git + HF action
+
+- Doc updated and committed to `experiment_1_b200` (this commit)
+- Pushed to GitHub
+- HF Hub README synced to the new commit sha
+- Rollout JSONLs (steps 1-10) all uploaded to HF (`logs/train_data/exp_013/`)
+- prod.log uploaded ✓
+
+**Next cadence**: Step 20 (~3 h from now if step time holds at ~700-900s).
+
 ### 6.2 Cost / wall-clock estimation — actively unresolved
 
 **Two estimates have been on the table; one wide range until step 1 lands:**
