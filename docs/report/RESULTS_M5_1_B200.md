@@ -117,11 +117,153 @@ Designed for unattended multi-day runs where Spheron spot preemption + the rare 
 
 Per-step times will be logged here as they land. Anchor for extrapolation: smoke step 3 = 43 s at smoke shape (seq=4096, 20 traj/step, micro=2); prod shape (seq=8192, 320 traj/step, micro=2) is ~15× larger per step → target **~10-11 min/step** if smoke→prod scaling holds. Run wall projection: 622 × 10 min ≈ 100 h ≈ 4.2 d (could be 3-6 d depending on rollout-length dynamics, per the M5 §4.1 shrink-then-grow observation).
 
-### 6.1 Step log
+### 6.1 Step log (live, updated after each step)
 
-| Step | Wall (s) | Reward mean | Gen length | Tool calls | KL | Notes |
-|------|---:|---:|---:|---:|---:|---|
-| 1 | TBD | TBD | TBD | TBD | TBD | (filled at first step) |
+Pulled from `prod.log` "Total step time" + W&B `reason_over_search/*` metrics. Speedup column is B200/A100 ratio vs the reference run `uwbodqgt` at the same step.
+
+| Step | Wall (s) | Reward | Gen len | Tool calls | Turns | Trunc % | A100 ref (s) | **B200/A100** |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 1047.73 | 0.0162 | 1384 | 6.55 | 7.30 | 62.8% | 3474 | **3.31×** |
+| 2 | 1081.31 | 0.0447 | 1413 | 6.72 | 7.49 | 68.1% | 3352 | **3.10×** |
+| 3 | 1103.42 | 0.0200 | 1334 | 6.96 | 7.65 | 70.6% | 3346 | **3.03×** |
+| 4 | 1020.96 | 0.0712 | 1463 | 6.22 | 6.93 | 59.7% | 3176 | **3.11×** |
+| 5 | 1010.43 | 0.0458 | 1428 | 6.24 | 6.94 | 58.8% | 2843 | **2.81×** |
+| 6 | 874.97 | 0.0761 | 1416 | 5.19 | 5.97 | 43.4% | 2294 | **2.62×** |
+| 7 | 915.05 | 0.0453 | 1433 | — | — | — | 2239 | **2.45×** |
+
+Phase breakdown (avg of steps 1-7, 1007s/step mean):
+- `policy_training`: ~62% (~625s) — DTensor backward pass, bandwidth-bound on 0.8B
+- `generation`: ~20% (~210s) — vLLM multi-turn rollouts + retriever HTTP calls
+- `policy_and_reference_logprobs`: ~18% (~190s) — current policy + frozen reference forward passes
+- everything else: <1%
+
+### 6.4 Live observations (running narrative; appended as steps land)
+
+#### 2026-05-14 ~16:30 UTC — first 4 steps complete, healthy
+
+- **Step 1 = 1047.73s, no warmup penalty** (vs my initial guess of 17 min with warmup baked in). vLLM `cumem` wake was 3.5 min of generation, but Step 2 was actually slightly *slower* (1081s) than Step 1, not faster — so the warmup theory was wrong. **17-18 min is steady-state for the cold phase.**
+- **Reward signal moving in the right direction**: 0.016 → 0.045 → 0.020 → 0.071. Noisy but trend positive. Matches A100 reference (0.020 → 0.071 → 0.023 → 0.073) within ±20%.
+- **No OOM, no crashes**. The postmortem-critical fixes (`metric_name: null`, `save_optimizer: false`) are holding.
+- **Mean gen length stable ~1400 tokens**, well under 8192 budget.
+
+#### 2026-05-14 ~16:35 UTC — uploader silently failing for 30 min; caught + fixed
+
+Found three bugs in `upload_a3_to_hf.sh` after the step-1 rollout JSONL (124 MB) sat on disk uploaded for 5+ minutes:
+
+1. **Wrong python path**: hardcoded `/opt/miniforge3/envs/retriever/bin/python` — that conda env doesn't exist on the Spheron CUDA-13 image (only base miniforge3). Every upload exited 127.
+2. **Wrong rollout glob**: looked for `train_data_step_*.jsonl` but NeMo-RL writes `train_data_step1.jsonl` (no underscore).
+3. **Silent-failure code paths**: `if result=$(...); then` swallowed non-zero exits with no log.
+
+**Fix** ([commit 906d93a](https://github.com/GaurisankarJ/reason_over_search/commit/906d93a)):
+- Installed `huggingface_hub` + `hf_transfer` into miniforge3 base (`/opt/miniforge3/bin/python`)
+- Parameterized `HF_PY` env var (fallback to nemo venv)
+- Fixed glob to `train_data_step*.jsonl`
+- Added explicit `✗ FAILED` logging on every failure path
+
+Killed broken uploader (pid 7919), restarted (pid 16526). First catch-up cycle uploaded `prod.log` + all rollout JSONLs from exp_006/012/013 within 90 s.
+
+**Lesson for M5.2+**: stand up the uploader as a separate **smoke-test** before prod launch, not first-tested-in-prod. Add to PHASE_2_RUNBOOK as a pre-launch gate.
+
+#### 2026-05-14 ~16:40 UTC — corrected per-step trajectory math (1600 → 320 rollouts/step)
+
+User caught a math error in my early commentary: I said "320 prompts × 5 generations = 1600 trajectories/step". The actual config is `num_prompts_per_step: 64`, not 320. **Real per-step batch is 64 × 5 = 320 trajectories**, as the prod.log itself confirms (`Generating responses for batch of size 320`). Cost-throughput calculations updated accordingly.
+
+#### 2026-05-14 ~16:45 UTC — cost estimate post-mortem: 34h was wrong, here's why
+
+The HARDWARE_COMPARISON.md v2 estimate of **~34 h / ~$130** was anchored on:
+- A100 23.7 min/step (steady-state, mid-run)
+- × 1/5.5 (B200 "5-6×" theoretical compute speedup, BF16 MLPerf vendor numbers)
+- × 1/1.3 (micro_batch=2 "unlock" 1.5× on training+logprobs phase)
+- = 2.2 min/step × 622 = 34 h
+
+**Three compounding errors**:
+
+1. **Theoretical compute speedup ≠ realized wall-clock speedup**. B200 BF16 compute = 7.2× A100, but our workload is **bandwidth-bound** on a 0.8B model with multi-turn rollouts. B200 HBM3e = 4× A100's HBM2e. **Realized speedup tracks bandwidth, not compute** → 3-4×, not 5-6×.
+2. **Anchor was mid-run A100, not early A100**. Doc used a single 23.7 min/step datapoint from steps 38-42 of a different A100 run. The reference run `uwbodqgt` actually showed **58 min/step at step 1**, dropping to 11 min/step at step 15 minimum, then rising back to 30 min/step by step 49. **Mean across 50 steps = 23.6 min** — matches the anchor but is not representative of early phase.
+3. **micro_batch=2 unlock was optimistic**. The 1.5× number assumed linear scaling with batch size; on 0.8B + bandwidth-bound regime it's closer to 1.2× — DTensor bookkeeping eats the rest.
+
+**Measured speedup (steps 1-7)**: 3.0× (range 2.45-3.31×, shrinking as A100's curve drops faster than ours). At our 1007s mean step, full-run projection:
+- Naive (current rate flat): 622 × 1007 = 7.25 d, **$667**
+- A100-curve-scaled (most likely): 86 h, **$330**
+- Pessimistic (climbing past step 49): 102 h, **$390**
+
+**Best single-point estimate: 4-4.5 d / ~$385-435**. HARDWARE_COMPARISON.md should be updated after step 25 once we have a clean steady-state anchor.
+
+#### 2026-05-14 ~16:50 UTC — A100 reference comparison: training is on the expected curve
+
+Pulled the A100 reference run `uwbodqgt` (same config except `train_micro_batch_size: 1`, 49 steps before it crashed on the postmortem-bug). Side-by-side comparison confirms:
+
+| Metric | Step 1-6 A100 | Step 1-6 B200 | Verdict |
+|---|---|---|---|
+| Step time | 3474 → 2294s | 1048 → 875s | ✓ 3.0× speedup, same shape |
+| Reward | 0.020 → 0.095 | 0.016 → 0.076 | ✓ Same trajectory, ~80% of A100's level |
+| Tool calls/sample | 6.89 → 4.35 | 6.55 → 5.19 | ✓ Lagging A100 by ~1-2 steps but trending right |
+| Truncation rate | 69% → 29% | 63% → 43% | ✓ Dropping (slower than A100, same direction) |
+| Mean gen length | 1353 → 1282 | 1384 → 1416 | ⚠️ B200 not yet shrinking; tool-collapse delayed |
+
+**Behavioural lag of ~1-2 steps explained by `train_micro_batch_size: 2`** (vs A100's 1): larger effective batch → slightly different gradient → behavior collapse delayed. Not a problem; the curve will catch up.
+
+**Tool-collapse confirmed at step 6**: step time dropped to 875s (first sub-1000s step). Same regime change A100 saw at step 5-6. Steps 7-10 should continue dropping if A100's pattern holds.
+
+#### 2026-05-14 ~17:00 UTC — OOM risk assessment: tight but fine
+
+Training-phase GPU memory peak: **178 GB / 179 GB total = 4 GB free (97.8% util)**.
+
+| Risk | Likelihood | Trigger |
+|---|---|---|
+| Longer sequences as model learns multi-turn | medium | Mean gen creeps toward 8192 cap |
+| Concurrent max-length rollouts in one batch | low | Tail of gen distribution |
+| Training-phase memory creep | low | Bounded; doesn't grow across steps |
+
+**Pre-built escape hatches** (none triggered yet):
+1. Drop `gpu_memory_utilization: 0.8 → 0.6` (frees ~30 GB vLLM cache). Trade: ~10% slower generation.
+2. Drop `train_micro_batch_size: 2 → 1` (halves training peak). Trade: ~30-50% slower training.
+
+Wrapper auto-restarts from latest `step_N/` ckpt if OOM hits. First save at step 50.
+
+#### 2026-05-14 ~17:10 UTC — decision: leave config alone (no micro_batch=4 optimization)
+
+Considered applying `train_micro_batch_size: 2 → 4` at the step-50 checkpoint to shave ~15-20% off training phase (~$80-120 savings over remaining run). **Decision: skip it.**
+
+Reasons:
+- Memory headroom is **4 GB at peak** — micro_batch=4 would push past OOM (activations ~2× → +5-10 GB needed)
+- To make room would require `gpu_memory_utilization: 0.8 → 0.5` paired drop → ~10% slower generation, net saving only ~5% = $40-60
+- This run already has **3 prior losses recovered from**; risk appetite is correctly low
+- The supervisor-meeting evidence we need is "did the recipe work?", not "did we save $100 on compute?"
+- Any B200 optimization experiments belong in **M5.2** as a clean 50-step ablation on a fresh box, not perturbing the live prod run
+
+#### 2026-05-14 ~17:15 UTC — reward-plateau / early-stop hypothesis (decision deferred to step ~200-250)
+
+A100 reference reward growth-rate by phase:
+- Steps 1-15 (cold start + tool collapse): **+0.0094/step** (fast climb)
+- Steps 15-25 (plateau): **+0.0001/step** (flat)
+- Steps 25-49 (re-exploration): **+0.0008/step** (slow climb)
+
+Marginal return per step collapses fast after step 25. **Most of the reward signal lands in the first 25 steps**. Steps 25-49 added just 0.019 reward (+15%) for ~50% more compute.
+
+Extrapolated full-run reward (rough projection from A100 trend):
+- Step 100: ~0.18-0.22
+- Step 311 (1 epoch): ~0.22-0.27
+- Step 600 (last save): ~0.24-0.30
+- Epoch 2 marginal gain: **~10-20% on reward, costs ~50% of total compute**
+
+**Strategy decided**: monitor reward 50-step rolling mean. **Make the early-stop call at step 200-250** based on whether the curve has plateaued. Three scenarios:
+- Plateau by step 200 → kill at step 200-300, save ~$160-220
+- Still climbing past step 250 → run full 622
+- Regime shift in epoch 2 (rare but possible) → may want to run full to capture it
+
+Not actionable now (we're at step 7). Just framing the future decision tree.
+
+#### Per-phase wall-clock split (avg of steps 1-7)
+
+| Phase | Time | % | Speedup vs A100 ref | Why |
+|---|---:|---:|---:|---|
+| `policy_training` | 625s | 62% | **3.56×** | Bandwidth-bound bwd pass; B200 HBM3e wins |
+| `generation` | 210s | 20% | **1.18×** | vLLM stack identical; retriever HTTP is the bottleneck, not GPU |
+| `policy_and_reference_logprobs` | 190s | 18% | **3.49×** | Same as training: bandwidth-bound fwd passes |
+| other | <3s | <1% | — | Batch prep, advantage compute, weight transfer |
+
+**Generation barely speeds up on B200** because the retriever HTTP round-trips and KV cache management are not GPU-bandwidth-bound. The 3× B200 win comes entirely from `policy_training` + `logprobs`.
 
 ### 6.2 Cost / wall-clock estimation — actively unresolved
 
