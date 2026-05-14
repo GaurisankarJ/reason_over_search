@@ -391,7 +391,7 @@ policy:
       # [memory] Same value as smoke (0.5). vLLM holds ~10% as resident
       # while "asleep"; at 0.5 that's ~4 GB. Combined with policy worker's
       # log_softmax peak at seq=8192 (~8 GB), leaves headroom on 1× A100.
-      gpu_memory_utilization: 0.7
+      gpu_memory_utilization: 0.8
       max_model_len: ${policy.max_total_sequence_length}
       enforce_eager: false
       use_deep_gemm: false
