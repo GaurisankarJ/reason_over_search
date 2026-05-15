@@ -208,7 +208,7 @@ forward_cuda (vllm/.../qwen3_next.py:176)
 
 ## 9. Cost / wall-clock estimate
 
-H200 SXM 141GB at Spheron. Hourly rate disputed in our own docs (SETUP_SPHERON.md §"Why H200" cites ~$2/h for Spheron's cheap H200 tier; the earlier version of this doc cited $15.15/h, which was the "cluster" / on-demand tier reference). Verify with the actual Spheron deployment invoice before reporting cost externally.
+**Confirmed rate: $1.95/h** (Spheron ES Spot, 1× H200 SXM5, US Central 1, instance ID `6a072a4e`). Validated 2026-05-15 ~22:30 UTC against dashboard: $12.25 total at 6.28 h elapsed = $1.951/h. (The $15.15/h figure in `HARDWARE_COMPARISON.md` is the 8× cluster tier; not what we're on.)
 
 H200 is roughly:
 - 0.6× B200's memory bandwidth (4.8 vs 8 TB/s)
@@ -229,12 +229,12 @@ These are with the H200 FlashInfer GDN patch applied (native Triton path; see §
 **Batch shape**: `num_prompts_per_step: 64 × num_generations_per_prompt: 5 = 320` rollouts/step.
 **Steps / epoch**: 19,938 / 64 = **311.5**.
 
-**Projected at current rate** (1101 s/step):
-| Span | Steps | Wall | Cost @ $2/h | Cost @ $15.15/h |
-|---|---:|---:|---:|---:|
-| 1 epoch | 311.5 | 95 h 17 min | $191 | $1,444 |
-| Configured `max_num_steps: 622` (= 2 epochs) | 622 | **190 h 14 min ≈ 7.9 days** | **$380** | **$2,882** |
-| Paper's 3 epochs | 934 | 285 h 32 min ≈ 11.9 days | $571 | $4,329 |
+**Projected at current rate** (1101 s/step, $1.95/h):
+| Span | Steps | Wall | Cost |
+|---|---:|---:|---:|
+| 1 epoch | 311.5 | 95 h 17 min | **$186** |
+| Configured `max_num_steps: 622` (= 2 epochs) | 622 | **190 h 14 min ≈ 7.9 days** | **$371** |
+| Paper's 3 epochs | 934 | 285 h 32 min ≈ 11.9 days | $557 |
 
 These projections assume step time stays at ~18 min throughout. **Realistically it won't.** Step time is dominated by multi-turn rollout cost (model emits `<search>` up to 10 times per question with current untrained policy). As the policy learns to emit `<answer>` earlier, average turns/question drops and step wall drops with it. B200 a3 observed step times dropping from ~9 min cold to ~6 min stable (~30 % reduction over 30-50 steps). Applying the same shape to H200:
 
@@ -244,7 +244,7 @@ These projections assume step time stays at ~18 min throughout. **Realistically 
 | Transitional (model learns to answer) | 51-150 | 15 min | 25 h | 40 h |
 | Stable | 151-622 | 13 min | 102 h | **142 h ≈ 5.9 days** |
 
-So realistic estimate for `max_num_steps: 622`: **~6 days wall, ~$285 @ $2/h or ~$2,150 @ $15.15/h**. Will tighten as we observe the actual transition curve in the cadence checkpoints.
+So realistic estimate for `max_num_steps: 622`: **~6 days wall, ~$277 @ $1.95/h** (full budget is $1000, leaves headroom for one more 622-step run or a 3-epoch extension to 934 steps for ~$557 if convergence justifies it). Will tighten as we observe the actual transition curve in the cadence checkpoints.
 
 ## 10. The four prior losses (recap)
 

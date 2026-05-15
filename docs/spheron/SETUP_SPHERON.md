@@ -20,7 +20,7 @@ The runbook is anchored on the H200 hardware reality we discovered the hard way;
 |---|---:|---:|---|
 | Spheron 1× A100 | 80 GB | 196 GB | Too slow at our budget; baseline for cost comparison |
 | Spheron 1× B200 (a3 host, preempted 2026-05-15) | 192 GB | 196 GB | More VRAM headroom; loss-prone if no persistent volume |
-| Spheron 1× **H200 (a4, this runbook)** | **141 GB** | **196 GB** | Cheaper ($2/h vs $15/h cluster); 50 GB less VRAM than B200 so several yaml knobs need adjustment |
+| Spheron 1× **H200 (a4, this runbook)** | **141 GB** | **196 GB** | $1.95/h Spheron ES Spot tier (confirmed 2026-05-15 vs $12.25 spend at 6.28 h; vs $15.15/h for 8× cluster tier); 50 GB less VRAM than B200 so several yaml knobs need adjustment |
 
 The 50 GB VRAM gap between B200 and H200 is the single biggest reason why a yaml that "just worked" on B200 can OOM on H200; see §6 "Yaml knob deltas for H200" and §8 "Pitfalls" for the specifics.
 
