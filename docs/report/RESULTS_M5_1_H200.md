@@ -208,26 +208,50 @@ forward_cuda (vllm/.../qwen3_next.py:176)
 
 ## 9. Cost / wall-clock estimate
 
-H200 SXM 141GB at Spheron at $15.15/h. H200 is roughly:
+H200 SXM 141GB at Spheron. Hourly rate disputed in our own docs (SETUP_SPHERON.md §"Why H200" cites ~$2/h for Spheron's cheap H200 tier; the earlier version of this doc cited $15.15/h, which was the "cluster" / on-demand tier reference). Verify with the actual Spheron deployment invoice before reporting cost externally.
+
+H200 is roughly:
 - 0.6× B200's memory bandwidth (4.8 vs 8 TB/s)
 - 0.44× B200's BF16 dense compute (989 vs 2250 TFLOPS)
 - 1.76× A100's memory bandwidth (4.8 vs 2 TB/s)
 
-Expected per-step wall vs measured anchors:
-- A100 mean (a3 reference): ~24 min/step → ~250 h total
-- B200 mean (a3 measured, 56 steps): ~9 min/step → projected ~95 h total
-- H200 projected (BW-scaled from B200): ~14-16 min/step → ~150-165 h total ≈ 6-7 days
+**Measured anchors (v11, untrained-model phase, max_turns=10)**:
+| Step | Wall (s) |
+|---:|---:|
+| 1 | 1101.82 |
+| 2 | 1123.09 |
+| 3 | 1079.01 |
+| mean | **1101.30 s = 18.36 min** |
 
-But: H200's 141 GB VRAM may allow `gpu_memory_utilization` headroom that helps, and our actual workload is bandwidth-bound not compute-bound — so H200 may perform closer to B200 than the compute ratio suggests.
+These are with the H200 FlashInfer GDN patch applied (native Triton path; see §7.5). Expected to decrease as the policy learns to emit `<answer>` earlier (turn 0 of step 1 ran ~80 % of prompts deep into multi-turn; this drops with training).
 
-**Estimate range for full run (622 steps)**: **2.5-7 days, $900-2500**. Revised after step 1.
+**MuSiQue dataset size**: 19,938 training rows (`data/training/musique/train.parquet`).
+**Batch shape**: `num_prompts_per_step: 64 × num_generations_per_prompt: 5 = 320` rollouts/step.
+**Steps / epoch**: 19,938 / 64 = **311.5**.
+
+**Projected at current rate** (1101 s/step):
+| Span | Steps | Wall | Cost @ $2/h | Cost @ $15.15/h |
+|---|---:|---:|---:|---:|
+| 1 epoch | 311.5 | 95 h 17 min | $191 | $1,444 |
+| Configured `max_num_steps: 622` (= 2 epochs) | 622 | **190 h 14 min ≈ 7.9 days** | **$380** | **$2,882** |
+| Paper's 3 epochs | 934 | 285 h 32 min ≈ 11.9 days | $571 | $4,329 |
+
+These projections assume step time stays at ~18 min throughout. **Realistically it won't.** Step time is dominated by multi-turn rollout cost (model emits `<search>` up to 10 times per question with current untrained policy). As the policy learns to emit `<answer>` earlier, average turns/question drops and step wall drops with it. B200 a3 observed step times dropping from ~9 min cold to ~6 min stable (~30 % reduction over 30-50 steps). Applying the same shape to H200:
+
+| Phase | Steps | Step wall | Sub-total | Cumulative |
+|---|---:|---:|---:|---:|
+| Cold (multi-turn at floor) | 1-50 | 18 min | 15 h | 15 h |
+| Transitional (model learns to answer) | 51-150 | 15 min | 25 h | 40 h |
+| Stable | 151-622 | 13 min | 102 h | **142 h ≈ 5.9 days** |
+
+So realistic estimate for `max_num_steps: 622`: **~6 days wall, ~$285 @ $2/h or ~$2,150 @ $15.15/h**. Will tighten as we observe the actual transition curve in the cadence checkpoints.
 
 ## 10. The four prior losses (recap)
 
 | # | When | Cost | Cause | Mitigation in a4 |
 |---|---|---|---|---|
 | a1 step-50 ckpt crash | 2026-05-11 | ~$30 | `metric_name: "train/loss/mean"` violated NeMo-RL assertion | `metric_name: null` + smoke-verified |
-| a1 rollout-corpus deletion | 2026-05-11 | 196 MB data loss | `rm -rf logs/exp_010` (prod) bundled with cleanup | Rollouts uploaded to HF (now to TWO repos) so single-machine deletion can't kill them |
+| a1 rollout-corpus deletion | 2026-05-11 | 196 MB data loss | `rm -rf logs/exp_010` (prod) bundled with cleanup | Rollouts uploaded to HF + Spheron persistent volume preserves a second copy — single-machine deletion can't kill them |
 | a2 zombie GPU misdiagnosis kill | 2026-05-12 | ~$21 | Misread `[Not Found]` in nvidia-smi | Kill-on-evidence rule |
 | **a3 Spheron T3 spot preemption** | **2026-05-15** | **~$36 + step_50 ckpt** | **Spot host preempted ~step 56 + uploader silently dropped rollouts past step 18** | **Persistent volume (`miletone5`) preserves all artifacts across host preemption; bulletproof uploader with heartbeat + retry catches silent-drop pattern from a3** |
 
