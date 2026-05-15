@@ -33,7 +33,7 @@ These are the in-tree changes made to get a fresh `pantomiman/reason-over-search
 
 ## Infrastructure changes (automated in bootstrap.sh)
 
-These are now fully automated by `training/scripts/bootstrap.sh`. The total Vast setup guide (human + agent) is [`docs/vast/SETUP_VAST.md`](../../docs/vast/SETUP_VAST.md).
+These are now fully automated by `training/scripts/bootstrap.sh`. The total GPU-instance setup guide (human + agent) is [`docs/setup/SETUP_INSTANCE.md`](../../docs/setup/SETUP_INSTANCE.md).
 
 ### 4. v2 (automodel) venv — downloaded from HF Hub, not compiled on Vast
 

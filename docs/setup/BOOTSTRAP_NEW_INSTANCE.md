@@ -8,13 +8,13 @@ updated: 2026-05-09
 
 # Bootstrap a new instance — non-Vast hosts
 
-Bring up the full `reason_over_search` runtime on **any** host that can run the docker image (in-house GPU box, lab cluster, cloud VM that isn't Vast.ai). For Vast.ai specifically, use [`docs/vast/SETUP_VAST.md`](../vast/SETUP_VAST.md) directly; it's tuned to Vast's image-template + persistent-volume layout. For ALICE HPC use [`training/scripts/bootstrap_alice.sh`](../../training/scripts/bootstrap_alice.sh) (Apptainer-based).
+Bring up the full `reason_over_search` runtime on **any** host that can run the docker image (in-house GPU box, lab cluster, cloud VM that isn't Vast.ai). For Vast.ai / Verda B300 / RunPod-class hosts specifically, use [`docs/setup/SETUP_INSTANCE.md`](SETUP_INSTANCE.md) directly; it's tuned to those template + persistent-volume layouts. For ALICE HPC use [`training/scripts/bootstrap_alice.sh`](../../training/scripts/bootstrap_alice.sh) (Apptainer-based).
 
-This doc is the **thin wrapper**: it covers the host-specific steps that SETUP_VAST.md doesn't (pulling the image, running the container, the `/venv/...` symlink caveat). After the container is up and you've cloned the repo into it, you run [`training/scripts/bootstrap.sh`](../../training/scripts/bootstrap.sh) the same way SETUP_VAST.md does, and it provisions everything (retriever assets, training venvs, M4 eval models).
+This doc is the **thin wrapper**: it covers the host-specific steps that SETUP_INSTANCE.md doesn't (pulling the image, running the container, the `/venv/...` symlink caveat). After the container is up and you've cloned the repo into it, you run [`training/scripts/bootstrap.sh`](../../training/scripts/bootstrap.sh) the same way SETUP_INSTANCE.md does, and it provisions everything (retriever assets, training venvs, M4 eval models).
 
 ## Step 0 — host requirements
 
-Same accelerator + RAM + disk envelope as Vast; pick a row in [SETUP_VAST.md § 0 disk-budget table](../vast/SETUP_VAST.md#0-pre-flight-do-this-before-booting-the-instance) for the disk size.
+Same accelerator + RAM + disk envelope as the provider templates; pick a row in [SETUP_INSTANCE.md § 0 disk-budget table](SETUP_INSTANCE.md#0-pre-flight-do-this-before-booting-the-instance) for the disk size.
 
 | Resource | Minimum | Recommended | Why |
 |---|---|---|---|
@@ -75,7 +75,7 @@ git checkout <branch>          # research_v2 / main / etc.
 bash training/scripts/bootstrap.sh
 ```
 
-This is the **same script SETUP_VAST.md uses**. It provisions retriever assets (corpus + IVF-SQ8 index + e5-base-v2), training venvs (`uv sync` + the v2/automodel worker venv), Qwen3.5-2B training weights, M4 eval models (Qwen3.5-0.8B hybrid + base), and starts the retriever on `127.0.0.1:3005`. See [SETUP_VAST.md § 4](../vast/SETUP_VAST.md#4-bootstrap-25-min-cold-hf-path-50-min-compile-fallback-1-min-warm) for the per-step breakdown and skip flags (`SKIP_V2_BUILD=1`, `SKIP_RETRIEVER=1`, `SKIP_M4_MODELS=1`).
+This is the **same script SETUP_INSTANCE.md uses**. It provisions retriever assets (corpus + IVF-SQ8 index + e5-base-v2), training venvs (`uv sync` + the v2/automodel worker venv), Qwen3.5-2B training weights, M4 eval models (Qwen3.5-0.8B hybrid + base), and starts the retriever on `127.0.0.1:3005`. See [SETUP_INSTANCE.md § 4](SETUP_INSTANCE.md#4-bootstrap-25-min-cold-hf-path-50-min-compile-fallback-1-min-warm) for the per-step breakdown and skip flags (`SKIP_V2_BUILD=1`, `SKIP_RETRIEVER=1`, `SKIP_M4_MODELS=1`).
 
 After bootstrap finishes the box is ready. Launch your actual experiments per the milestone runbooks; this doc has no run commands by design.
 
@@ -89,14 +89,14 @@ After bootstrap finishes the box is ready. Launch your actual experiments per th
 
 ## What this doc does NOT cover
 
-- **The actual setup steps** (asset downloads, venvs, retriever start). Those live in `bootstrap.sh` and are documented in [`docs/vast/SETUP_VAST.md`](../vast/SETUP_VAST.md).
+- **The actual setup steps** (asset downloads, venvs, retriever start). Those live in `bootstrap.sh` and are documented in [`docs/setup/SETUP_INSTANCE.md`](SETUP_INSTANCE.md).
 - **Eval pipelines** (M1 GRPO checkpoint reproduction, M3 Qwen3-0.6B, M4 Qwen3.5-0.8B). Those live in their respective milestone docs.
 - **Training runs.** See [`docs/milestone_2/PHASE_2_RUNBOOK.md`](../milestone_2/PHASE_2_RUNBOOK.md).
 - **Smoke tests.** Deliberately omitted — once `bootstrap.sh` exits 0, the box is ready; testing happens at the experiment layer.
 
 ## See also
 
-- [`docs/vast/SETUP_VAST.md`](../vast/SETUP_VAST.md) — full setup steps (the "actual" runbook this doc delegates to)
+- [`docs/setup/SETUP_INSTANCE.md`](SETUP_INSTANCE.md) — full setup steps (the "actual" runbook this doc delegates to)
 - [`training/scripts/bootstrap.sh`](../../training/scripts/bootstrap.sh) — the bootstrap script
 - [`training/scripts/bootstrap_alice.sh`](../../training/scripts/bootstrap_alice.sh) — ALICE HPC equivalent (Apptainer-based)
 - [`local_retriever/README.md`](../../local_retriever/README.md) — retriever asset download steps + index choices (bootstrap.sh mirrors these)

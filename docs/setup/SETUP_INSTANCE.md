@@ -1,23 +1,34 @@
 ---
-title: SETUP VAST
-tags: [setup, vast, runbook]
+title: SETUP INSTANCE
+tags: [setup, vast, verda, runpod, h200, b200, b300, runbook]
 source: internal
 created: 2026-05-09
-updated: 2026-05-09
+updated: 2026-05-15
 ---
 
-# SETUP_VAST.md — total setup guide for a fresh Vast.ai instance
+# SETUP_INSTANCE.md — total setup guide for a fresh GPU instance
 
 > **Audience**: a human operator OR a Claude agent given SSH access to a freshly
-> booted Vast.ai instance running `pantomiman/reason-over-search-v1:v2` (use v2;
-> v2 = v1 + transformers 5.7.0 baked in, which Qwen3.5 needs). Follow
-> this end-to-end and the box ends up with retrieval, eval (M4 Qwen3.5-0.8B),
-> and training (M2 GRPO) all set up and ready to run. After bootstrap finishes
-> you don't run anything in this doc; you launch your actual experiments per
-> the milestone runbooks.
+> booted GPU instance. Covers multiple providers / hardware shapes we actively
+> use:
+>
+> - **§1–§9 Vast.ai path** — instance booted with `pantomiman/reason-over-search-v1:v2`
+>   (use v2; v2 = v1 + transformers 5.7.0 baked in, which Qwen3.5 needs). The
+>   image bundles conda envs + the pre-warmed `uv` wheel cache.
+> - **§10 Verda B300 path** — bare Ubuntu 24.04, no docker image, 1× or 2× B300
+>   SXM6 with 275 GB HBM3e each. No pre-warmed cache; you install `uv` and
+>   materialize venvs yourself.
+> - **RunPod / other docker-capable hosts (H200, B200, …)** — see the
+>   "Porting this runbook to a non-Vast host" section below; the same image
+>   works, only the persistent-volume mount path may differ.
+>
+> Follow the right section end-to-end and the box ends up with retrieval, eval
+> (M4 Qwen3.5-0.8B), and training (M5.1+ GRPO) all set up and ready to run.
+> After bootstrap finishes you don't run anything in this doc; you launch your
+> actual experiments per the milestone runbooks.
 >
 > Sister doc for the ALICE HPC cluster: [`training/scripts/bootstrap_alice.sh`](../../training/scripts/bootstrap_alice.sh)
-> (Apptainer-based, same image, ZFS-aware paths). Use this one for Vast.
+> (Apptainer-based, same image, ZFS-aware paths).
 
 What this guide provisions, in order:
 1. Conda envs for **retrieval** + **eval** + **training** (baked into the image).
@@ -34,7 +45,7 @@ Total cold-to-ready: ~25 min on the HF fast path (dominated by the ~30 GB retrie
 
 | Resource | Minimum | Recommended | Why |
 |---|---|---|---|
-| GPU | 1× 24 GB (4090) | 1× 80 GB (A100 / H100 / H200) | Training needs ≥40 GB; eval is fine on 24 GB |
+| GPU | 1× 24 GB (4090) | 1× 80 GB (A100 / H100 / H200) or 1× B200/B300 SXM6 | Training needs ≥40 GB; eval is fine on 24 GB. B300 (288 GB) unlocks `train_micro_batch_size=4` for M5.5; see §10. |
 | Host RAM | 32 GB (IVF-SQ8 only, 1 worker) | 150 GB (IVF-SQ8, 8 workers for training) | 8 retriever workers each load ~16 GB index; flat IP needs ~65 GB |
 | Disk | 60 GB (eval-only, 0.8B) | 150 GB (M1 reproduction or 2B training) | See per-scenario table below |
 | Public ports | none required | 3000, 3005 | Optional for external SGLang / retriever; default workflow is local-only |
@@ -57,7 +68,7 @@ Have ready:
 - (Optional) A `WANDB_API_KEY` for live training curves
 - (Optional) A `HF_TOKEN` if you plan to push artifacts back to HF (downloads are public)
 
-See [`docs/setup/HARDWARE_COMPARISON.md`](../setup/HARDWARE_COMPARISON.md) for the full accelerator comparison (and [`docs/setup/HARDWARE_4090.md`](../setup/HARDWARE_4090.md) for the historical 4090 dev-box snapshot).
+See [`docs/setup/HARDWARE_COMPARISON.md`](HARDWARE_COMPARISON.md) for the full accelerator comparison (and [`docs/setup/HARDWARE_4090.md`](HARDWARE_4090.md) for the historical 4090 dev-box snapshot).
 
 ---
 
@@ -379,12 +390,13 @@ Qwen3.5-0.8B GRPO on MuSiQue, ReSearch paper recipe, 622 steps × 320 trajectori
 | 1× H200-141GB | ~1.2 d (~29 h) | ~$104 (RunPod spot @ $3.59/h) |
 | 2× H100-80GB SXM (TP=2) | ~22 h | ~$82 (Vast 2× $1.87/h) |
 | **1× B200-192GB** | **~14–16 h** | **~$90** (RunPod spot @ $5.98/h) |
+| **1× B300-288GB (M5.5 b300 config)** | **~9–11 h** (projected; micro=4 + act-ckpt off vs B200 micro=2 + act-ckpt on) | **~$55–65** (Verda @ $5.94/h, see §10) |
 
-Full per-config table + the choice criteria (Pareto pick: 1× H100 SXM on Vast at ~2 d/$90; fastest single-GPU: 1× B200 on RunPod) live in [`../setup/HARDWARE_COMPARISON.md` §3-§6](../setup/HARDWARE_COMPARISON.md#3-m51-wall-clock--cost-estimates-by-hardware). The M5.1-specific per-step trajectory (which dropped from 58 min/step at step 1 to 10 min/step at step 17 as the model learned shorter rollouts) is in [`../report/RESULTS_SMOKE_m5.md` §6.2](../report/RESULTS_SMOKE_m5.md#62-per-step-trajectory-live-refresh-as-steps-land).
+Full per-config table + the choice criteria (Pareto pick: 1× H100 SXM on Vast at ~2 d/$90; fastest single-GPU: 1× B200 on RunPod) live in [`HARDWARE_COMPARISON.md` §3-§6](HARDWARE_COMPARISON.md#3-m51-wall-clock--cost-estimates-by-hardware). The M5.1-specific per-step trajectory (which dropped from 58 min/step at step 1 to 10 min/step at step 17 as the model learned shorter rollouts) is in [`../report/RESULTS_SMOKE_m5.md` §6.2](../report/RESULTS_SMOKE_m5.md#62-per-step-trajectory-live-refresh-as-steps-land).
 
 ### M2 Phase-2 reference (historical)
 
-The earlier M2 sketch (Qwen3.5-2B, NQ+HotpotQA, 1005 steps × 510 trajectories) projected **~11–17 d** on 1× A100 / **~5–8.5 d** on H100. Those numbers are M2-shape, not M5.1, and predate the per-step time collapse observed in M5.1. Source: [`docs/training/SMOKE_RESULTS_2026-05-06.md`](../training/SMOKE_RESULTS_2026-05-06.md). For any new M5-derived experiment, scale from the [HARDWARE_COMPARISON anchor](../setup/HARDWARE_COMPARISON.md#1-live-anchor--what-were-measuring-against), not from the M2 numbers.
+The earlier M2 sketch (Qwen3.5-2B, NQ+HotpotQA, 1005 steps × 510 trajectories) projected **~11–17 d** on 1× A100 / **~5–8.5 d** on H100. Those numbers are M2-shape, not M5.1, and predate the per-step time collapse observed in M5.1. Source: [`docs/training/SMOKE_RESULTS_2026-05-06.md`](../training/SMOKE_RESULTS_2026-05-06.md). For any new M5-derived experiment, scale from the [HARDWARE_COMPARISON anchor](HARDWARE_COMPARISON.md#1-live-anchor--what-were-measuring-against), not from the M2 numbers.
 
 ### Porting this runbook to a non-Vast host (e.g. RunPod)
 
@@ -393,7 +405,167 @@ This doc hardcodes `/workspace` as the persistent-volume mount (line 108: `cd /w
 1. **Image tag stays the same** (`pantomiman/reason-over-search-v1:v2`) but **Blackwell sm_100 (B200) is untested** — the v2 worker venv was built against Hopper-era CUDA. Run a v6-equivalent 10-step smoke ([`docs/report/RESULTS_SMOKE_m5.md` §2](../report/RESULTS_SMOKE_m5.md#2-v6--m5-smoke-pipeline-validation-smoke-shape--success)) before committing a multi-day run on a B200.
 2. **On a host with a different persistent mount path** (not `/workspace`), override before bootstrap: `export HF_HOME=<your-mount>/hf_cache && export TMPDIR=<your-mount>/tmp_build` then `cd <your-mount>/reason_over_search && bash training/scripts/bootstrap.sh`. Verify the disk-free check in `bootstrap.sh:50` against the actual mount.
 
-Generic (non-Vast) bootstrap delegates to this doc plus the wrapper in [`../setup/BOOTSTRAP_NEW_INSTANCE.md`](../setup/BOOTSTRAP_NEW_INSTANCE.md).
+Generic (non-Vast) bootstrap delegates to this doc plus the wrapper in [`BOOTSTRAP_NEW_INSTANCE.md`](BOOTSTRAP_NEW_INSTANCE.md).
+
+---
+
+## 10. Variant: Verda B300 (fresh Ubuntu, no docker image)
+
+The Verda B300 SXM6 instance type ships as **bare Ubuntu 24.04** with no docker
+image, no conda envs, no `/workspace` mount, and no pre-warmed `uv` cache.
+Everything §1–§9 assumes (the `pantomiman/reason-over-search-v1:v2` image) is
+**absent**. You have to install `uv`, materialize venvs, and download retriever
+assets yourself — but in exchange you get 1× or 2× B300 SXM6 (275 GB HBM3e
+each), ~3.6× A100's memory, and ~50% more compute than B200.
+
+Reference box (observed 2026-05-15):
+
+| Field | Value |
+|---|---|
+| Hostname | `cosmic-matrix-fin-03` |
+| OS | Ubuntu 24.04.4 LTS, kernel 6.8.0-100-generic |
+| GPUs | 2× NVIDIA B300 SXM6 AC, 275040 MiB each, driver 580.126.09 / CUDA 13.0 |
+| vCPU / RAM | 60 cores / 550 GB |
+| Disk (`/`) | 193 GB total, ~160 GB free (no separate `/workspace`) |
+| Cost | $5.94/h (Verda spot) |
+
+### 10a. Code sync (from your local checkout)
+
+```bash
+# From local repo root — tar-stream to skip the bloat:
+tar --exclude='./.venv' --exclude='./.git' --exclude='./results' \
+    --exclude='./logs' --exclude='./wandb' --exclude='./__pycache__' \
+    --exclude='*.pyc' --exclude='*.parquet' \
+    --exclude='./training/nemo_rl/.venv' \
+    -czf - . | ssh root@<HOST> 'mkdir -p /root/reason_over_search && \
+    tar -xzf - -C /root/reason_over_search'
+```
+
+The repo lands at `/root/reason_over_search/` (~275 MB). Verda has no
+`/workspace` mount, so paths in this doc that say `/workspace/reason_over_search`
+become `/root/reason_over_search` here.
+
+### 10b. Install uv + materialize the NeMo-RL venv
+
+```bash
+ssh root@<HOST>
+cd /root/reason_over_search
+
+# 1. uv (Astral installer)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+export PATH="$HOME/.local/bin:$PATH"
+uv --version
+
+# 2. M5.5 venv (works for M5.1 too — shared NeMo-RL symlink). ~13 GB, ~5-15 min.
+bash training_m5_5/setup.sh
+ls training_m5_5/nemo_rl/.venv/bin/python   # sanity
+```
+
+There is **no pre-warmed wheel cache** on Verda; `uv sync --extra vllm` pulls
+~5 GB of wheels on first run. Cache at `~/.cache/uv` after that.
+
+### 10c. Retriever assets (corpus + IVF-SQ8 index + e5-base-v2)
+
+The retriever stack and download URLs are unchanged from §4 step 6, but you
+have to drive the download manually. From `/root/reason_over_search`:
+
+```bash
+mkdir -p local_retriever/{corpus,indexes,models}
+
+# Hugging Face downloader (uses hf_transfer for speed)
+pip install --upgrade huggingface_hub hf_transfer
+export HF_HUB_ENABLE_HF_TRANSFER=1
+
+# 1. wiki-18 corpus (~14 GB after gunzip)
+hf download PeterJinGo/wiki-18-corpus --repo-type dataset \
+    --local-dir /tmp/wiki18 --include 'wiki-18.jsonl.gz'
+gunzip -c /tmp/wiki18/wiki-18.jsonl.gz > local_retriever/corpus/wiki18_100w.jsonl
+
+# 2. IVF-SQ8 index (~16 GB)
+hf download pantomiman/reason-over-search --repo-type model \
+    --local-dir local_retriever/indexes \
+    --include 'wiki18_100w_e5_ivf4096_sq8.index'
+
+# 3. e5-base-v2 encoder (~0.5 GB)
+hf download intfloat/e5-base-v2 --local-dir local_retriever/models/e5-base-v2
+```
+
+Disk budget: corpus 14 + index 16 + encoder 0.5 + venv 13 + Qwen3.5-0.8B model
+~1.7 + ~12 ckpts × 3.2 GB ≈ 84 GB. Fits comfortably in 160 GB free.
+
+### 10d. Training data (MuSiQue)
+
+```bash
+source training_m5_5/nemo_rl/.venv/bin/activate
+python training_m5_5/scripts/prep_musique.py
+# Writes data/training/musique/train.parquet (~10 MB).
+```
+
+### 10e. Stand up the retriever
+
+```bash
+# from a screen / tmux session so it survives SSH drops
+tmux new -s retriever
+cd /root/reason_over_search/local_retriever
+# 8 workers fits in 550 GB host RAM (each loads the ~16 GB index)
+# follow local_retriever/README.md "Run" section; same as the Vast path
+# Detach: Ctrl-b d. Verify:
+curl -sS http://127.0.0.1:3005/health    # → {"status":"healthy"}
+```
+
+### 10f. W&B + HF tokens
+
+```bash
+cat > training_m5_5/.env <<EOF
+WANDB_API_KEY=<your_key>
+# optional, for upload_ckpts_watcher.sh:
+HF_TOKEN=<your_hf_token>
+HF_REPO_PREFIX=<your_hf_user>/qwen3.5-0.8b-grpo-musique
+EOF
+```
+
+### 10g. Launch M5.5 production on B300
+
+The B300-specific config bumps `train_micro_batch_size=4`,
+`gpu_memory_utilization=0.85`, and turns `activation_checkpointing=false` — see
+the fix table in [`training_m5_5/configs/m5_5_research_paper_b300.yaml`](../../training_m5_5/configs/m5_5_research_paper_b300.yaml)
+for the per-knob rationale.
+
+```bash
+cd /root/reason_over_search
+tmux new -s train
+bash training_m5_5/scripts/run.sh --mode prod_b300 --seed 42 \
+    > /root/logs/m5_5_b300.log 2>&1 &
+disown
+tail -f /root/logs/m5_5_b300.log
+```
+
+Per-step wall-clock projection vs the B200 anchor (B200 = ~1000 s/step at
+micro=2 with activation_checkpointing on, per RESULTS_M5_1_B200.md §6.1):
+
+| Knob change | Expected speedup vs B200 |
+|---|---|
+| B300 vs B200 compute (~1.5× SMs, same bandwidth class) | ~1.3× |
+| `train_micro_batch_size: 2 → 4` (fewer DTensor roundtrips, bigger matmul efficiency) | ~1.15× |
+| `activation_checkpointing: true → false` (skip recomputation) | ~1.25× |
+| **Cumulative** | **~1.9×** → ~525 s/step → 622 steps ≈ **91 h ≈ 3.8 d** |
+
+Tighten with smoke first: `bash training_m5_5/scripts/run.sh --mode smoke` runs
+50 steps at the small shape (~20 traj/step) and confirms the loop end-to-end
+before committing the 4-day prod run.
+
+### 10h. 2× B300 — open question
+
+The Verda box has two B300s but the `prod_b300` config is single-GPU
+(`cluster.gpus_per_node: 1`). To use both, you'd want either:
+
+- a `prod_b300_2xgpu` config with `tensor_parallel_size: 2` and the
+  `custom_parallel_plan` from `training_m5_5/src/parallel_plan_qwen35.py`
+  (mirror what `m5_5_research_paper_2xa100.yaml` does for 2× A100), or
+- run two independent seeds in parallel (one per GPU), which doubles statistical
+  power for the M5.5 ablation at the same wall-clock.
+
+Neither is shipped yet; pick one based on whether you want speed or seeds.
 
 ---
 
@@ -450,7 +622,7 @@ $HF_HOME = /workspace/hf_cache                     # Qwen3.5-2B + Qwen3.5-2B-Bas
 - [`local_retriever/README.md`](../../local_retriever/README.md) — retriever asset download steps + index choices (bootstrap mirrors these)
 - [`docs/milestone_4/MILESTONE_4.md`](../milestone_4/MILESTONE_4.md) — M4 Qwen3.5-0.8B eval design + runbook
 - [`docs/milestone_2/PHASE_2_RUNBOOK.md`](../milestone_2/PHASE_2_RUNBOOK.md) — operational runbook for Phase-2 training
-- [`docs/setup/BOOTSTRAP_NEW_INSTANCE.md`](../setup/BOOTSTRAP_NEW_INSTANCE.md) — generic bootstrap (any host, not Vast-specific); leans more on docker pull / docker run
-- [`docs/setup/HARDWARE_COMPARISON.md`](../setup/HARDWARE_COMPARISON.md) — accelerator comparison
+- [`docs/setup/BOOTSTRAP_NEW_INSTANCE.md`](BOOTSTRAP_NEW_INSTANCE.md) — generic bootstrap (any host, not Vast-specific); leans more on docker pull / docker run
+- [`docs/setup/HARDWARE_COMPARISON.md`](HARDWARE_COMPARISON.md) — accelerator comparison
 - [`docs/training/CONVERSATION_CONTEXT.md`](../training/CONVERSATION_CONTEXT.md) — current state of training-side work
 - [`docs/training/NEMO_RL_KNOBS.md`](../training/NEMO_RL_KNOBS.md) — every NeMo-RL knob and our recommended values

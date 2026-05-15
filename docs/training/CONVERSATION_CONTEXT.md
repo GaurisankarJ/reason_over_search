@@ -52,8 +52,8 @@ Order matters. Each file has a clear job; cross-references between them resolve 
 | 6 | [`VALIDATION.md`](VALIDATION.md) | in-loop validation plan (NQ + HotpotQA test sets); current first-pass disables it; §7 has the re-enable steps |
 | 7 | [`NEMO_RL_KNOBS.md`](NEMO_RL_KNOBS.md) | every NeMo-RL config knob that matters with our shipped values; §7 is the authoritative diff-vs-upstream table |
 | 8 | [`VERL_REFERENCE.md`](VERL_REFERENCE.md) | verl-side reference settings (HTTP retriever contract, KL/GRPO mappings, FSDP-to-DTensor translations); useful when reading verl scripts |
-| 9 | [`docs/vast/SETUP_VAST.md`](../vast/SETUP_VAST.md) | total Vast.ai setup guide (human or agent): bootstrap, retriever, eval, training; replaces the older agent-only `SETUP_CLAUDE.md` |
-| op | [`docs/milestone_2/PHASE_2_RUNBOOK.md`](../milestone_2/PHASE_2_RUNBOOK.md) | operational runbook for Phase-2 training (boot, retriever setup, launch, monitoring, recovery); pairs with `SETUP_VAST.md` |
+| 9 | [`docs/setup/SETUP_INSTANCE.md`](../setup/SETUP_INSTANCE.md) | total GPU-instance setup guide (human or agent), covering Vast.ai, Verda B300, and RunPod-class hosts: bootstrap, retriever, eval, training; replaces the older agent-only `SETUP_CLAUDE.md` |
+| op | [`docs/milestone_2/PHASE_2_RUNBOOK.md`](../milestone_2/PHASE_2_RUNBOOK.md) | operational runbook for Phase-2 training (boot, retriever setup, launch, monitoring, recovery); pairs with `SETUP_INSTANCE.md` |
 
 ---
 

@@ -54,8 +54,8 @@ Estimated wall: **3–4 h coding + ~2 h Phase-1 sweep** on the optimised stack.
 You'll most likely be on a fresh Vast.ai box. Bootstrap path:
 
 1. [`docs/setup/BOOTSTRAP_NEW_INSTANCE.md`](../setup/BOOTSTRAP_NEW_INSTANCE.md) — `docker pull pantomiman/reason-over-search-v1:v2` (NOT `:v1` — `:v1` rebuild is broken upstream; `:v2` ships transformers 5.7.0 needed for Qwen3.5 `model_type=qwen3_5` AutoConfig). The `:v2` bootstrap.sh idempotently upgrades transformers in the eval venv, so `:v1` boxes also self-heal but skip the friction by pulling `:v2` directly.
-2. [`docs/vast/SETUP_VAST.md`](../vast/SETUP_VAST.md) — canonical Vast guide; `training/scripts/bootstrap.sh` provisions corpus + IVF-SQ8 index + e5-base-v2 encoder + Qwen3.5-0.8B hybrid + base for M4 eval in one command.
-3. Disk budget per scenario is in SETUP_VAST.md. M4.4 needs the same M4 footprint (corpus + index + e5 + Qwen3.5-0.8B × 2 variants).
+2. [`docs/setup/SETUP_INSTANCE.md`](../setup/SETUP_INSTANCE.md) — canonical GPU-instance guide (covers Vast.ai, Verda B300, RunPod-class hosts); `training/scripts/bootstrap.sh` provisions corpus + IVF-SQ8 index + e5-base-v2 encoder + Qwen3.5-0.8B hybrid + base for M4 eval in one command.
+3. Disk budget per scenario is in SETUP_INSTANCE.md. M4.4 needs the same M4 footprint (corpus + index + e5 + Qwen3.5-0.8B × 2 variants).
 4. Optimised stack settings (re-use these for M4.4): multi-block `<tool_response>` per chunk, per-chunk cap 120 tok, `generator_max_input_len=8192`, retriever IVF-SQ8 × 16 workers + `asyncio.to_thread`, `INFERENCE_MAX_WORKERS=128`. All of these are already defaults in [`scripts/run_m4.sh`](../../scripts/run_m4.sh) — don't change them.
 
 ## Files to read first (in order)

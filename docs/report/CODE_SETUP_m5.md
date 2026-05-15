@@ -258,7 +258,7 @@ Two byte-level checks (both deliverables of the M5.1 launch); the first is autom
 ## 5. M5 Run sequence
 
 ```bash
-# Bootstrap fresh Vast.ai instance per docs/vast/SETUP_VAST.md
+# Bootstrap fresh GPU instance per docs/setup/SETUP_INSTANCE.md
 cd /workspace/reason_over_search
 cd training_m5_1
 bash setup.sh                           # uv sync --extra vllm against vendored nemo_rl/

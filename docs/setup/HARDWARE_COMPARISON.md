@@ -335,7 +335,7 @@ Exhaustive provider scan (May 2026) changed the picture again. The best on-deman
 - v0 of this doc (step-8 anchor; superseded by v1): [`../archive/HARDWARE_COMPARISON_v0.md`](../archive/HARDWARE_COMPARISON_v0.md)
 - Live M5.1 trajectory and bottleneck analysis: [`../report/RESULTS_SMOKE_m5.md`](../report/RESULTS_SMOKE_m5.md)
 - M5.1 training-dynamics analysis (shrink-then-grow): [`../report/RESULTS_m5.md` §4.1](../report/RESULTS_m5.md#41-transferable-observation--rl-training-dynamic-regimes)
-- Current Vast setup runbook: [`../vast/SETUP_VAST.md`](../vast/SETUP_VAST.md)
+- Current GPU-instance setup runbook: [`SETUP_INSTANCE.md`](SETUP_INSTANCE.md)
 - M5.1 milestone: [`../milestone_5/MILESTONE_5.md`](../milestone_5/MILESTONE_5.md)
 - Paper-vs-ours mapping: [`../milestone_5/PAPER_VS_OURS_M5.md`](../milestone_5/PAPER_VS_OURS_M5.md)
 - Phase-2 runtime-efficiency lever menu: [`../research/RUNTIME_EFFICIENCY.md`](../research/RUNTIME_EFFICIENCY.md)
