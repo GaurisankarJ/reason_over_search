@@ -1,4 +1,12 @@
-# M5.1 production config — Qwen3.5-0.8B GRPO on MuSiQue, ReSearch paper recipe.
+# M5.5 production config — Qwen3.5-0.8B GRPO on MuSiQue, ReSearch paper recipe
+# with the **F1 + 0.1 partial-credit floor + format gate** reward (the ablation
+# knob — see training_m5_5/src/rewards/search_r1.py and
+# docs/milestone_5/MILESTONE_5_5.md §2).
+#
+# Every knob below except the reward module is byte-identical to
+# training_m5_1/configs/m5_1_research_paper.yaml (the F1-only baseline).
+# M5.5 is the F1+format leg of the reward-shape ablation triad
+# (M5.1 F1-only / M5.5 F1+0.1 floor / M5.6 EM-only).
 #
 # Authored 2026-05-10 after the smoke v6 (10 steps × 93.1 s/step ex-warmup).
 # Updated 2026-05-11 after v7 baseline OOM at micro=2 (production seq=8192
@@ -18,8 +26,10 @@
 #     fp32 BEFORE any chunking can apply, allocating 16.3 GB at our shape.
 #     No config-level fix — a NeMo-RL source patch would unlock micro=2
 #     and roughly halve training-phase wall-clock.
-#   - reward: F1 only (paper F1 + 0.1 floor for non-empty + format gate).
-#     Decision: keep our F1 — matches M4 eval and report continuity.
+#   - reward: F1 + 0.1 floor + format gate (paper-faithful 3-tier shaping).
+#     Differs from M5.1 (F1-only). The 0.1 floor is the ablation target;
+#     see MILESTONE_5_5.md §2 for the formula and PHASE_1_SALVAGE.md
+#     Finding 1 for the motivation.
 #   - max_obs_chars: 1024 (paper has no cap; we keep safety net to bound
 #     pathological retrieval blowups).
 #
@@ -393,7 +403,7 @@ policy:
         num_nodes: null
 
 # =============================================================================
-# Data — MuSiQue (M5.1 single-dataset training)
+# Data — MuSiQue (M5 single-dataset training)
 # =============================================================================
 data:
   max_input_seq_length: ${policy.max_total_sequence_length}

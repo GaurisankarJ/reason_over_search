@@ -98,15 +98,15 @@ base_model: Qwen/Qwen3.5-0.8B
 tags: [grpo, research-paper, musique, m5.5, qwen3.5]
 ---
 
-# Qwen3.5-0.8B GRPO checkpoint — M5.1 step {step}
+# Qwen3.5-0.8B GRPO checkpoint — M5.5 step {step}
 
-GRPO training checkpoint from `M5.5-prod` (F1+format reward, 0.1 floor — ReSearch paper-faithful) (paper-faithful ReSearch recipe on MuSiQue, 1× A100-80GB).
+GRPO training checkpoint from `M5.5-prod` (F1+format reward, 0.1 floor — ReSearch paper-faithful) on MuSiQue, 1× A100-80GB.
 Mode: `{mode}`, seed: `{seed}`, step: `{step}`. Uploaded automatically by `upload_ckpts_watcher.sh`.
 
 - Project: [`reason_over_search`](https://github.com/GaurisankarJ/reason_over_search)
 - Run config: `training_m5_5/configs/m5_5_research_paper.yaml`
 - Reward: F1+0.1-floor+format reward on `<answer>...</answer>` content
-- Answer wrap: plain `<answer>X</answer>` (M5.1 divergence #2)
+- Answer wrap: plain `<answer>X</answer>` (M5 divergence #2 — see CLAUDE.md)
 
 See `RESULTS_m5.md` and `RESULTS_SMOKE_m5.md` in the repo for run context.
 """

@@ -1,4 +1,6 @@
-# M5.1 smoke config — Qwen3.5-0.8B GRPO on MuSiQue, ReSearch recipe scaffold.
+# M5 smoke config — Qwen3.5-0.8B GRPO on MuSiQue, ReSearch recipe scaffold.
+# (Reward-agnostic pipeline smoke — the reward module is selected by which
+#  training_m5_X/ directory loads it. Identical across M5.1 / M5.5 / M5.6.)
 #
 # Purpose: verify the loop runs end-to-end on 1× A100-80GB, capture per-step
 #          wall-clock, generation-length distribution, reward-mean trajectory.
@@ -377,7 +379,7 @@ policy:
         num_nodes: null
 
 # =============================================================================
-# Data — MuSiQue (M5.1 single-dataset training)
+# Data — MuSiQue (M5 single-dataset training)
 # =============================================================================
 data:
   max_input_seq_length: ${policy.max_total_sequence_length}

@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
-# Set up the NeMo-RL venv after `git clone`-ing this repo (M5.1 variant).
+# Set up the NeMo-RL venv after `git clone`-ing this repo (M5.5 variant —
+# F1+format reward ablation; see docs/milestone_5/MILESTONE_5_5.md).
 #
 # IMPORTANT: training_m5_5/nemo_rl is a SYMLINK to ../training/nemo_rl/ (the
 # vendored source is 23 GB and /workspace was disk-constrained at scaffold
 # time). That means:
 #
 #   - The .venv this script creates lives at ../training/nemo_rl/.venv/ —
-#     i.e. THE SAME venv that training/setup.sh would create. M5.1 and M2
+#     i.e. THE SAME venv that training/setup.sh would create. M5.5 and M2
 #     share venv state. Fine while both pin NeMo-RL v0.6.0 (the current state).
 #   - If you ever bump NeMo-RL in one experiment (FORCE_RECLONE below), the
 #     bump leaks to the other. Break the symlink with a real copy first if

@@ -1,4 +1,4 @@
-"""Tool schemas for the qwen_native chat-template arm (M5.1 overlay).
+"""Tool schemas for the qwen_native chat-template arm (M5 overlay; shared across the M5.1/M5.5/M5.6 ablation triad).
 
 Re-exports `QWEN35_SEARCH_TOOL` from the M4 eval pipeline
 (`evaluation_qwen35/flashrag/search_r1/templates.py`) as `SEARCH_TOOL`, so

@@ -1,4 +1,4 @@
-"""Pure-Python parsing & formatting helpers for the M5.1 Search-R1 env.
+"""Pure-Python parsing & formatting helpers for the M5 Search-R1 env.
 
 Split out so unit tests can import these without dragging in `torch`, `ray`, or
 `nemo_rl.*`. The env actor (search_r1_env.py) re-exports and uses these.
@@ -7,7 +7,7 @@ For the `qwen_native` arm the action parser is **re-exported from the M4 eval
 pipeline** (`flashrag.search_r1.parser.extract_tool_call_query`) so train- and
 eval-time rollouts hit the exact same regex by construction; see
 docs/milestone_5/MILESTONE_5.md §"Action format and answer extraction".
-The `paper` arm parser stays local (vestigial M2 legacy; M5.1 only runs
+The `paper` arm parser stays local (vestigial M2 legacy; M5 only runs
 qwen_native, but the dispatch is kept for ablation arms in later sub-experiments).
 """
 from __future__ import annotations

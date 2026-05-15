@@ -14,7 +14,7 @@
 #   - wandb run name: m5_smoke -> m5_smoke_2xa100
 #
 # Run from repo root inside a 2-A100 srun (gpu-short or gpu-a100-80g):
-#   bash training_m5_1/scripts/run.sh --mode smoke_2xa100
+#   bash training_m5_5/scripts/run.sh --mode smoke_2xa100
 #
 # Companion: m5_5_research_paper_2xa100.yaml (the production 2xa100 config).
 
@@ -129,7 +129,7 @@ policy:
     # speedup knob (matches m5_5_research_paper_2xa100.yaml's training side).
     tensor_parallel_size: 2  # Option A: TP=2 with custom_parallel_plan (Qwen3.5 vocab-parallel FSDP bug workaround)
     context_parallel_size: 1
-    custom_parallel_plan: training_m5_1.src.parallel_plan_qwen35.custom_parallel_plan  # Option A: Qwen3.5 vocab-parallel FSDP bug workaround
+    custom_parallel_plan: training_m5_5.src.parallel_plan_qwen35.custom_parallel_plan  # Option A: Qwen3.5 vocab-parallel FSDP bug workaround
     automodel_kwargs: {force_hf: true}  # NeMo-RL issue 2072: bypass automodel state_dict adapter, fixes TP=2 vocab-parallel lm_head refit
     lora_cfg:
       enabled: false
@@ -311,7 +311,7 @@ policy:
         num_nodes: null
 
 # =============================================================================
-# Data — MuSiQue (M5.1 single-dataset training)
+# Data — MuSiQue (M5 single-dataset training)
 # =============================================================================
 data:
   max_input_seq_length: ${policy.max_total_sequence_length}

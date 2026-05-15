@@ -11,8 +11,8 @@
 #     CPU FAISS; only the trainer needs 2 GPUs)
 #
 # Dual-use design (SBATCH headers are bash comments):
-#   sbatch training_m5_5/scripts/sbatch_m5_1_2xa100.sh
-#   bash   training_m5_5/scripts/sbatch_m5_1_2xa100.sh --mode smoke      # inside srun
+#   sbatch training_m5_5/scripts/sbatch_m5_5_2xa100.sh
+#   bash   training_m5_5/scripts/sbatch_m5_5_2xa100.sh --mode smoke_2xa100  # inside srun
 #
 # See sbatch_m5_5.sh for the pre-req checklist (SIF, venv, parquet, .env).
 

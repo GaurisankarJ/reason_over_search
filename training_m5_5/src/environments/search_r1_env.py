@@ -1,4 +1,4 @@
-"""Search-R1 retrieval environment for M5.1 (Ray actor).
+"""Search-R1 retrieval environment for M5 (Ray actor; shared across the M5.1/M5.5/M5.6 reward-ablation triad).
 
 Implements `EnvironmentInterface.step()` for the multi-turn rollout loop in
 `run_multi_turn_rollout` (rollouts.py:403). Each turn:
@@ -212,7 +212,9 @@ class SearchR1Env(EnvironmentInterface):
                 gold = meta.get("ground_truth") or []
                 # Best-effort: maybe an unclosed <answer was emitted; f1_check
                 # against an empty string yields 0, which is what we want.
-                # F1 (not EM) here to stay consistent with M5.1's F1-only reward.
+                # F1 (not EM) here for env-level telemetry consistency across the
+                # M5 reward triad; the actual training reward is dispatched in
+                # rewards/search_r1.py (M5.5: F1+0.1 floor+format).
                 ans = extract_solution(solution_str) or ""
                 rewards[i] = float(f1_check(ans, gold)) if ans else 0.0
                 terminateds[i] = True
@@ -228,7 +230,7 @@ class SearchR1Env(EnvironmentInterface):
                 # source had this as `max_chars=` for both, which TypeError'd
                 # on the qwen_native search path — only the qwen_native answer-
                 # direct and exhausted paths were reached in the M2 smoke. Fixed
-                # here so M5.1's retrieval path doesn't trip the same bug.
+                # here so M5's retrieval path doesn't trip the same bug.
                 content = (
                     format_docs_qwen_native(docs, max_chars_per_chunk=self.max_obs_chars)
                     if self.arm == "qwen_native"
@@ -281,7 +283,8 @@ class SearchR1Env(EnvironmentInterface):
             properly_ended = float("nan")
 
         accuracy = rewards.mean().item()
-        # Under M5.1's F1-only reward, `accuracy` is the mean F1 over the batch
+        # Under M5's F1-family reward (M5.1 F1-only; M5.5 F1+0.1 floor+format),
+        # `accuracy` is the mean F1-or-floor over the batch
         # (continuous in [0, 1]). Track a near-EM rate too: fraction of samples
         # with F1 >= 0.8, i.e. predicted answer is close enough to gold that
         # it's almost-certainly the intended entity. Useful sanity dichotomy

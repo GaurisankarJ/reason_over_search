@@ -1,11 +1,19 @@
 #!/usr/bin/env bash
-# M5.1 GRPO launcher for Qwen3.5-0.8B on MuSiQue, 1× A100 80GB.
+# M5.5 GRPO launcher for Qwen3.5-0.8B on MuSiQue, 1× A100 80GB.
+# (F1 + 0.1 partial-credit floor + format-gate reward — see
+#  training_m5_5/src/rewards/search_r1.py and docs/milestone_5/MILESTONE_5_5.md.)
 #
-# Two configs supported, selected via --mode:
-#   --mode smoke  → configs/m5_smoke.yaml         (20 traj/step × 50 steps;
-#                                                  validates loop end-to-end)
-#   --mode prod   → configs/m5_5_research_paper.yaml (full ReSearch recipe;
-#                                                  authored in M5.1 step 6)
+# Five modes supported, selected via --mode:
+#   --mode smoke         → configs/m5_smoke.yaml             (20 traj/step × 50 steps;
+#                                                             validates loop end-to-end)
+#   --mode smoke_2xa100  → configs/m5_smoke_2xa100.yaml      (2x A100 smoke variant)
+#   --mode prod          → configs/m5_5_research_paper.yaml  (full ReSearch recipe
+#                                                             with M5.5 F1+format reward;
+#                                                             1× A100-80GB shape)
+#   --mode prod_2xa100   → configs/m5_5_research_paper_2xa100.yaml (2x A100 production)
+#   --mode prod_b300     → configs/m5_5_research_paper_b300.yaml   (1× B300 288GB:
+#                                                                   micro=4, gpu_mem=0.85,
+#                                                                   act-ckpt off)
 #
 # Common knobs:
 #   --seed N      → GRPO seed (RNG; defaults to 42)
@@ -48,8 +56,9 @@ case "$MODE" in
     smoke_2xa100)  CONFIG="training_m5_5/configs/m5_smoke_2xa100.yaml" ;;
     prod)          CONFIG="training_m5_5/configs/m5_5_research_paper.yaml" ;;
     prod_2xa100)   CONFIG="training_m5_5/configs/m5_5_research_paper_2xa100.yaml" ;;
-    "")            echo "error: --mode is required (smoke|smoke_2xa100|prod|prod_2xa100)" >&2; exit 2 ;;
-    *)             echo "error: --mode must be smoke|smoke_2xa100|prod|prod_2xa100 (got: $MODE)" >&2; exit 2 ;;
+    prod_b300)     CONFIG="training_m5_5/configs/m5_5_research_paper_b300.yaml" ;;
+    "")            echo "error: --mode is required (smoke|smoke_2xa100|prod|prod_2xa100|prod_b300)" >&2; exit 2 ;;
+    *)             echo "error: --mode must be smoke|smoke_2xa100|prod|prod_2xa100|prod_b300 (got: $MODE)" >&2; exit 2 ;;
 esac
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -58,9 +67,8 @@ cd "${REPO_ROOT}"
 
 if [[ ! -f "${CONFIG}" ]]; then
     echo "error: config not found at ${CONFIG}" >&2
-    if [[ "$MODE" == "prod" ]]; then
-        echo "       (m5_5_research_paper.yaml is built in M5.1 step 6;" >&2
-        echo "        see docs/milestone_5/MILESTONE_5_5.md §\"Run sequence — M5.1\")" >&2
+    if [[ "$MODE" == "prod" || "$MODE" == "prod_2xa100" || "$MODE" == "prod_b300" ]]; then
+        echo "       (m5_5_research_paper*.yaml; see docs/milestone_5/MILESTONE_5_5.md)" >&2
     fi
     exit 1
 fi
@@ -83,9 +91,11 @@ fi
 # vllm_cfg.gpu_memory_utilization in the yaml instead.
 
 TS="$(date -u +%Y%m%dT%H%MZ)"
-RUN_NAME="qwen3.5-0.8b-musique-m5_${MODE}-seed${SEED}-${TS}"
+RUN_NAME="qwen3.5-0.8b-musique-m5_5_${MODE}-seed${SEED}-${TS}"
 # Checkpoint dir keyed by (mode, seed); not timestamped, so resumes work.
-CKPT_DIR="${CHECKPOINT_DIR_BASE:-results/grpo}/m5_${MODE}/seed${SEED}"
+# Matches the yaml default (checkpointing.checkpoint_dir: results/grpo/m5_5_prod)
+# so the override stays under the same m5_5_<mode> prefix as the W&B project.
+CKPT_DIR="${CHECKPOINT_DIR_BASE:-results/grpo}/m5_5_${MODE}/seed${SEED}"
 
 OVERRIDES=(
     "grpo.seed=${SEED}"

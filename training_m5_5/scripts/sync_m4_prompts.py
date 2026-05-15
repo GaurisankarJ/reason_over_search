@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Materialise an M4 prompt template into M5.1's prompt files.
+"""Materialise an M4 prompt template into M5.5's prompt files.
 
 The M4 eval pipeline iterates on prompt candidates centrally in
 `evaluation_qwen35/flashrag/search_r1/templates.py:QWEN35_TEMPLATES`. To
@@ -26,7 +26,7 @@ Important caveats:
 
 - The training processor calls `prompt.format(question)` (positional), so
   this script substitutes `{prompt}` -> `{}` on write. Don't add new format
-  placeholders in M5.1 prompts without also updating the processor.
+  placeholders in M5.5 prompts without also updating the processor.
 - Mode `qwen35_minimal_no_system` ALSO requires the training processor to
   stop passing `tools=[SEARCH_TOOL]` to `apply_chat_template` (the M4
   pipeline does that for this mode). That knob does NOT exist yet in the
@@ -100,7 +100,7 @@ def main() -> int:
     if args.mode in MODES_REQUIRING_NO_TOOLS:
         print(
             f"WARNING: mode {args.mode!r} requires the M4 pipeline to skip\n"
-            "  `tools=[QWEN35_SEARCH_TOOL]` in apply_chat_template. The M5.1\n"
+            "  `tools=[QWEN35_SEARCH_TOOL]` in apply_chat_template. The M5\n"
             "  training processor currently always passes tools=; using this\n"
             "  mode without a processor edit produces train/eval drift.",
             file=sys.stderr,

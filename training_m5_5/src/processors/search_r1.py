@@ -69,7 +69,7 @@ def search_r1_processor(
     Expects `datum_dict` to carry the columns produced by either of the
     repo's two dataset-prep scripts:
       - M2 NQ+HotpotQA: `training/scripts/prepare_dataset.py`
-      - M5.1 MuSiQue : `training_m5_5/scripts/prep_musique.py`
+      - M5 MuSiQue  : `training_m5_5/scripts/prep_musique.py`
 
     Required columns:
       - `messages`: list[{"role": "user", "content": question}]  (length 1)

@@ -418,6 +418,28 @@ Everything §1–§9 assumes (the `pantomiman/reason-over-search-v1:v2` image) i
 assets yourself — but in exchange you get 1× or 2× B300 SXM6 (275 GB HBM3e
 each), ~3.6× A100's memory, and ~50% more compute than B200.
 
+### TL;DR — one-shot bootstrap (recommended)
+
+```bash
+# 1. Sync repo to /root/reason_over_search/ (see §10a)
+# 2. Then run:
+bash training_m5_5/scripts/bootstrap_b300.sh   # ~30-45 min cold; idempotent
+bash training_m5_5/scripts/start_b300.sh       # auto-runs bootstrap if needed
+```
+
+`bootstrap_b300.sh` bakes in every fix learned from the 2026-05-15 bring-up:
+CUDA 12.9 toolkit swap, InfiniBand headers, ninja, cmake 4.x (Ubuntu 24.04
+ships 3.28 which doesn't know sm_120), cuDNN dev headers, `uv` symlinked
+system-wide, V2 worker venv built from host shell (not Ray actor), TE compile
+narrowed to `NVTE_CUDA_ARCHS="90;120"`, and Qwen3.5-0.8B HF cache pre-warmed.
+If anonymous HF download fails, the script prompts for an `HF_TOKEN`
+interactively and persists it to `training_m5_5/.env`. Root-cause for each
+fix: [B300_VERDA_RUNBOOK.md](B300_VERDA_RUNBOOK.md).
+
+The §10b–§10h sections below are the **manual** equivalent — useful only if
+you want to understand or debug what the bootstrap is doing. Skip them
+otherwise.
+
 Reference box (observed 2026-05-15):
 
 | Field | Value |
