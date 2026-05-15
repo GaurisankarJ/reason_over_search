@@ -258,6 +258,32 @@ Step wall-clock + reward signal (rollouts pulled from `train_data_step*.jsonl`):
 - Cumulative cost since launch: ~$14. Still ~30× under budget.
 - B200 a3 reference (steps 11-20 cadence): rew_mean ~0.115 — H200 at 0.106 is **within 8 % of B200**, same recipe + same hardware-class except for the GDN patch. The patch's compute overhead does not visibly hurt learning.
 
+### Cadence 3: steps 25-30 (through 2026-05-16 ~01:38 UTC)
+
+| Step | Wall (s) | M:S | rew mean | rew > 0 | notes |
+|---:|---:|---:|---:|---:|---|
+| 25 | 284.86 | 4:45 | 0.161 | 24 % | |
+| 26 | 271.16 | 4:31 | 0.122 | 24 % | |
+| 27 | 359.82 | 6:00 | 0.091 | 20 % | Step time rising — re-exploration phase. |
+| 28 | 304.35 | 5:04 | 0.161 | 32 % | |
+| 29 | 353.21 | 5:53 | 0.134 | 26 % | |
+| **30** | **340.01** | **5:40** | **0.173** | **37 %** | **Third checkpoint** (6.4 GB) uploaded to HF in 24 s. **Peak reward and peak rew>0% so far**. |
+
+**Cadence 3 vs Cadence 2 (10-step windows)**:
+| Window | rew_mean | rew > 0 | step wall | tool calls (med) |
+|---|---:|---:|---:|---:|
+| Steps 1-10 | 0.067 | 13 % | ~900 s | 6 |
+| Steps 11-20 | 0.106 | 20 % | ~280 s | 4 |
+| Steps 21-30 | **0.131** | **26 %** | ~315 s | 4 |
+| Δ c2→c3 | +24 % rew, +30 % rew>0 | +12 % wall (re-exploration) | — |
+
+**Trends after cadence 3**:
+- Reward climbing again after a brief plateau (steps 17-22 around 0.10-0.16; steps 28-30 mean 0.156). Step 30 hit 0.173 — **6.3× cold-start**.
+- Re-exploration phase has started: step time rose from ~245 s to ~315 s (+25 %). Tool count stays at 4 median, but search queries are getting longer (more careful retrieval). Same pattern B200 a3 showed at steps 25+.
+- HF: `step_30/` live at [the primary repo](https://huggingface.co/pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42/tree/main/step_30).
+- Cumulative cost: ~$18. Steps 1-30 wall: ~9 h.
+- B200 a3 cadence-3 same range: rew_mean 0.143 — H200 at 0.131 is **within 9 % of B200** (still tracking).
+
 ## 9. Cost / wall-clock estimate
 
 **Confirmed rate: $1.95/h** (Spheron ES Spot, 1× H200 SXM5, US Central 1, instance ID `6a072a4e`). Validated 2026-05-15 ~22:30 UTC against dashboard: $12.25 total at 6.28 h elapsed = $1.951/h. (The $15.15/h figure in `HARDWARE_COMPARISON.md` is the 8× cluster tier; not what we're on.)
