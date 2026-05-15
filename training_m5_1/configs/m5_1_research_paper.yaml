@@ -457,15 +457,15 @@ logger:
   swanlab_enabled: false
   monitor_gpus: true
   wandb:
-    project: "reason_over_search_b200"
-    name: "qwen3.5-0.8b-musique-b200-a3-seed42"
+    project: "reason_over_search_h200"
+    name: "qwen3.5-0.8b-musique-h200-a4-seed42"
   swanlab:
-    project: "reason_over_search_b200"
-    name: "qwen3.5-0.8b-musique-b200-a3-seed42"
+    project: "reason_over_search_h200"
+    name: "qwen3.5-0.8b-musique-h200-a4-seed42"
   tensorboard: {}
   mlflow:
-    experiment_name: "reason_over_search_b200"
-    run_name: "qwen3.5-0.8b-musique-b200-a3-seed42"
+    experiment_name: "reason_over_search_h200"
+    run_name: "qwen3.5-0.8b-musique-h200-a4-seed42"
     tracking_uri: "http://localhost:5000"
   gpu_monitoring:
     collection_interval: 10

@@ -442,15 +442,15 @@ logger:
   wandb:
     # Per-experiment project per docs/milestone_5/MILESTONE_5.md §"Folder
     # layout" — keeps M5.1 / M5.2 / ... cleanly separated in W&B.
-    project: "reason_over_search_m5_1"
-    name: "qwen3.5-0.8b-musique-m5_smoke-seed42"
+    project: "reason_over_search_h200"
+    name: "qwen3.5-0.8b-musique-h200-a4-smoke-seed42"
   swanlab:
-    project: "reason_over_search_m5_1"
-    name: "qwen3.5-0.8b-musique-m5_smoke-seed42"
+    project: "reason_over_search_h200"
+    name: "qwen3.5-0.8b-musique-h200-a4-smoke-seed42"
   tensorboard: {}
   mlflow:
-    experiment_name: "reason_over_search_m5_1"
-    run_name: "qwen3.5-0.8b-musique-m5_smoke-seed42"
+    experiment_name: "reason_over_search_h200"
+    run_name: "qwen3.5-0.8b-musique-h200-a4-smoke-seed42"
     tracking_uri: "http://localhost:5000"
   gpu_monitoring:
     collection_interval: 10
