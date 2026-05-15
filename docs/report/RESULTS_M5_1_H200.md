@@ -227,6 +227,37 @@ Step wall-clock + reward signal (rollouts pulled from `train_data_step*.jsonl`):
 
 **Untrained-model rollout cost dropping faster than predicted**: §9 cold-50 estimate had step time at ~18 min through step 50; we're at 6 min by step 12. Updating projection below.
 
+### Cadence 2: steps 14-24 (through 2026-05-16 ~00:50 UTC)
+
+| Step | Wall (s) | M:S | rew mean | rew > 0 | notes |
+|---:|---:|---:|---:|---:|---|
+| 14 | 289.27 | 4:49 | 0.120 | 21 % | |
+| 15 | 287.95 | 4:48 | 0.126 | 28 % | |
+| 16 | 254.40 | 4:14 | 0.140 | 23 % | First sub-5-min step. |
+| 17 | 263.31 | 4:23 | 0.091 | 18 % | Brief regression. |
+| 18 | 227.04 | 3:47 | 0.117 | 20 % | |
+| 19 | 245.15 | 4:05 | 0.111 | 23 % | |
+| **20** | **242.07** | **4:02** | 0.106 | 18 % | **Second checkpoint** (6.4 GB) uploaded to HF in 23 s. |
+| **21** | 248.41 | 4:08 | **0.164** | **30 %** | **Peak yet** — 30 % of rollouts now solving MuSiQue. |
+| 22 | 248.57 | 4:08 | 0.099 | 20 % | |
+| 23 | 281.05 | 4:41 | 0.140 | 24 % | |
+| 24 | 255.14 | 4:15 | 0.130 | 23 % | |
+
+**Cadence 1 vs Cadence 2 (10-step windows)**:
+| Window | rew_mean | rew > 0 | step wall | tool calls (med) |
+|---|---:|---:|---:|---:|
+| Steps 1-10 | 0.067 | 13 % | ~900 s | 6 (still hitting ceiling) |
+| Steps 11-20 | **0.106** | **20 %** | ~280 s | 4 (clean) |
+| Δ | +58 % rew, +54 % rew>0 | -69 % wall | model converged on 4-call pattern |
+
+**Trends after cadence 2**:
+- Step time **plateaued ~245 s (4 min)**. The cold→stable transition is over; we're in stable-regime now.
+- Reward keeps climbing — peak at step 21 (0.164) is **5.9× step 1 (0.028)**.
+- Frac rew > 0: best step (21) reached 30 %, 3× the cold-start 10 % rate.
+- HF: `step_20/` live at [the primary repo](https://huggingface.co/pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42/tree/main/step_20). Both checkpoints durable.
+- Cumulative cost since launch: ~$14. Still ~30× under budget.
+- B200 a3 reference (steps 11-20 cadence): rew_mean ~0.115 — H200 at 0.106 is **within 8 % of B200**, same recipe + same hardware-class except for the GDN patch. The patch's compute overhead does not visibly hurt learning.
+
 ## 9. Cost / wall-clock estimate
 
 **Confirmed rate: $1.95/h** (Spheron ES Spot, 1× H200 SXM5, US Central 1, instance ID `6a072a4e`). Validated 2026-05-15 ~22:30 UTC against dashboard: $12.25 total at 6.28 h elapsed = $1.951/h. (The $15.15/h figure in `HARDWARE_COMPARISON.md` is the 8× cluster tier; not what we're on.)
