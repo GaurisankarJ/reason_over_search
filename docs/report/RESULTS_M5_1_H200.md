@@ -198,13 +198,34 @@ forward_cuda (vllm/.../qwen3_next.py:176)
 
 ## 8. Live trajectory
 
-| Step | Wall (s) | Phase breakdown | Notes |
-|---:|---:|---|---|
-| 1 | 1101.82 | gen (incl. multi-turn) ~5-7 min · reward+adv ~10 s · logprob ~2-3 min · train ~8-10 min | First step on the patched native Triton GDN path. GPU peak 140 GiB (close to 141 GB ceiling). |
-| 2 | 1123.09 | similar | Stable; +21 s vs step 1 likely from rollout-distribution noise. |
-| 3 | in-flight (as of 2026-05-15 20:09 UTC) | | Rollout phase active. |
+### Cadence 1: steps 1-13 (through 2026-05-16 ~00:16 UTC)
 
-**Untrained-model rollout cost**: turn 0 starts at 320 prompts; ~10 prompts emit `<answer>` per turn, so turn 1 = 310, turn 2 = 294, etc. Max turns = 10 (uncapped per user direction). Step time will decrease as the model learns to emit `<answer>` earlier (typically within first 50-100 steps based on b200 trajectory).
+Step wall-clock + reward signal (rollouts pulled from `train_data_step*.jsonl`):
+
+| Step | Wall (s) | M:S | rew mean | rew > 0 | notes |
+|---:|---:|---:|---:|---:|---|
+| 1 | 1101.82 | 18:22 | 0.028 | 8 % | First step on patched native Triton GDN. GPU peak 140 GiB. |
+| 2 | 1123.09 | 18:43 | — | — | Cold rollout. |
+| 3 | 1079.01 | 17:59 | 0.023 | 7 % | Cold rollout. |
+| 4 | 1023.30 | 17:03 | — | — | First sign of step-time drop. |
+| 5 | 986.47 | 16:26 | 0.073 | 10 % | **Reward starts moving** (3× step 1). |
+| 6 | 782.38 | 13:02 | — | — | Big drop — model stopped using max_turns. |
+| 7 | 821.99 | 13:42 | 0.074 | 15 % | rew > 0 doubled vs step 1. |
+| 8 | 735.03 | 12:15 | — | — | |
+| 9 | 646.39 | 10:46 | — | — | |
+| **10** | **598.64** | **9:58** | 0.073 | 15 % | **First checkpoint** (6.4 GB) saved + uploaded to HF in 21 s. |
+| 11 | 470.35 | 7:50 | — | — | |
+| 12 | 363.78 | 6:04 | 0.078 | 15 % | Wall now 1/3 of step 1. |
+| 13 | — (running at cadence cut) | — | **0.110** | **20 %** | **Best reward yet** — 20 % of rollouts solving MuSiQue. |
+
+**Trends after one cadence**:
+- Step wall: 1101 → 364 s (−67 %) over 12 steps. Multi-turn rollout depth dropped sharply.
+- Reward mean: 0.028 → 0.110 (~4 ×).
+- Frac rew > 0: 8 % → 20 %.
+- HF Hub: `step_10/` (6.4 GB) live at [the primary repo](https://huggingface.co/pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42/tree/main/step_10).
+- Cumulative wall: ~3.5 h since launch. Cost: ~$7. 0 OOMs, 0 uploader errors, 0 stalls (GDN patch holds).
+
+**Untrained-model rollout cost dropping faster than predicted**: §9 cold-50 estimate had step time at ~18 min through step 50; we're at 6 min by step 12. Updating projection below.
 
 ## 9. Cost / wall-clock estimate
 
@@ -240,11 +261,27 @@ These projections assume step time stays at ~18 min throughout. **Realistically 
 
 | Phase | Steps | Step wall | Sub-total | Cumulative |
 |---|---:|---:|---:|---:|
-| Cold (multi-turn at floor) | 1-50 | 18 min | 15 h | 15 h |
-| Transitional (model learns to answer) | 51-150 | 15 min | 25 h | 40 h |
-| Stable | 151-622 | 13 min | 102 h | **142 h ≈ 5.9 days** |
+| ~~Cold (multi-turn at floor)~~ | 1-50 | 18 min | 15 h | 15 h |
+| ~~Transitional (model learns to answer)~~ | 51-150 | 15 min | 25 h | 40 h |
+| ~~Stable~~ | 151-622 | 13 min | 102 h | **142 h ≈ 5.9 days** |
 
-So realistic estimate for `max_num_steps: 622`: **~6 days wall, ~$277 @ $1.95/h** (full budget is $1000, leaves headroom for one more 622-step run or a 3-epoch extension to 934 steps for ~$557 if convergence justifies it). Will tighten as we observe the actual transition curve in the cadence checkpoints.
+The cold-transitional-stable shape above was the **a3 b200 trajectory** ported to H200; turns out the H200 a4 run blew through the curve much faster:
+
+| Observed (cadence 1) | Steps | Step wall | Sub-total | Cumulative |
+|---|---:|---:|---:|---:|
+| Cold | 1-5 | ~17 min | 1.4 h | 1.4 h |
+| Sharp drop | 6-12 | ~10 min | 1.2 h | 2.6 h |
+| Stable (extrapolated, step 13 anchor 6 min) | 13-622 | 6 min | 61.0 h | **63.6 h ≈ 2.6 days** |
+
+If step time really stabilises at ~6 min through step 622 (a strong assumption — it could drift up as the policy explores harder questions or down further as `<answer>`-emission improves):
+
+| Span | Steps | Wall | Cost @ $1.95/h |
+|---|---:|---:|---:|
+| 1 epoch | 311.5 | 31.2 h | **$60.8** |
+| `max_num_steps: 622` (2 epochs) | 622 | **63.6 h ≈ 2.6 days** | **$124** |
+| Paper's 3 epochs | 934 | 95.7 h ≈ 4.0 days | $187 |
+
+So realistic estimate for `max_num_steps: 622` revised down to **~2.6 days wall, ~$124 @ $1.95/h** (was 5.9 days / $277 before observing the drop). Whole budget of $1000 now easily fits 8 full seeds or 3+ epochs × 2 seeds. Will keep tracking step time at every cadence; if step time creeps back up above 10 min/step the projection will rise accordingly.
 
 ## 10. The four prior losses (recap)
 
