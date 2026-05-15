@@ -9,7 +9,7 @@ status: live — v11 running on patched native Triton GDN; step 2 landed
 
 # M5.1-prod-a4 — Production training on Spheron H200 with persistent volume
 
-> **Status**: smoke launched 2026-05-15 ~11:18 UTC after host migration to H200 + virtiofs persistent volume. Follows 4 prior M5.1 losses (a1/a1b/a2/a3) — see [`RESULTS_M5_1_B200.md` §10](RESULTS_M5_1_B200.md) for the a3 incident report. This run uses the new bulletproof uploader + external monitor + dual-repo backup + persistent volume to make host-loss recovery structurally possible.
+> **Status**: smoke launched 2026-05-15 ~11:18 UTC after host migration to H200 + virtiofs persistent volume. Follows 4 prior M5.1 losses (a1/a1b/a2/a3) — see [`RESULTS_M5_1_B200.md` §10](RESULTS_M5_1_B200.md) for the a3 incident report. This run uses the new bulletproof uploader + persistent volume to make host-loss recovery structurally possible. (The earlier draft also wrote to a redundant `-backup` HF repo; removed 2026-05-15 once we confirmed the Spheron volume already preserves all artifacts across host preemption.)
 >
 > **Key changes vs a3**:
 > - Hardware: 1× H200 SXM 141GB (vs B200 192GB) on Spheron with **persistent volume** (`miletone5`, 600 GB, virtiofs)
@@ -26,8 +26,7 @@ status: live — v11 running on patched native Triton GDN; step 2 landed
 |---|---|
 | Run name | `qwen3.5-0.8b-musique-h200-a4-seed42` |
 | W&B project | `reason_over_search_h200` |
-| HF Hub repo (primary) | [`pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42`](https://huggingface.co/pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42) |
-| HF Hub repo (backup) | [`pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-backup`](https://huggingface.co/pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-backup) |
+| HF Hub repo | [`pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42`](https://huggingface.co/pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42) (single; persistent volume makes redundancy unnecessary) |
 | Git branch | `experiment_1_h200` (forked from `experiment_1_b200` at commit `178d5db`) |
 | Started commit | `48d9a64` (h200 yaml updates) |
 | Launch time (UTC) | 2026-05-15 19:24 (v11, after 8 prior prod-launch iterations; see §7.5) |
@@ -85,32 +84,30 @@ All other paper-faithful hyperparameters (lr=1e-6, kl_penalty=0.001, ratio_clip=
 - **Checkpoint folder priority** — `step_N/` pushes before logs/rollouts
 - **Aggressive retry** with exponential backoff (5/15/45/90/180 s on transient errors)
 - **Pre-flight canary** — uploads a tiny test file at startup, exits 2 if HF unreachable
-- **Dual-repo** — uploads to both primary and backup namespaces simultaneously
+- ~~**Dual-repo** — uploads to both primary and backup namespaces simultaneously~~ (Removed 2026-05-15: the Spheron persistent volume already preserves all artifacts across host preemption, so the backup repo was duplicating durability we get for free from the volume. Uploader now writes only to the primary repo; backup HF repo has been deleted.)
 - **5-second filesystem scan** for new `step_N/` folders (vs 60s in a3's bash uploader)
 - **JSON state file** with atomic writes (vs plain-text append in a3)
 
-### 4.2 External monitor (`external_monitor.py`)
-- Runs on user's **local Mac**, not the training instance
+### 4.2 External monitor (`external_monitor.py`) — script exists but not currently auto-invoked
+- Script designed to run on user's **local Mac**, not the training instance
 - Polls HF every 5 min, cross-references with W&B step count
 - Reports STALE if no commit in 10 min
 - Reports LAG if W&B step is >10 steps ahead of HF rollouts
-- Tested against the dead a3 run: would have caught the failure at minute 11, not 11 hours
+- **Status 2026-05-15**: script exists in repo but no `launchd` / `cron` job is invoking it; verified via `launchctl list`, `crontab -l`, and `ps -ef | grep external_monitor` on the user's Mac. The "external monitor running on user's local Mac" status in earlier sections was aspirational. With the persistent volume now preserving artifacts across host preemption, the external monitor's main purpose (catch silent-drop uploads before the host dies) is much less critical — but if we want it auto-running, the easiest install is a per-user `launchd` plist polling every 5 min.
 
 ### 4.3 Launch checklist (`LAUNCH_CHECKLIST_A4.md`)
 Explicit gate-by-gate verification. Every box must be checked before training:
-- HF_TOKEN + HF_REPO_ID + HF_BACKUP_REPO_ID set
-- Both repos created on HF
-- Uploader pre-flight passes on both repos
-- External monitor running on user's local Mac
+- HF_TOKEN + HF_REPO_ID set
+- Repo created on HF
+- Uploader pre-flight passes
 - Volume mount verified persistent (destroy + recreate test)
 
 ### 4.4 Pre-launch gates passed (for this run)
 | Gate | Status |
 |---|---|
 | HF token set | ✓ in `.env` |
-| Both repos created | ✓ (h200-a4-seed42 + h200-a4-backup) |
-| Pre-flight uploads canary to both | ✓ both repos have `.preflight_canary.txt` |
-| External monitor reports HEALTHY | ✓ verified at 11:15 UTC |
+| Primary repo created | ✓ (h200-a4-seed42) |
+| Pre-flight uploads canary | ✓ repo has `.preflight_canary.txt` |
 | Persistent volume mount tested | ✓ (file from previous host visible here) |
 | NeMo-RL venv functional | ✓ torch 2.10 + cuda True + H200 visible |
 | Retriever healthy | ✓ port 3005, 8/8 workers available |
@@ -142,7 +139,7 @@ Every 10 steps. Each cadence:
 4. Hand-analyze each (2-3 sentence commentary)
 5. Append to this doc; commit to `experiment_1_h200`; push to GitHub
 6. README on both HF repos updated
-7. **Before ANY of the above**: verify uploader is healthy by checking heartbeat in `uploader.log` AND running external_monitor.py
+7. **Before ANY of the above**: verify uploader is healthy by checking the heartbeat line in `/workspace/state/uploader_prod.log` (most recent line should be within 60 s and show `errors=0`). The external_monitor.py script in §4.2 is not currently auto-invoked.
 
 ## 7. Smoke verification status (DONE)
 
@@ -176,7 +173,7 @@ else:
 
 - B200 (sm_100): never matches the if; always Triton. Why all prior B200 runs worked.
 - A100 (sm_80): never matches the if; always Triton. Why M2 training never hit it.
-- H200 (sm_90): matches the if; calls FlashInfer GDN. On small batches (smoke shape, async continuous-batching micro-batches) the kernel finishes. On **prod-scale sync prefill (309 prompts post-retrieval-injection with 3-6 K context each)** the kernel deadlocks inside CUDA. GPU stays at 100 % util; the Python decode loop never returns from `forward_cuda`.
+- H200 (sm_90): matches the if; calls FlashInfer GDN. On small batches (smoke shape, async continuous-batching micro-batches) the kernel finishes. On **prod-scale sync prefill (309 rollouts post-retrieval-injection with 3-6 K context each — 309 ≈ the 320-rollout step batch minus the ~11 prompts that already emitted `<answer>` in turn 0)** the kernel deadlocks inside CUDA. GPU stays at 100 % util; the Python decode loop never returns from `forward_cuda`. Note: 320 = `num_prompts_per_step (64) × num_generations_per_prompt (5)` — these are GRPO rollouts seen by vLLM, not unique prompts.
 
 **Symptom**: prod.log + vLLM worker .out both frozen for 30+ min while vLLM proc shows R state, 180-190 % CPU, GPU at 100 % util. No traceback. No tqdm refresh. py-spy stack dump (run from host with `sudo /tmp/py-spy dump --pid <host_pid>` after `docker cp h200-a4:/workspace/.../bin/py-spy /tmp/py-spy`) confirms:
 
@@ -232,15 +229,14 @@ But: H200's 141 GB VRAM may allow `gpu_memory_utilization` headroom that helps, 
 | a1 step-50 ckpt crash | 2026-05-11 | ~$30 | `metric_name: "train/loss/mean"` violated NeMo-RL assertion | `metric_name: null` + smoke-verified |
 | a1 rollout-corpus deletion | 2026-05-11 | 196 MB data loss | `rm -rf logs/exp_010` (prod) bundled with cleanup | Rollouts uploaded to HF (now to TWO repos) so single-machine deletion can't kill them |
 | a2 zombie GPU misdiagnosis kill | 2026-05-12 | ~$21 | Misread `[Not Found]` in nvidia-smi | Kill-on-evidence rule |
-| **a3 Spheron T3 spot preemption** | **2026-05-15** | **~$36 + step_50 ckpt** | **Spot host preempted ~step 56 + uploader silently dropped rollouts past step 18** | **Persistent volume + bulletproof uploader + external monitor + dual-repo backup** |
+| **a3 Spheron T3 spot preemption** | **2026-05-15** | **~$36 + step_50 ckpt** | **Spot host preempted ~step 56 + uploader silently dropped rollouts past step 18** | **Persistent volume (`miletone5`) preserves all artifacts across host preemption; bulletproof uploader with heartbeat + retry catches silent-drop pattern from a3** |
 
 **Cumulative loss across M5.1**: ~$108 + 196 MB + 1 trained checkpoint.
 
 ## 11. Pointers
 
 - W&B project: [`reason_over_search_h200`](https://wandb.ai/gaurisankarj1996-leiden-university/reason_over_search_h200)
-- HF Hub primary: [`pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42`](https://huggingface.co/pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42)
-- HF Hub backup: [`pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-backup`](https://huggingface.co/pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-backup)
+- HF Hub: [`pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42`](https://huggingface.co/pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42) (backup repo removed 2026-05-15; volume handles redundancy)
 - Prior run (crashed): [a3 RESULTS](RESULTS_M5_1_B200.md) (W&B run [h68uskz6](https://wandb.ai/gaurisankarj1996-leiden-university/reason_over_search_b200/runs/h68uskz6))
 - Config: [`training_m5_1/configs/m5_1_research_paper.yaml`](../../training_m5_1/configs/m5_1_research_paper.yaml)
 - Smoke config: [`training_m5_1/configs/m5_smoke.yaml`](../../training_m5_1/configs/m5_smoke.yaml)

@@ -28,9 +28,10 @@ The 50 GB VRAM gap between B200 and H200 is the single biggest reason why a yaml
 
 1. Spheron account with active compute deployment for 1× H200 + persistent volume named `miletone5` (600 GB) attached.
 2. SSH access to the deployment's IP (key set up in Spheron console).
-3. Both HF model repos provisioned and empty (only README + config_snapshot + .gitattributes):
-   - `pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42` (primary)
-   - `pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-backup` (backup)
+3. HF model repo provisioned and empty (only README + config_snapshot + .gitattributes):
+   - `pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42` (primary; the only one we upload to now)
+
+   The earlier setup also wrote to a second `*-backup` repo for redundancy against host preemption. Removed and deleted 2026-05-15: the Spheron persistent volume (`miletone5`) already preserves all checkpoints + rollouts across host preemption, so the backup repo was duplicating durability we now get for free. The HF backup repo has been deleted; do not reinstate.
 4. HF dataset `pantomiman/reason-over-search-v1-venvs` has `dtensor_policy_worker_v2.tar.gz` (6.5 GB pre-built DTensor V2 venv) accessible with your HF token.
 5. WANDB_API_KEY in your environment for the run.
 6. Branch `experiment_1_h200` exists locally on the volume (fork from `experiment_1_b200`); commit `48d9a64` is the canonical h200-rename commit.
@@ -269,7 +270,7 @@ sudo docker exec h200-a4 pkill -f retriever_serving
 
 ## Stage 6: Uploader startup
 
-The bulletproof Python uploader (`training_m5_1/scripts/upload_a4_to_hf.py`) watches the checkpoint dir, rollout dir, and prod.log; pushes each new artifact to both primary + backup HF repos with retry and heartbeats. This was authored on 2026-05-15 after the prior bash uploader (a3) silently dropped uploads past step 18 and lost the step 50 ckpt when the host was preempted.
+The bulletproof Python uploader (`training_m5_1/scripts/upload_a4_to_hf.py`) watches the checkpoint dir, rollout dir, and prod.log; pushes each new artifact to the primary HF repo with retry and heartbeats. This was authored on 2026-05-15 after the prior bash uploader (a3) silently dropped uploads past step 18 and lost the step 50 ckpt when the host was preempted. (Earlier draft also wrote to a backup repo; removed 2026-05-15 because the Spheron persistent volume already preserves all artifacts across host preemption.)
 
 ### 6.1 Pre-flight HF access
 
@@ -280,19 +281,16 @@ set -a; . /workspace/reason_over_search/training_m5_1/.env; set +a
 import os
 from huggingface_hub import HfApi
 api = HfApi(token=os.environ["HF_TOKEN"])
-for repo in [
-    "pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42",
-    "pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-backup",
-]:
-    info = api.repo_info(repo, repo_type="model")
-    files = api.list_repo_files(repo, repo_type="model")
-    print(f"OK {repo}")
-    print(f"  files: {files}")
+repo = "pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42"
+info = api.repo_info(repo, repo_type="model")
+files = api.list_repo_files(repo, repo_type="model")
+print(f"OK {repo}")
+print(f"  files: {files}")
 EOF
 '
 ```
 
-Both repos should be reachable; files should be exactly `['.gitattributes', 'README.md', 'config_snapshot.yaml']` if cleaned.
+Files should be exactly `['.gitattributes', 'README.md', 'config_snapshot.yaml']` if cleaned.
 
 ### 6.2 Pre-mark stale rollouts in state file
 
@@ -329,7 +327,6 @@ sudo docker exec -d h200-a4 bash -c '
 set -a; . /workspace/reason_over_search/training_m5_1/.env; set +a
 /venv/main/bin/python /workspace/reason_over_search/training_m5_1/scripts/upload_a4_to_hf.py \
   --repo-id pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42 \
-  --backup-repo-id pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-backup \
   --checkpoint-dir /workspace/reason_over_search/results/grpo/m5_smoke/seed42 \
   --rollout-dir /workspace/reason_over_search/logs \
   --prod-log /workspace/smoke.log \
@@ -382,9 +379,9 @@ sudo docker exec h200-a4 ls /workspace/reason_over_search/results/grpo/m5_smoke/
 # Each ckpt is ~6.4 GB
 sudo docker exec h200-a4 du -sh /workspace/reason_over_search/results/grpo/m5_smoke/seed42/step_*/
 
-# Both ckpts on BOTH HF repos
+# Both ckpts on the HF repo
 sudo docker exec h200-a4 grep "step_4 (folder)" /workspace/state/uploader_smoke.log
-# Expected: 2 lines (one per repo)
+# Expected: 1 line
 
 # Cross-check HF API
 sudo docker exec h200-a4 bash -c '
@@ -393,25 +390,22 @@ set -a; . /workspace/reason_over_search/training_m5_1/.env; set +a
 import os
 from huggingface_hub import HfApi
 api = HfApi(token=os.environ["HF_TOKEN"])
-for repo in [
-    "pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42",
-    "pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-backup",
-]:
-    files = api.list_repo_files(repo, repo_type="model")
-    print(f"{repo}:")
-    for f in files:
-        print(f"  {f}")
+repo = "pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42"
+files = api.list_repo_files(repo, repo_type="model")
+print(f"{repo}:")
+for f in files:
+    print(f"  {f}")
 EOF
 '
 ```
 
-Each repo should have at minimum: `step_2/` + `step_4/` (with safetensors inside), `logs/train_data/exp_NNN/train_data_step{1,2,3,4}.jsonl`, README, config_snapshot.yaml.
+Repo should have at minimum: `step_2/` + `step_4/` (with safetensors inside), `logs/train_data/exp_NNN/train_data_step{1,2,3,4}.jsonl`, README, config_snapshot.yaml.
 
 Smoke wall-clock observed (2026-05-15): **~17 min total**:
 - Setup (vLLM + DTensor init): ~4.7 min
 - Step 1 (cold turn-1 thinking blocks): ~9 min (mostly the model's `<think>` block at temp=1.0)
 - Steps 2-3-4 (warm): ~2 min total
-- Both checkpoints uploaded to both HF repos: ~15s after step 4 closes
+- Both checkpoints uploaded to the HF repo: ~15s after step 4 closes
 
 If any of these gates fail, see §8 Pitfalls before retrying. **Do not launch prod until smoke is verified end-to-end.**
 
@@ -436,17 +430,14 @@ import os
 from huggingface_hub import HfApi, CommitOperationDelete
 api = HfApi(token=os.environ["HF_TOKEN"])
 KEEP = {".gitattributes", "README.md", "config_snapshot.yaml"}
-for repo in [
-    "pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42",
-    "pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-backup",
-]:
-    files = api.list_repo_files(repo, repo_type="model")
-    to_del = [f for f in files if f not in KEEP]
-    if to_del:
-        ops = [CommitOperationDelete(path_in_repo=f) for f in to_del]
-        api.create_commit(repo_id=repo, repo_type="model", operations=ops,
-                          commit_message="cleanup: remove smoke artifacts pre-prod")
-        print(f"deleted {len(to_del)} from {repo}")
+repo = "pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42"
+files = api.list_repo_files(repo, repo_type="model")
+to_del = [f for f in files if f not in KEEP]
+if to_del:
+    ops = [CommitOperationDelete(path_in_repo=f) for f in to_del]
+    api.create_commit(repo_id=repo, repo_type="model", operations=ops,
+                      commit_message="cleanup: remove smoke artifacts pre-prod")
+    print(f"deleted {len(to_del)} from {repo}")
 EOF
 '
 ```
@@ -490,7 +481,6 @@ sudo docker exec -d h200-a4 bash -c '
 set -a; . /workspace/reason_over_search/training_m5_1/.env; set +a
 /venv/main/bin/python /workspace/reason_over_search/training_m5_1/scripts/upload_a4_to_hf.py \
   --repo-id pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42 \
-  --backup-repo-id pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-backup \
   --checkpoint-dir /workspace/reason_over_search/results/grpo/m5_prod/seed42 \
   --rollout-dir /workspace/reason_over_search/logs \
   --prod-log /workspace/prod.log \
@@ -694,9 +684,11 @@ The `pantomiman/reason-over-search-v1:v2` image inherits a Vast.ai-style entrypo
 
 If a `docker exec -d ... run.sh ...` command's wrapping shell fails after the exec (e.g. a syntax error in a downstream `echo`), the process still launched inside the container and competes with later launches. **Always verify exactly 1 (or 2 parent+child) run_grpo.py processes immediately after launch**, before assuming a relaunch was clean.
 
-### P9: vLLM tqdm progress hides real generation activity
+### P9: vLLM tqdm progress hides real generation activity (sometimes; sometimes hides a kernel deadlock)
 
-vLLM's "Processed prompts: 0%" tqdm output uses `\r` to overwrite a single line. From outside, the log appears stalled at 0 % for several minutes during the cold first turn (Qwen3.5 `<think>` blocks at temp=1.0 can generate thousands of internal tokens before any visible output). The training is NOT hung. Confirmation: check that `ray::VllmGenerationWorker` is in `R` state with growing CPU time, and that the orchestrator log file `mtime` is advancing.
+vLLM's "Processed prompts: 0%" tqdm output uses `\r` to overwrite a single line. From outside, the log appears stalled at 0 % for several minutes during the cold first turn (Qwen3.5 `<think>` blocks at temp=1.0 can generate thousands of internal tokens before any visible output).
+
+**Heuristic upgraded after v10b**: growing CPU time alone is **no longer sufficient** to declare a tqdm stall harmless — that same symptom (vLLM proc R-state, 180-190 % CPU, GPU 100 % util, log frozen 30+ min) was the FlashInfer GDN deadlock on H200 (see P12). After 10 minutes of zero tqdm/INFO log activity, run py-spy on the vLLM proc (recipe in P12). If the stack is parked in `flashinfer.gdn_prefill`, you have the deadlock, not slow generation. If it's anywhere in `vllm.v1.engine.core` calls cycling, generation is genuinely slow.
 
 ### P10: Spheron sshd can hang under fork pressure
 
@@ -756,6 +748,26 @@ Thread X (active): "MainThread"
 **Fix**: apply the Stage 9.1 patch (force `forward_native` always, ignoring the device-capability check). This is mandatory for H200; idempotent on other GPUs (their device capability never matched anyway).
 
 **Why we missed it for so long**: every smoke run used small batches (kernel happy), and v8 used async (continuous batching submits 1-10 prompts at a time, kernel happy). The moment we switched to sync engine at prod batch size (v10b), we were the first one to hit the bug. The earlier "v4 proven config" was on the same hardware but on async + smoke batch; the proof did not transfer to sync + prod batch.
+
+### P13: Live uploader pre-flight cleanup can look like a deletion
+
+The Python uploader ([`upload_a4_to_hf.py`](../../training_m5_1/scripts/upload_a4_to_hf.py)) does an automatic pre-flight HF wipe when transitioning from smoke to prod (Stage 8.2). The wipe lands on the HF Hub as a commit titled `cleanup: drop smoke artifacts; prep for prod a4 run`, which removes the smoke `step_2/` + `step_4/` directories from `pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42` and leaves only `README.md`, `config_snapshot.yaml`, `.gitattributes`, `.uploader_canary.txt`, and the log mirror behind.
+
+**Why this looks alarming**: a `repo_info(files_metadata=True)` call right after the wipe shows the repo at ~0 GB. If you don't know the pre-flight ran, this looks like the repo was emptied by an external action (e.g. an unauthorized delete during HF cleanup). Confirmed false alarm on 2026-05-15 PM during the HF smoke-cleanup session: the uploader's normal cleanup commit at 14:57 UTC fired ~2 min before the (unrelated) 13-repo smoke deletion. Diagnostic was done via the `*-backup` repo's commit history, which existed at the time (since deleted 2026-05-15 PM along with the move to single-repo durability via the persistent volume).
+
+**Diagnostic**: check the repo's commit history before assuming a destructive action hit it.
+
+```bash
+python -c "
+from huggingface_hub import HfApi; api = HfApi()
+for c in list(api.list_repo_commits('pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42'))[:5]:
+    print(c.created_at, c.commit_id[:10], c.title)
+"
+```
+
+If the most recent commit is `cleanup: drop smoke artifacts; prep for prod a4 run`, the uploader did it and the empty-repo state is **expected**. The next prod ckpt (step 50) will repopulate the repo automatically via the watcher.
+
+**Mitigation for future agents**: the uploader's pre-flight cleanup is intentional (smoke → prod state separation per Stage 8.2). Do not modify it. Add a wait-and-verify step before any "the HF repo is missing data" panic.
 
 ## Appendix A: Volume contents map (for sanity-checking)
 
