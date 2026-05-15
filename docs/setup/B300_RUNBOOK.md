@@ -99,7 +99,9 @@ UV_PROJECT_ENVIRONMENT="$V2_VENV" \
   uv sync --locked --extra automodel --directory training_m5_5/nemo_rl
 ```
 
-The Vast image avoids this by **downloading a pre-built v2 venv tarball** from `pantomiman/reason-over-search-v1-venvs`. Verda has no such tarball, so we compile.
+**Faster alternative — fast-path via pre-built tarball (added 2026-05-16)**: the Vast image downloads the pre-built v2 venv from `pantomiman/reason-over-search-v1-venvs` (HF dataset, file `dtensor_policy_worker_v2.tar.gz`, ~5 GB compressed). **This is provider-agnostic** — the tarball is just a vendored Python venv with compiled `.so` files; it works on Verda the same as on Vast. The only risk is that the kernels inside may not have a sm_120 SASS binary (built on Hopper-class hardware), but they typically embed PTX for the highest arch which JIT-compiles on B300 at first use.
+
+`bootstrap_b300.sh` now tries this path first and falls back to source compile only if the smoke import (`torch, transformer_engine, causal_conv1d, mamba_ssm, deep_ep, nemo_automodel`) fails — saving ~20-30 min on the next fresh box. Original framing in this runbook ("Verda has no such tarball, so we compile") was wrong — I copied it from `SETUP_INSTANCE.md` without checking. The tarball is publicly downloadable from any host with HF access.
 
 ### 6. transformer-engine compiles for **7 GPU architectures by default**
 
@@ -258,7 +260,7 @@ After this, `bash training_m5_5/scripts/start_b300.sh` is your single trigger fo
 | `NVTE_CUDA_ARCHS="90;120"` (vs default 7-arch) | **~3.5×** | The single biggest knob. Must include at least one non-stripped arch (i.e. NOT just "120"). |
 | `MAX_JOBS=32` / `CMAKE_BUILD_PARALLEL_LEVEL=32` | ~2× until single-file tail | 60 vCPUs → up to 32 parallel nvcc procs. Tail-limited. |
 | `TORCH_CUDA_ARCH_LIST="12.0+PTX"` | ~1.5× | Affects `deep-ep`, `causal-conv1d`, `mamba-ssm` (not TE). |
-| Pre-built tarball from `pantomiman/reason-over-search-v1-venvs` (if available) | ~10× | Skip compile entirely; Vast bootstrap uses this path. No Verda tarball exists yet. |
+| Pre-built tarball from `pantomiman/reason-over-search-v1-venvs` (fast-path, default) | ~10× | Provider-agnostic — `bootstrap_b300.sh` tries this first and falls back to source compile only if the B300 smoke import fails. |
 
 The remaining slow tail is dominated by a handful of large TE kernels (`cast_transpose_fusion`, `ln_fwd_cuda_kernel`, etc) that take 1-3 min each per arch and can't parallelize across files because `--threads 1`.
 

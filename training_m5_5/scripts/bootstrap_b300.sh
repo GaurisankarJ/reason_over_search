@@ -3,7 +3,7 @@
 # Ubuntu 24.04 box with B300 GPUs + driver 580 + CUDA 13.0 default toolkit).
 #
 # Bakes in every fix learned during the 2026-05-15 bring-up. Full root-cause
-# discussion: docs/setup/B300_VERDA_RUNBOOK.md.
+# discussion: docs/setup/B300_RUNBOOK.md.
 #
 # Idempotent: each step checks if its outcome is already true and skips if so.
 # Run from anywhere; cd's to the repo root before doing work.
@@ -129,10 +129,53 @@ training_m5_5/nemo_rl/.venv/bin/python -c "import torch; print(f'  torch={torch.
 ok "main venv built"
 
 # ============================================================
-info "step 7/9 — V2 worker venv (built from HOST shell — nv-grouped-gemm needs GPU at build time)"
+info "step 7/9 — V2 worker venv (tarball fast-path → falls back to source compile)"
 # ============================================================
+#
+# Two paths to materialize the DTensorPolicyWorkerV2 venv:
+#   a. FAST: download the pre-built tarball from HF dataset
+#      `pantomiman/reason-over-search-v1-venvs` and extract (~3-5 min for
+#      ~5 GB). Smoke-test that imports work on B300 (sm_120) — the tarball
+#      was built on Hopper-class hardware, so the cuda kernels may not have
+#      sm_120 SASS but should have PTX for JIT fallback. If any import
+#      fails (no PTX, ABI drift, etc.), wipe and fall through to (b).
+#   b. SLOW: compile transformer-engine + nv-grouped-gemm + deep-ep +
+#      causal-conv1d + mamba-ssm from source (~15-25 min). Runs from the
+#      host shell, not a Ray actor — nv-grouped-gemm.setup.py calls
+#      torch.cuda.init() at install time and the actor has no GPU.
+#
+# Override:
+#   V2_BUILD_FROM_SOURCE=1   skip the tarball path; always compile
+#   V2_VENV_HF_REPO=<repo>   override the HF repo for the tarball
 V2_VENV="${REPO_ROOT}/training/nemo_rl/venvs/nemo_rl.models.policy.workers.dtensor_policy_worker_v2.DTensorPolicyWorkerV2"
-if [[ ! -x "${V2_VENV}/bin/python" ]] || ! "${V2_VENV}/bin/python" -c "import transformer_engine" 2>/dev/null; then
+V2_VENV_HF_REPO="${V2_VENV_HF_REPO:-pantomiman/reason-over-search-v1-venvs}"
+V2_VENV_HF_FILE="${V2_VENV_HF_FILE:-dtensor_policy_worker_v2.tar.gz}"
+
+# Smoke-test the V2 venv at runtime: import the kernels we actually use.
+# More aggressive than Vast's `import nemo_automodel` because we want to
+# catch sm_120 mismatches (PTX missing → "no kernel image available") early.
+v2_imports_ok() {
+    [[ -x "${V2_VENV}/bin/python" ]] || return 1
+    "${V2_VENV}/bin/python" - <<'PY' 2>/dev/null
+import sys
+try:
+    import torch
+    import transformer_engine
+    import causal_conv1d
+    import mamba_ssm
+    import deep_ep
+    import nemo_automodel
+    # quick smoke that CUDA actually works at this arch
+    assert torch.cuda.is_available()
+    torch.zeros(1, device="cuda")
+    print("OK")
+except Exception as e:
+    print(f"FAIL: {type(e).__name__}: {e}", file=sys.stderr)
+    sys.exit(1)
+PY
+}
+
+build_from_source() {
     info "compiling V2 venv (NVTE_CUDA_ARCHS=${NVTE_CUDA_ARCHS}, MAX_JOBS=${MAX_JOBS}; ~15-25 min cold)"
     rm -rf "${V2_VENV}"
     rm -rf /root/.cache/uv/git-v0/checkouts/*/build 2>/dev/null || true
@@ -146,9 +189,39 @@ if [[ ! -x "${V2_VENV}/bin/python" ]] || ! "${V2_VENV}/bin/python" -c "import tr
       CMAKE_BUILD_PARALLEL_LEVEL="${MAX_JOBS}" \
       UV_PROJECT_ENVIRONMENT="${V2_VENV}" \
       uv sync --locked --extra automodel --directory training_m5_5/nemo_rl
+}
+
+if v2_imports_ok; then
+    ok "V2 worker venv already usable"
+elif [[ "${V2_BUILD_FROM_SOURCE:-0}" == "1" ]]; then
+    build_from_source
+else
+    info "attempting fast-path: tarball from HF ${V2_VENV_HF_REPO}:${V2_VENV_HF_FILE}"
+    rm -rf "${V2_VENV}"
+    mkdir -p "$(dirname "${V2_VENV}")"
+    TARBALL_DIR="$(mktemp -d)"
+    VENV_HF="${REPO_ROOT}/training_m5_5/nemo_rl/.venv/bin/hf"
+    # Use parent venv's hf CLI if available, else fall back to uv tool's hf
+    [[ -x "${VENV_HF}" ]] || VENV_HF="$(command -v hf)"
+    if HF_HUB_ENABLE_HF_TRANSFER=1 "${VENV_HF}" download "${V2_VENV_HF_REPO}" "${V2_VENV_HF_FILE}" \
+            --repo-type dataset --local-dir "${TARBALL_DIR}" 2>&1 | tail -3; then
+        info "extracting (~2 min, ~5 GB → ~10 GB on disk)"
+        tar -xzf "${TARBALL_DIR}/${V2_VENV_HF_FILE}" -C "$(dirname "${V2_VENV}")"
+        rm -rf "${TARBALL_DIR}"
+        if v2_imports_ok; then
+            ok "V2 venv usable via tarball (saved ~20-30 min vs compile)"
+        else
+            warn "tarball extracted but imports failed on B300 (likely no sm_120 SASS/PTX). Wiping + compiling."
+            rm -rf "${V2_VENV}"
+            build_from_source
+        fi
+    else
+        warn "HF tarball download failed; falling back to source compile"
+        rm -rf "${TARBALL_DIR}"
+        build_from_source
+    fi
 fi
-"${V2_VENV}/bin/python" -c "import transformer_engine, causal_conv1d, mamba_ssm; print('  V2 imports OK')" \
-    || fail "V2 venv built but imports failed — inspect ${V2_VENV}"
+v2_imports_ok || fail "V2 venv built but final smoke import fails — inspect ${V2_VENV}"
 ok "V2 worker venv ready"
 
 # ============================================================

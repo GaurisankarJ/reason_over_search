@@ -434,7 +434,7 @@ system-wide, V2 worker venv built from host shell (not Ray actor), TE compile
 narrowed to `NVTE_CUDA_ARCHS="90;120"`, and Qwen3.5-0.8B HF cache pre-warmed.
 If anonymous HF download fails, the script prompts for an `HF_TOKEN`
 interactively and persists it to `training_m5_5/.env`. Root-cause for each
-fix: [B300_VERDA_RUNBOOK.md](B300_VERDA_RUNBOOK.md).
+fix: [B300_RUNBOOK.md](B300_RUNBOOK.md).
 
 The §10b–§10h sections below are the **manual** equivalent — useful only if
 you want to understand or debug what the bootstrap is doing. Skip them
