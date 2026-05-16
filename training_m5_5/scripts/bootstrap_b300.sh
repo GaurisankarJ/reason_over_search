@@ -398,6 +398,53 @@ if [[ ! -x local_retriever/.venv_cpu/bin/python ]]; then
 fi
 ok "retriever venv ready"
 
+# ============================================================
+info "step 10/10 — retriever assets (corpus 14G + IVF index 15G + e5 encoder)"
+# ============================================================
+mkdir -p local_retriever/corpus local_retriever/indexes local_retriever/models
+VENV_HF="${REPO_ROOT}/training_m5_5/nemo_rl/.venv/bin/hf"
+[[ -x "${VENV_HF}" ]] || VENV_HF="$(command -v hf)"
+
+# Corpus (~14 GB unzipped)
+if [[ ! -s local_retriever/corpus/wiki18_100w.jsonl ]]; then
+    info "downloading wiki-18 corpus (~7 GB gz → 14 GB unzipped, ~3-5 min)"
+    TMPD="$(mktemp -d)"
+    HF_HUB_ENABLE_HF_TRANSFER=1 HF_TOKEN="${HF_TOKEN:-}" "${VENV_HF}" download \
+        PeterJinGo/wiki-18-corpus --repo-type dataset \
+        --include "wiki-18.jsonl.gz" --local-dir "${TMPD}" 2>&1 | tail -3
+    gunzip -c "${TMPD}/wiki-18.jsonl.gz" > local_retriever/corpus/wiki18_100w.jsonl
+    rm -rf "${TMPD}"
+fi
+ok "corpus: $(ls -lh local_retriever/corpus/wiki18_100w.jsonl | awk '{print $5}')"
+
+# IVF-SQ8 index (~15 GB)
+IVF=local_retriever/indexes/wiki18_100w_e5_ivf4096_sq8.index
+if [[ ! -s "${IVF}" ]]; then
+    info "downloading IVF-SQ8 index (~15 GB, ~3-5 min)"
+    curl -L --fail -o "${IVF}" \
+        https://huggingface.co/datasets/pantomiman/reason-over-search/resolve/main/retriever/wiki18_100w_e5_ivf4096_sq8.index 2>&1 | tail -3
+fi
+ok "index: $(ls -lh ${IVF} | awk '{print $5}')"
+
+# e5-base-v2 encoder (~0.5 GB)
+if [[ ! -f local_retriever/models/e5-base-v2/config.json ]]; then
+    info "downloading intfloat/e5-base-v2 encoder (~0.5 GB)"
+    HF_HUB_ENABLE_HF_TRANSFER=1 HF_TOKEN="${HF_TOKEN:-}" "${VENV_HF}" download \
+        intfloat/e5-base-v2 --local-dir local_retriever/models/e5-base-v2 2>&1 | tail -3
+fi
+ok "encoder: $(ls -lh local_retriever/models/e5-base-v2/model.safetensors 2>/dev/null | awk '{print $5}')"
+
+# MuSiQue parquet + M4 prompt (cheap; idempotent)
+if [[ ! -s data/training/musique/train.parquet ]]; then
+    info "preparing MuSiQue parquet"
+    training_m5_5/nemo_rl/.venv/bin/python training_m5_5/scripts/prep_musique.py
+fi
+if [[ ! -s training_m5_5/src/prompts/m5_qwen35_user.txt ]]; then
+    info "syncing M4 prompt (qwen35_minimal)"
+    training_m5_5/nemo_rl/.venv/bin/python training_m5_5/scripts/sync_m4_prompts.py --mode qwen35_minimal
+fi
+ok "musique parquet + prompt present"
+
 echo
 ok "bootstrap complete — next:"
 echo "    bash training_m5_5/scripts/start_b300.sh --dry-run    # validate pre-flight"
