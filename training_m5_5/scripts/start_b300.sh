@@ -40,17 +40,28 @@ set -euo pipefail
 MODE="prod_b300"
 SEED="42"
 DRY_RUN=0
+SMOKE_FIRST=0
 NUM_RETRIEVER="${NUM_RETRIEVER:-8}"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --mode)    MODE="$2"; shift 2 ;;
-        --seed)    SEED="$2"; shift 2 ;;
-        --dry-run) DRY_RUN=1; shift ;;
-        -h|--help) sed -n '2,35p' "$0"; exit 0 ;;
+        --mode)         MODE="$2"; shift 2 ;;
+        --seed)         SEED="$2"; shift 2 ;;
+        --dry-run)      DRY_RUN=1; shift ;;
+        --smoke-first)  SMOKE_FIRST=1; shift ;;
+        -h|--help)      sed -n '2,35p' "$0"; exit 0 ;;
         *) echo "unknown arg: $1 (run with --help)" >&2; exit 2 ;;
     esac
 done
+
+# --smoke-first chains smoke (4 steps, ~5-10 min) → prod (--mode) in one tmux
+# session. Smoke acts as a tripwire: if it doesn't reach Step 4/4, prod
+# does not launch. Useful as the "single command, end-to-end" entry point.
+if [[ "${SMOKE_FIRST}" -eq 1 && "${MODE}" == *smoke* ]]; then
+    echo "error: --smoke-first is for chaining smoke → a prod mode. Got --mode ${MODE}." >&2
+    echo "       try: --smoke-first --mode prod_b300   (or prod_b300_2xgpu)" >&2
+    exit 2
+fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
@@ -211,21 +222,37 @@ fi
 
 mkdir -p /root/logs
 TS="$(date -u +%Y%m%dT%H%MZ)"
-TRAIN_LOG="/root/logs/m5_5_b300_${MODE}_seed${SEED}_${TS}.log"
 
 if tmux has-session -t train 2>/dev/null; then
     fail "tmux session 'train' already exists. Inspect: tmux attach -t train. Kill it (tmux kill-session -t train) and re-run if you want a fresh launch."
 fi
 
-info "launching training (tmux session 'train'; log: ${TRAIN_LOG})..."
-tmux new-session -d -s train -c "${REPO_ROOT}" \
-    "bash training_m5_5/scripts/run.sh --mode ${MODE} --seed ${SEED} 2>&1 | tee ${TRAIN_LOG}"
-
-ok "training launched."
-echo
-echo "  tail log:    tail -f ${TRAIN_LOG}"
-echo "  attach:      tmux attach -t train       (Ctrl-b d to detach)"
-echo "  stop:        tmux kill-session -t train"
-echo "  retriever:   tmux attach -t retriever"
-echo
-echo "First step typically lands in ~15-20 min (vLLM warm-up + first generation pass)."
+if [[ "${SMOKE_FIRST}" -eq 1 ]]; then
+    CHAIN_LOG="/root/logs/m5_5_chain_seed${SEED}_${TS}.log"
+    info "launching SMOKE → ${MODE} chain (tmux session 'train'; chain log: ${CHAIN_LOG})"
+    tmux new-session -d -s train -c "${REPO_ROOT}" \
+        "bash training_m5_5/scripts/smoke_then_prod.sh ${SEED} ${MODE} 2>&1 | tee ${CHAIN_LOG}"
+    ok "smoke→prod chain launched."
+    echo
+    echo "  smoke validates the loop (4 steps, ~5-10 min)"
+    echo "  if smoke passes: ${MODE} starts automatically"
+    echo "  if smoke fails:  prod does NOT launch; chain exits"
+    echo
+    echo "  tail chain:  tail -f ${CHAIN_LOG}"
+    echo "  attach:      tmux attach -t train       (Ctrl-b d to detach)"
+    echo "  stop:        tmux kill-session -t train"
+    echo "  retriever:   tmux attach -t retriever"
+else
+    TRAIN_LOG="/root/logs/m5_5_b300_${MODE}_seed${SEED}_${TS}.log"
+    info "launching training (tmux session 'train'; log: ${TRAIN_LOG})..."
+    tmux new-session -d -s train -c "${REPO_ROOT}" \
+        "bash training_m5_5/scripts/run.sh --mode ${MODE} --seed ${SEED} 2>&1 | tee ${TRAIN_LOG}"
+    ok "training launched."
+    echo
+    echo "  tail log:    tail -f ${TRAIN_LOG}"
+    echo "  attach:      tmux attach -t train       (Ctrl-b d to detach)"
+    echo "  stop:        tmux kill-session -t train"
+    echo "  retriever:   tmux attach -t retriever"
+    echo
+    echo "First step typically lands in ~15-20 min (vLLM warm-up + first generation pass)."
+fi

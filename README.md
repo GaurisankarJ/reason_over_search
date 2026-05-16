@@ -62,4 +62,12 @@ If the user has not picked a reward ablation, default to **M5.1 (F1-only)** sinc
 3. Launch prod under `tmux` (or `nohup … & disown`) so the SSH session can drop without killing training. The B300 launcher [training_m5_5/scripts/start_b300.sh](training_m5_5/scripts/start_b300.sh) is the reference for what a hardware-specific launcher looks like (pre-flight → retriever bring-up → tmux'd training).
 4. Tail the log and surface the W&B run URL to the user.
 
-**Special case — B300 / Verda one-shot path**: on a fresh Verda B300 box, the launcher auto-detects missing prerequisites and invokes [training_m5_5/scripts/bootstrap_b300.sh](training_m5_5/scripts/bootstrap_b300.sh). That script bakes in every fix from the 2026-05-15 bring-up (CUDA 12.9 swap, IB headers, ninja, cmake 4.x, cuDNN, uv system-wide symlink, V2 venv built from host shell with `NVTE_CUDA_ARCHS="90;120"`, Qwen3.5-0.8B HF pre-cache) and **prompts the user for `HF_TOKEN` if anonymous HF download fails**. The token is persisted to `training_m5_5/.env`. Lessons-learned + root-cause for each fix: [docs/setup/B300_RUNBOOK.md](docs/setup/B300_RUNBOOK.md).
+**Special case — B300 / Verda one-shot path**: on a fresh Verda B300 box, one command does it all:
+
+```bash
+bash training_m5_5/scripts/start_b300.sh --smoke-first --mode prod_b300
+```
+
+That chains: bootstrap (if needed) → retriever bring-up → **smoke** (4 steps, ~5-10 min) → **prod** (auto-launches only if smoke reached Step 4/4). If smoke fails, prod does NOT launch and the chain exits with the failure. Both phases share one tmux session (`train`); detach with Ctrl-b d, reattach with `tmux attach -t train`.
+
+For the manual one-step-at-a-time flow, `start_b300.sh` (no `--smoke-first`) auto-detects missing prerequisites and invokes [training_m5_5/scripts/bootstrap_b300.sh](training_m5_5/scripts/bootstrap_b300.sh). That script bakes in every fix from the 2026-05-15 bring-up (CUDA 12.9 swap, IB headers, ninja, cmake 4.x, cuDNN, uv system-wide symlink, V2 venv built from host shell with `NVTE_CUDA_ARCHS="90;120"`, Qwen3.5-0.8B HF pre-cache) and **prompts the user for `HF_TOKEN` if anonymous HF download fails**. The token is persisted to `training_m5_5/.env`. Lessons-learned + root-cause for each fix: [docs/setup/B300_RUNBOOK.md](docs/setup/B300_RUNBOOK.md).

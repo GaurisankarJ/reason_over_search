@@ -170,11 +170,12 @@ HF_TOKEN=<your_hf_token>
 EOF
 chmod 600 training_m5_5/.env
 
-# Run the bootstrap — auto-detects sm_89 (4090) and builds V2 venv for it
-bash training_m5_5/scripts/bootstrap_b300.sh
-
-# Validate the loop end-to-end with the smoke config (~5-10 min, fits 24 GB)
+# One command: bootstrap (if needed) → retriever → smoke → prod (only if smoke passes)
+# On a 4090/A100 validation box, just stop at --mode smoke:
 bash training_m5_5/scripts/start_b300.sh --mode smoke
+
+# On B300 (production), chain smoke → prod in one tmux session:
+bash training_m5_5/scripts/start_b300.sh --smoke-first --mode prod_b300
 ```
 
 **What this proves**:
