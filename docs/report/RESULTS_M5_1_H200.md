@@ -546,7 +546,7 @@ Worked example — **step 39, sample 158**, reward 1.0, 3 tool calls:
 - **Step wall +19 % vs cadence 4** (448 s vs 376 s) despite fewer tool calls — and stays elevated across all 10 steps, not just the first 2-3. AdamW re-warm should have decayed by step 47; it didn't. Most likely host-to-host variance on Spheron Spot (cadence 4 was on host 247, cadence 5 is on 126). Re-exploration drift cannot be ruled out, but the flat tool_med-3 argues against it.
 - **Context still growing**: len_med 13.0 K → 14.6 K. With fewer tool calls but longer rollouts, individual `<think>` blocks and tool responses are getting wordier.
 - HF: `step_50/` live at [the primary repo](https://huggingface.co/pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42/tree/main/step_50).
-- Cumulative cost (at $1.95/h, ~11.5 h elapsed): ~$22.
+- Cumulative cost (mixed Spot $1.95/h for steps 1-40 + Dedicated $4.70/h for steps 41-50, ~11.5 h elapsed): ~$21.
 - **Wall-clock projection**: at 448 s/step, ETA step 311 = 261 × 448 s + 11.5 h elapsed ≈ 44 h total = step 311 lands ~14:30 UTC May 17 (was ~37 h with cadence-4 timing).
 
 #### Mechanical examples (cadence 5)
@@ -612,7 +612,13 @@ Worked example — **step 46, sample 126**, reward 1.0, 4 tool calls, 5-hop:
 
 ## 9. Cost / wall-clock estimate
 
-**Confirmed rate: $1.95/h** (Spheron ES Spot, 1× H200 SXM5, US Central 1, instance ID `6a072a4e`). Validated 2026-05-15 ~22:30 UTC against dashboard: $12.25 total at 6.28 h elapsed = $1.951/h. (The $15.15/h figure in `HARDWARE_COMPARISON.md` is the 8× cluster tier; not what we're on.)
+**Two tiers in play across this run**:
+- **Spot $1.95/h** — hosts 207 and 247 (Spheron ES Spot, 1× H200 SXM5, US Central 1, instance ID `6a072a4e`). Validated 2026-05-15 ~22:30 UTC against dashboard: $12.25 total at 6.28 h elapsed = $1.951/h. Cadences 1-4 (steps 1-40) ran here, with two preemption events.
+- **Dedicated $4.70/h** — host 126 (Spheron dedicated tier, same H200 SXM5 SKU). Switched in 2026-05-16 10:39 UTC after the second preemption to eliminate further preemption risk through the rest of the run. Cadence 5+ (steps 41+) running here.
+
+The $4.70/h dedicated rate is **2.4× the Spot rate**; the up-front choice was made under the assumption that one more preemption would cost a multi-hour resume penalty, and the marginal cost over remaining hours is small relative to the time lost.
+
+(The $15.15/h figure in `HARDWARE_COMPARISON.md` is the 8× H200 cluster tier; not what we're on.)
 
 H200 is roughly:
 - 0.6× B200's memory bandwidth (4.8 vs 8 TB/s)
@@ -633,12 +639,12 @@ These are with the H200 FlashInfer GDN patch applied (native Triton path; see §
 **Batch shape**: `num_prompts_per_step: 64 × num_generations_per_prompt: 5 = 320` rollouts/step.
 **Steps / epoch**: 19,938 / 64 = **311.5**.
 
-**Projected at current rate** (1101 s/step, $1.95/h):
-| Span | Steps | Wall | Cost |
-|---|---:|---:|---:|
-| 1 epoch | 311.5 | 95 h 17 min | **$186** |
-| Configured `max_num_steps: 622` (= 2 epochs) | 622 | **190 h 14 min ≈ 7.9 days** | **$371** |
-| Paper's 3 epochs | 934 | 285 h 32 min ≈ 11.9 days | $557 |
+**Projected at v11 cold-start rate** (1101 s/step):
+| Span | Steps | Wall | Cost @ Spot $1.95/h | Cost @ Dedicated $4.70/h |
+|---|---:|---:|---:|---:|
+| 1 epoch | 311.5 | 95 h 17 min | **$186** | **$448** |
+| Configured `max_num_steps: 622` (= 2 epochs) | 622 | **190 h 14 min ≈ 7.9 days** | **$371** | **$894** |
+| Paper's 3 epochs | 934 | 285 h 32 min ≈ 11.9 days | $557 | $1342 |
 
 These projections assume step time stays at ~18 min throughout. **Realistically it won't.** Step time is dominated by multi-turn rollout cost (model emits `<search>` up to 10 times per question with current untrained policy). As the policy learns to emit `<answer>` earlier, average turns/question drops and step wall drops with it. B200 a3 observed step times dropping from ~9 min cold to ~6 min stable (~30 % reduction over 30-50 steps). Applying the same shape to H200:
 
@@ -658,13 +664,27 @@ The cold-transitional-stable shape above was the **a3 b200 trajectory** ported t
 
 If step time really stabilises at ~6 min through step 622 (a strong assumption — it could drift up as the policy explores harder questions or down further as `<answer>`-emission improves):
 
-| Span | Steps | Wall | Cost @ $1.95/h |
-|---|---:|---:|---:|
-| 1 epoch | 311.5 | 31.2 h | **$60.8** |
-| `max_num_steps: 622` (2 epochs) | 622 | **63.6 h ≈ 2.6 days** | **$124** |
-| Paper's 3 epochs | 934 | 95.7 h ≈ 4.0 days | $187 |
+| Span | Steps | Wall | Cost @ Spot $1.95/h | Cost @ Dedicated $4.70/h |
+|---|---:|---:|---:|---:|
+| 1 epoch | 311.5 | 31.2 h | **$61** | **$146** |
+| `max_num_steps: 622` (2 epochs) | 622 | **63.6 h ≈ 2.6 days** | **$124** | **$299** |
+| Paper's 3 epochs | 934 | 95.7 h ≈ 4.0 days | $187 | $450 |
 
-So realistic estimate for `max_num_steps: 622` revised down to **~2.6 days wall, ~$124 @ $1.95/h** (was 5.9 days / $277 before observing the drop). Whole budget of $1000 now easily fits 8 full seeds or 3+ epochs × 2 seeds. Will keep tracking step time at every cadence; if step time creeps back up above 10 min/step the projection will rise accordingly.
+### Actual cost of the in-flight run
+
+Measured cost-to-date and projection forward, by tier (as of step 55, 2026-05-16 ~12:30 UTC):
+
+| Span | Steps | Wall | Tier | Rate | Cost |
+|---|---:|---:|---|---:|---:|
+| Cadences 1-4 (Spot, hosts 207/247) | 1-40 | ~6.4 h | Spot | $1.95/h | ~$12.50 |
+| Cadence 5 + steps 51-55 so far (Dedicated, host 126) | 41-55 | ~1.85 h | Dedicated | $4.70/h | ~$8.70 |
+| **Spent to date** | **55** | **~8.3 h** | mixed | | **~$21** |
+| Remaining steps to finish 1 epoch | 56-311 (256) | 28.4 h @ 400 s/step | Dedicated | $4.70/h | **~$134** |
+| **1-epoch total projection** | 311 | ~37 h | mixed | | **~$155** |
+
+If we ran the entire epoch on dedicated from cold-start (e.g. for a future seed), the all-up cost lands **$153-182 depending on step time** (376 s baseline → $153; 448 s including warmup → $182). The current in-flight run gets a ~$10 discount from having spent its first 40 steps on Spot before the preemption-driven move.
+
+ETA step 311 at 400 s/step from 12:30 UTC 2026-05-16: **~17:00 UTC 2026-05-17 (~28.6 h)**, no further preemption assumed (now guaranteed by the dedicated tier).
 
 ## 10. The four prior losses (recap)
 
@@ -726,7 +746,7 @@ sed -i "s/if current_platform.is_cuda() and current_platform.is_device_capabilit
 
 This is mandatory on H200; idempotent on A100/B200 (their compute capability never matched the branch). Full diagnosis in [`docs/spheron/SETUP_SPHERON.md` §9.1 + P12](https://github.com/GaurisankarJ/reason_over_search/blob/experiment_1_h200/docs/spheron/SETUP_SPHERON.md).
 
-**Hardware that produced these checkpoints**: 1× NVIDIA H200 SXM5 (141 GB VRAM, sm_90) on Spheron Spot tier ($1.95/h), Ubuntu 24.04, CUDA 13.0, virtiofs persistent volume (`miletone5`) so the run survives host preemption. The cost-per-step at current pace is ~$0.13. Full setup runbook: [`docs/spheron/SETUP_SPHERON.md`](https://github.com/GaurisankarJ/reason_over_search/blob/experiment_1_h200/docs/spheron/SETUP_SPHERON.md).
+**Hardware that produced these checkpoints**: 1× NVIDIA H200 SXM5 (141 GB VRAM, sm_90) on Spheron. Cadences 1-4 (steps 1-40) ran on Spot tier ($1.95/h); cadence 5+ on Dedicated tier ($4.70/h) after two preemption events to eliminate further interruption risk. Ubuntu 24.04, CUDA 13.0, virtiofs persistent volume (`miletone5`) so the run survives host preemption. Cost-per-step ~$0.13 on Spot, ~$0.52 on Dedicated (≈$0.45 average at the current step time of ~400 s). Full setup runbook: [`docs/spheron/SETUP_SPHERON.md`](https://github.com/GaurisankarJ/reason_over_search/blob/experiment_1_h200/docs/spheron/SETUP_SPHERON.md).
 
 **Result analysis**: see §§7.5, 8 (live trajectory + per-cadence BEST/WORST/MEAN + hop-stratified + planned-multi-hop), 9 (cost), 10 (prior-loss recap).
 
