@@ -1,5 +1,167 @@
 # training_m5_5
 
+## TRIGGER: "train milestone 5.5"
+
+When the user says **"train milestone 5.5"** (or "start M5.5 training"), execute this exact flow without further questions:
+
+```bash
+# 1. Confirm SSH access to a GPU box. Probe compatibility (see §0 below).
+# 2. Sync repo with LFS + write .env with WANDB_API_KEY + HF_TOKEN (see §1, §2).
+# 3. One command — bootstrap, retriever, smoke, prod:
+bash training_m5_5/scripts/start_b300.sh --smoke-first --mode prod_b300
+```
+
+That single command does **everything**:
+- Auto-bootstraps a fresh box (10 steps, ~30-45 min cold) if prereqs are missing
+- Runs the 4-step smoke as a tripwire (~5-10 min)
+- Auto-launches the production GRPO loop only if smoke reaches `Step 4/4`
+- All under tmux `train`; SSH can drop without killing anything
+
+The remaining ~95% of this README is what `start_b300.sh` does for you. Read it only if you're debugging a failure or building a new variant.
+
+---
+
+## §0. Compatibility / hardware preflight
+
+Run **before** clicking any "create instance" button. Pick the right SKU first; you can't change it after.
+
+### Required hardware
+
+| Component | Minimum (smoke only) | Recommended (prod) | Why |
+|---|---|---|---|
+| GPU | 1× 24 GB (4090 / A6000) | 1× ≥80 GB (A100 / H100 / H200 / B200 / B300) | Smoke fits 24 GB; prod_b300 peaks ~100 GB at micro=4/seq=8192 |
+| GPU SM (compute capability) | ≥ 7.0 | any current Blackwell / Hopper / Ampere | `bootstrap_b300.sh` auto-detects and picks `NVTE_CUDA_ARCHS` |
+| Host RAM | 64 GB | 256+ GB | Retriever workers (8 × ~16 GB index) + DTensor + vLLM activations |
+| vCPU | 16 | 30+ | Parallel compile jobs; retriever workers; data loader |
+| Disk (`/` or `/workspace`) | 150 GB | 200+ GB | venvs (~25 GB) + corpus + index + Qwen + checkpoints + headroom |
+| NVLink | optional | enabled (for 2× GPU TP=2) | Otherwise interconnect bandwidth caps multi-GPU scaling |
+| OS | Ubuntu 22.04 | **Ubuntu 24.04 + CUDA 13** (Verda default) | Bootstrap is tested against this stack |
+
+### Software preflight (auto-handled by `bootstrap_b300.sh`)
+
+The bootstrap **assumes nothing is installed** and fixes everything. You only need: SSH access, `git`, `python3` (system). Driver is provided by the GPU host.
+
+The bootstrap detects and handles:
+1. CUDA toolkit mismatch (host has 13.0, torch wheels are cu129 → swaps default `/usr/local/cuda` symlink to 12.9)
+2. Missing InfiniBand headers (`deep-ep` won't compile without them)
+3. Missing `ninja` (vLLM kernel JIT) and `cmake` 4.x (sm_103 / sm_120 support needs ≥3.31)
+4. `uv` not on Ray actor PATH (Ray strips `~/.local/bin`)
+5. Missing cuDNN headers (TE pytorch ext needs `<cudnn.h>`)
+6. nv-grouped-gemm GPU init at install time (Ray actor has no GPU → bootstrap builds V2 venv from host shell)
+7. Wrong arch flag for Blackwell (`NVTE_CUDA_ARCHS="103"` fails cutlass static_assert → `"90;100"` triggers TE's family expansion to sm_100a + sm_103a)
+8. Anonymous HF rate limits (uses `HF_TOKEN` from `.env`; falls back to interactive prompt if missing)
+
+Full lessons-learned with root-cause for each: [docs/setup/B300_RUNBOOK.md](../docs/setup/B300_RUNBOOK.md).
+
+---
+
+## §1. Code + data sync (~3-5 min)
+
+```bash
+# On the fresh remote box:
+apt-get update && apt-get install -y -qq git-lfs
+git lfs install --skip-repo
+cd /root
+git clone -b m5.5_b300 https://github.com/GaurisankarJ/reason_over_search.git
+cd reason_over_search
+git lfs install
+git lfs pull --include "data/**"   # ~500 MB: MuSiQue parquet, dev jsonls, etc.
+```
+
+The repo carries LFS-tracked training data (`data/**/*.{jsonl,parquet}`). Without `git lfs pull` the smoke will fail on dataloader.
+
+---
+
+## §2. Secrets (~10 sec)
+
+```bash
+cat > training_m5_5/.env <<EOF
+WANDB_API_KEY=<your_wandb_key>      # required for logger.wandb.enabled=true
+HF_TOKEN=<your_hf_token>            # write-scoped — used for both fetching tarballs AND uploading sm_103 tarball after build
+EOF
+chmod 600 training_m5_5/.env
+```
+
+`.env` is gitignored. `HF_TOKEN` should have **write access** if you want `package_v2_venv.sh` to upload the V2 venv tarball back to your HF account for future reuse (§5).
+
+---
+
+## §3. Bootstrap (auto-invoked by `start_b300.sh`)
+
+`bash training_m5_5/scripts/bootstrap_b300.sh` runs 10 steps end-to-end. Idempotent — re-running skips anything already done. Steps:
+
+| # | Step | Time | What it does |
+|---|---|---|---|
+| 1 | apt prereqs | ~2 min | `ninja-build tmux cmake build-essential libibverbs-dev libmlx5-1 libnuma-dev rdma-core` |
+| 2 | CUDA 12.9 toolkit | ~3 min | Install + swap `/usr/local/cuda` → 12.9 (torch wheels are cu129) |
+| 3 | cuDNN dev headers | ~1 min | `cudnn9-cuda-12 libcudnn9-dev-cuda-12` for TE pytorch ext |
+| 4 | uv | ~30 sec | Install + symlink to `/usr/local/bin/uv` so Ray actors find it |
+| 5 | cmake 4.x | ~30 sec | `uv tool install cmake` + override `/usr/bin/cmake` (sm_103 / sm_120 need 3.31+) |
+| 6 | Main NeMo-RL venv | ~3-5 min | `setup.sh` → `uv sync --extra vllm`. Downloads torch 2.10+cu129, vLLM 0.17, deep-ep, etc. |
+| 7 | V2 worker venv | **~3 min fast / ~10-15 min source** | Try tarball fast-path: `<your-hf>/reason-over-search-venvs:dtensor_policy_worker_v2_sm${CC}.tar.gz` → fall back to `pantomiman/reason-over-search-v1-venvs` (Hopper) → fall back to source compile with `NVTE_CUDA_ARCHS` matched to detected SM |
+| 8 | Qwen3.5-0.8B HF cache | ~10 sec | Pre-fetch model weights (avoids slow anonymous DL at vLLM warmup); uses `HF_TOKEN` |
+| 9 | Retriever venv | ~30 sec | `local_retriever/.venv_cpu` with faiss-cpu |
+| 10 | Retriever assets | ~5-10 min | wiki-18 corpus (14 GB), IVF-SQ8 index (15 GB), e5-base-v2 encoder (0.5 GB), MuSiQue parquet + M4 prompt |
+
+**Parallelization opportunities** (not yet wired into bootstrap, but feasible): steps 6 and 10 are independent of each other after step 5. Future enhancement: kick off step 10 (asset downloads, mostly network-bound) in the background once step 5 finishes, run steps 6+7 (compile-bound) in foreground. Would save ~5-8 min on cold boxes.
+
+---
+
+## §4. Smoke → prod chain (~5-10 min smoke, then prod auto-launches)
+
+`bash training_m5_5/scripts/start_b300.sh --smoke-first --mode prod_b300` chains:
+
+1. **Pre-flight** — verify everything from §0-§3 is in place
+2. **Retriever bring-up** — `retriever_serving.py` in tmux `retriever`, wait for `/health`
+3. **Phase 1 — smoke** (4 steps × seq=4096, 20 traj/step) in tmux `train`
+4. **Tripwire** — smoke must reach `Step 4/4` and exit 0; otherwise prod does NOT launch
+5. **Ray cleanup** between phases (kill `raylet`/`gcs_server`, wipe `/tmp/ray`)
+6. **Phase 2 — prod** (whatever `--mode` you passed) in the same tmux session
+
+For 2× B300 (TP=2): `--mode prod_b300_2xgpu`. The launcher refuses prod_b300* on GPUs <80 GB VRAM.
+
+---
+
+## §5. (Optional) Upload V2 venv tarball after first build
+
+After bootstrap finishes on a new GPU SM, package + upload the V2 venv so future bootstraps on the same SM hit the fast-path:
+
+```bash
+bash training_m5_5/scripts/package_v2_venv.sh
+# → uploads dtensor_policy_worker_v2_sm${CC}.tar.gz to <your_hf>/reason-over-search-venvs
+# → next bootstrap on the same SM: ~3 min skip instead of ~15 min compile
+```
+
+The script auto-detects HF username via `hf auth whoami`, sanity-checks the venv imports before uploading (refuses broken venvs), and round-trip-verifies the upload.
+
+---
+
+## §6. Verifying / watching the chain
+
+```bash
+# Live status
+tail -f /root/logs/m5_5_chain_seed42_*.log
+
+# Interactive tmux
+tmux attach -t train      # Ctrl-b d to detach
+tmux attach -t retriever
+
+# Kill if needed
+tmux kill-session -t train
+
+# W&B URL surfaces in chain log after vLLM warmup (~2 min into prod phase)
+```
+
+Expected timings on B300:
+- Bootstrap (cold): ~30-45 min
+- Smoke (4 steps): ~5-10 min
+- Prod first step lands: ~15-20 min after smoke pass
+- Full prod (622 steps): ~3.8 d on 1× B300, ~2.2 d on 2× B300 TP=2
+
+---
+
+## Original milestone narrative
+
 GRPO training scaffold for **milestone M5.5 — F1+format reward ablation** on Qwen3.5-0.8B / MuSiQue. This is the **F1 + 0.1 partial-credit floor + format-gate** variant of the reward-shape ablation triad:
 
 - **M5.1** ([`training_m5_1/`](../training_m5_1/)) — F1-only baseline (the existing in-flight run).
