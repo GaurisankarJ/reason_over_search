@@ -3,7 +3,7 @@ title: Log
 tags: []
 source: internal
 created: 2026-05-06
-updated: 2026-05-15
+updated: 2026-05-16
 ---
 
 # Wiki log
@@ -28,6 +28,11 @@ Conventions:
 - Don't rewrite past entries; if a fact turns out wrong, add a correcting bullet on the day the correction was made.
 
 ---
+
+## 2026-05-16
+
+- Created: [`milestone_8/MILESTONE_8.md`](milestone_8/MILESTONE_8.md) — Chain-consistency + retrieval-grounded reward extensions; the ceiling-buster for M5.1's F1-only plateau at 0.22-0.24 window-mean. Two compound reward components, both pure functions of the rollout string, ~50 LoC total. Trace evidence (Fox Island silent-flip vs Kotri clean-chain, both reward 1.0 under M5.1) sits in [`report/RESULTS_M5_1_H200.md §9.5`](report/RESULTS_M5_1_H200.md). Predicted M8.2 ceiling 0.27-0.32 vs M5.1's 0.22-0.24; negative-result outcome (no lift) constrains future-work to model-prior scaling. Total M8 budget ~$200 on top of M5.1.
+- Registered: [`research/QUESTIONS.md` Q2](research/QUESTIONS.md) — latent-space rollouts for GRPO (user idea: predict next hidden state with a cheap model so MCTS-style search can happen in latent space without running the full transformer). Translation into the literature's vocabulary: learned latent dynamics model (MuZero-for-LLMs), with Coconut and speculative decoding as the closest LLM-side precedents; LoRA framing is the wrong handle (LoRA is a weight delta, not an activation predictor; would not skip the stack). Thesis-shaped version is model-based rollout amortization for GRPO with tool use; novel as far as I can find, but too big a bite for the 2026-06-10 deadline so logged as future-work, not an M6 candidate.
 
 ## 2026-05-15
 

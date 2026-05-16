@@ -12,7 +12,7 @@ updated: 2026-05-11
 >
 > Sibling snapshots: [`../report/CONVERSATION_CONTEXT.md`](../report/CONVERSATION_CONTEXT.md) (thesis writing), [`../research/CONVERSATION_CONTEXT.md`](../research/CONVERSATION_CONTEXT.md) (frozen 2026-05-04 literature arm + algorithm/systems), [`../training/CONVERSATION_CONTEXT.md`](../training/CONVERSATION_CONTEXT.md) (training pipeline).
 
-**Last updated**: 2026-05-11 (M6 created; Phase-1 salvage + data audit authored ahead of Phase 1)
+**Last updated**: 2026-05-16 (literature gap audit added; framing decisions from 2026-05-11 confirmed)
 
 ---
 
@@ -29,18 +29,19 @@ Sub-questions M6 must answer:
 - Does the picked pair survive head-to-head against Tree-GRPO ([arXiv:2509.21240](https://arxiv.org/abs/2509.21240), ICLR 2026) and the JustRL "tricks may hurt" thesis ([arXiv:2512.16649](https://arxiv.org/abs/2512.16649))?
 - What is the realistic venue with honest acceptance probability — and is that venue worth optimising the experiments for?
 
-## 3. Working assumption from 2026-05-11 critical review
+## 3. Working assumption from 2026-05-11 critical review (confirmed 2026-05-16)
 
-Captured here as the starting point, not as a settled answer.
+Captured here as the starting point, not as a settled answer. All six rows survived the 2026-05-16 literature gap audit ([`LITERATURE_GAP_AUDIT_2026-05-16.md`](LITERATURE_GAP_AUDIT_2026-05-16.md)) unchanged; one row added below (#7) for Candidate C exposure to [arXiv:2602.19526](https://arxiv.org/html/2602.19526v1).
 
 | Claim | Verdict (2026-05-11) | Implication |
 |---|---|---|
 | "M5 = Search-R1 + ReSearch combined" | **Inaccurate**. M5 is ReSearch-paper recipe alone (GRPO, F1, MuSiQue, G=5); Search-R1's role is the 7-dataset eval. | Rewrite the framing in any draft and supervisor brief. |
 | "MC-GRPO has not been applied to search-tool RL" | **True**. [MC-GRPO](https://arxiv.org/abs/2601.22582) abstract + reported experiments are math (Qwen3-1.7B on GSM8K). | Genuine gap. But the mechanism for *why* search-tool should benefit (retrieval reward variance, longer trajectories, smaller G under memory pressure) needs to be made explicit. |
 | "JustRL works as a control for the recipe" | **Methodologically true, but not a contribution**. JustRL itself ([arXiv:2512.16649](https://arxiv.org/abs/2512.16649)) is the published "simple beats complex" finding; we can use it as a control, not as a novelty hook. | Don't pitch the control as the paper. |
-| "Two efficiency improvements → faster training, same result = good paper" | **Insufficient** for NeurIPS main. DIVA-GRPO already claims 2.55× step + 1.76× wall-clock; Tree-GRPO claims 1/4 rollout budget at ICLR 2026. | Either head-to-head one of them or shift the contribution from "efficiency" to "characterisation of small-rollout regime for search-tool RL". |
-| "0.8B scale is a strength (reproducibility)" | **Mixed**. Reviewers will ask "does this scale to 7B?" — the answer needs to be either "yes, here is a 2B run" or "this paper is about the small-scale regime and that is the contribution". | Pick a lane and defend it in the introduction. |
+| "Two efficiency improvements → faster training, same result = good paper" | **Insufficient** for NeurIPS main. DIVA-GRPO already claims 2.55× step + 1.76× wall-clock; Tree-GRPO claims 1/4 rollout budget at ICLR 2026. AERO ([2602.14338](https://arxiv.org/abs/2602.14338)) claims 48 % compute reduction at 1.5B; BAPO ([2602.20722](https://arxiv.org/html/2602.20722v1)) adds replay-buffer angle (both Feb 2026, found in 2026-05-16 audit). | Either head-to-head one of them or shift the contribution from "efficiency" to "characterisation of small-rollout regime for search-tool RL". |
+| "0.8B scale is a strength (reproducibility)" | **Mixed → strengthened**. DGPO ([2508.20324](https://arxiv.org/abs/2508.20324), v4 = Apr 2026) explicitly argues 0.5–1B models can't do agentic search via RL alone — gives mechanistic support to the small-scale scope and to Phase-1 Finding 3's shrink-and-improve regime. | Pick the lane; defend in the introduction; cite DGPO as small-scale-mechanism prior. |
 | "NeurIPS main is the realistic target" | **No**. Realistic ranges: NeurIPS main 5-10 %, ICLR / ACL / EMNLP main 15-25 %, Findings / Workshop 50 %+, ICLR blogpost (like JustRL) very plausible if the message is "simple recipe + characterisation". | Pick the venue before picking the experiments. |
+| **"Candidate C reward-shape ablation is novel"** (added 2026-05-16) | **Partial scoop**. [arXiv:2602.19526](https://arxiv.org/html/2602.19526v1) "How to Train Your Deep Research Agent?" (Feb 2026) directly studies EM vs F1 reward in Search-R1; finds naive F1 less stable than EM, F1+action-penalties wins. Their work is 3B+; ablates F1 vs EM, not the 0.1 partial-credit floor; doesn't carry Phase-1 Finding 1's 0.1-floor-masks-signal mechanism. | Rewrite Candidate C as the **small-model (0.8B), single-GPU-budget, no-format-reward** complementary point. Phase-1 Finding 1 remains the project's own. |
 
 ## 4. Decisions captured (M6-strand)
 
@@ -50,6 +51,8 @@ Captured here as the starting point, not as a settled answer.
 | Three frozen artifacts: landscape table, candidate experiments, picked pair + publication-framing brief | 2026-05-11 | Each phase produces a defensible artifact; later phases cannot be defended without earlier ones |
 | Stop saying "Search-R1 + ReSearch combined" | 2026-05-11 | Inaccurate; M5 is ReSearch alone |
 | Don't anchor on NeurIPS main as the realistic target | 2026-05-11 | 5-10 % acceptance probability with current plan; Findings / Workshop / ICLR blogpost are honest targets |
+| Candidate C must engage with [arXiv:2602.19526](https://arxiv.org/html/2602.19526v1) before any GPU is rented | 2026-05-16 | Partial scoop of EM-vs-F1 ablation; rewrite as small-model / single-GPU / no-format-reward complementary point |
+| Candidate D rationale (if picked) must engage with [arXiv:2603.27226](https://arxiv.org/html/2603.27226) | 2026-05-16 | Negative-result paper on E2H for deductive reasoning; reframes E2H-for-RAG ablation as "testing whether the critique generalises" |
 
 ## 5. Compute and budget (M6-relevant)
 
@@ -69,13 +72,14 @@ M6 itself uses **no GPU compute**. The constraints on what M6's picked pair can 
 
 | File | Status |
 |---|---|
-| [`MILESTONE_6.md`](MILESTONE_6.md) | Authored 2026-05-11; milestone definition |
+| [`MILESTONE_6.md`](MILESTONE_6.md) | Authored 2026-05-11; milestone definition; external sources list refreshed 2026-05-16 |
 | [`CONVERSATION_CONTEXT.md`](CONVERSATION_CONTEXT.md) | This file; living |
-| [`LOG.md`](LOG.md) | Authored 2026-05-11; append-only |
+| [`LOG.md`](LOG.md) | Authored 2026-05-11; append-only; 2026-05-16 entry added |
 | [`PHASE_1_SALVAGE.md`](PHASE_1_SALVAGE.md) | Authored 2026-05-11; three Phase-1 findings as paper motivation, with file:line cites + limits |
 | [`DATA_AUDIT_PHASE_1.md`](DATA_AUDIT_PHASE_1.md) | Authored 2026-05-11; deep-dive on what is measured cleanly vs what is missing |
-| `LANDSCAPE_TABLE_2026-05.md` | Phase 1 output; pending |
-| `CANDIDATE_EXPERIMENTS.md` | Phase 2 output; pending |
+| [`LITERATURE_GAP_AUDIT_2026-05-16.md`](LITERATURE_GAP_AUDIT_2026-05-16.md) | Authored 2026-05-16; 18 papers (2025-11 → 2026-05) missing from the frozen 2026-05-04 pass; 5 Tier-1 (must-engage), 4 Tier-2 (dense-credit cluster), 9 Tier-3 (additive) |
+| `LANDSCAPE_TABLE_2026-05.md` | Phase 1 output; pending — seed list now includes 18 entries from the 2026-05-16 audit |
+| `CANDIDATE_EXPERIMENTS.md` | Phase 2 output; pending — Candidate C rewrite required per 2026-05-16 audit |
 | `PICKED_PAIR.md` | Phase 3 output; pending |
 | `PUBLICATION_FRAMING.md` | Phase 3 output; pending |
 

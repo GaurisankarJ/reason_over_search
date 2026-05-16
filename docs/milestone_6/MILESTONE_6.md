@@ -43,13 +43,39 @@ The M0-M5 work has been pipeline-and-recipe-driven; M6 is question-driven and sh
 4. [`report/SUPERVISOR_MEETING_2026-05-07_m0_to_3.md`](../report/SUPERVISOR_MEETING_2026-05-07_m0_to_3.md) — last canonical chapter-closing brief; §5 carries the reframed RQ, §6 the original candidate recipe (E2H + S-GRPO + MC-GRPO with JustRL control).
 5. [`milestone_5/MILESTONE_5.md`](../milestone_5/MILESTONE_5.md) and [`milestone_5/PAPER_VS_OURS_M5.md`](../milestone_5/PAPER_VS_OURS_M5.md) — what M5.1 actually does (the baseline M6 has to position against).
 6. M5.1 live results as they land — [`report/RESULTS_SMOKE_m5.md` §6](../report/RESULTS_SMOKE_m5.md), W&B `uwbodqgt`. The mid-training reward trajectory shapes which efficiency lever or algorithmic ablation is the right "next experiment".
-7. **External (verified 2026-05-11)**:
+7. **External (verified 2026-05-11; expanded 2026-05-16 via [`LITERATURE_GAP_AUDIT_2026-05-16.md`](LITERATURE_GAP_AUDIT_2026-05-16.md))**:
+
+   *Core 2025–early-2026 papers (verified 2026-05-11)*:
    - JustRL — [arXiv:2512.16649](https://arxiv.org/abs/2512.16649) (ICLR 2026 blogpost track, math reasoning, 1.5B base models).
    - MC-GRPO — [arXiv:2601.22582](https://arxiv.org/abs/2601.22582) (median baseline GRPO, math evaluation).
    - Tree-GRPO — [arXiv:2509.21240](https://arxiv.org/abs/2509.21240) (ICLR 2026, tree-search rollouts for LLM agent RL, built on Search-R1, Qwen2.5-3B).
    - Agentic RL Survey — [arXiv:2509.02547](https://arxiv.org/abs/2509.02547) (last revised 2026-04-17, synthesises 500+ works).
    - ReSearch — [arXiv:2503.19470](https://arxiv.org/abs/2503.19470) (NeurIPS 2025; the recipe M5.1 ports).
    - Awesome-RL-based-Agentic-Search-Papers — [github.com/ventr1c/...](https://github.com/ventr1c/Awesome-RL-based-Agentic-Search-Papers) (community survey).
+
+   *Added 2026-05-16 — Tier 1 (must-engage)*:
+   - **How to Train Your Deep Research Agent?** — [arXiv:2602.19526](https://arxiv.org/html/2602.19526v1) (Feb 2026). EM vs F1 reward in Search-R1; **partially scoops Candidate C reward-shape ablation**.
+   - **AERO** — [arXiv:2602.14338](https://arxiv.org/abs/2602.14338) (Feb 2026). Adaptive rollout for GRPO, 48 % compute reduction on 1.5B; competes on small-rollout-regime framing.
+   - **BAPO** — [arXiv:2602.20722](https://arxiv.org/html/2602.20722v1) (Feb 2026). Off-policy GRPO with replay buffer; partial compete on small-rollout-regime framing.
+   - **DGPO / Compact LMs Search Like Agents** — [arXiv:2508.20324](https://arxiv.org/abs/2508.20324) (v4 Apr 2026). 0.5–1B agentic RAG fails pure RL; **mechanistic support for Phase-1 Finding 3**.
+   - **LiteResearcher** — [arXiv:2604.17931](https://arxiv.org/abs/2604.17931) (Apr 2026). 4B deep-research agent; closest published small-model search-agent reference.
+
+   *Added 2026-05-16 — Tier 2 (dense-credit-assignment cluster)*:
+   - **IGPO** — [arXiv:2510.14967](https://arxiv.org/abs/2510.14967) (ICLR 2026 Poster). Per-turn dense reward = marginal increase in correct-answer probability.
+   - **TIPS** — [arXiv:2603.22293](https://arxiv.org/html/2603.22293v1) (Mar 2026). Dense per-turn reward via teacher-model log-likelihood gain; +11.8 % EM on 7 QA benchmarks at Qwen-2.5-7B.
+   - **IG-Search** — [arXiv:2604.15148](https://arxiv.org/abs/2604.15148) (Apr 2026). Per-search-step information gain; evaluates on HotpotQA / 2Wiki / MuSiQue / Bamboogle (overlaps project's eval suite).
+   - **Search-P1** — [arXiv:2602.22576](https://arxiv.org/html/2602.22576v1) (Feb 2026, Tencent). Path-centric reward shaping; +7.7 avg accuracy over Search-R1 at Qwen-2.5-3B/7B.
+
+   *Added 2026-05-16 — Tier 3 (additive citations)*:
+   - **Path Not Taken** — [arXiv:2511.08567](https://arxiv.org/abs/2511.08567) (Nov 2025). Three-Gate Theory: RLVR updates off principal SVD directions; mechanistic foundation for PEFT-for-RLVR.
+   - **Learning from Less** — [arXiv:2604.18381](https://arxiv.org/abs/2604.18381) (Apr 2026, MLSys 2026 oral). 5× sample efficiency from mixed-complexity training.
+   - **Rethinking Easy-to-Hard** — [arXiv:2603.27226](https://arxiv.org/html/2603.27226) (Mar 2026). Negative result on E2H curriculum; reframes Candidate D rationale.
+   - **NeMo-RL Speculative Decoding** — [arXiv:2604.26779](https://arxiv.org/html/2604.26779v1) (Apr 2026, NVIDIA). 1.8× rollout throughput at 8B; free win on M5.1 substrate.
+   - **Balanced Aggregation** — [arXiv:2605.04077](https://arxiv.org/abs/2605.04077) (May 2026). Token-vs-sequence aggregation bias; validated on Qwen3-1.7B.
+   - **EqLen** — [arXiv:2604.17328](https://arxiv.org/html/2604.17328v1) (Apr 2026). Length-inconsistency failure modes in GRPO/GSPO/RLOO.
+   - **Why GRPO Needs Normalization** — [arXiv:2601.23135](https://arxiv.org/abs/2601.23135) (Jan 2026). First rigorous theory for GRPO std-normalisation.
+   - **EBPO** — [arXiv:2602.05165](https://arxiv.org/html/2602.05165) (Feb 2026). Empirical-Bayes posterior-shrinkage GRPO; extends 2511.03710.
+   - **REAL** — [arXiv:2602.05630](https://arxiv.org/abs/2602.05630) (Feb 2026). Reframes verifiable rewards as classification labels; +6.7 % Pass@1 over DAPO at 1.5B.
 
 ## Scope (what M6 will and will not produce)
 
