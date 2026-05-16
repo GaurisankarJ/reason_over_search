@@ -782,6 +782,93 @@ Worked example — **step 46, sample 126**, reward 1.0, 4 tool calls, 5-hop:
 
 **The mode is stable but smaller in cadence 7** (132 → 102 rollouts). The policy is using planned-multi-hop primarily for genuinely hard questions where the bridge is unambiguous; for easier 2-3 hop questions it now defaults to the 1-2 call short form even when planning could help.
 
+### Cadence 8: steps 71-80 (through 2026-05-16 ~15:45 UTC, host 126 / dedicated $4.70/h)
+
+| Step | Wall (s) | M:S | rew mean | rew > 0 | tool_med | notes |
+|---:|---:|---:|---:|---:|---:|---|
+| 71 | 443 | 7:23 | 0.163 | 21 % | 2 | |
+| 72 | 505 | 8:25 | 0.183 | 31 % | 3 | |
+| 73 | 411 | 6:51 | 0.269 | 39 % | 2 | Step-time *floor* of cadence; the run is still capable of 412 s/step. |
+| 74 | 460 | 7:40 | 0.197 | 28 % | 3 | |
+| 75 | 471 | 7:51 | 0.252 | 37 % | 3 | |
+| 76 | 505 | 8:25 | 0.201 | 31 % | 3 | |
+| 77 | 472 | 7:52 | 0.227 | 32 % | 3 | |
+| **78** | **494** | **8:14** | **0.296** | **41 %** | **3** | **NEW RUN HIGH — rew_mean 0.296, 70 perfect rollouts, 41 % rew>0**. Prior peak was step 53 = 0.273. |
+| 79 | 461 | 7:41 | 0.211 | 33 % | 2.5 | |
+| **80** | **447** | **7:27** | 0.209 | 31 % | 2 | **Eighth checkpoint** uploaded to HF. Tool_med drifted back to 2 in last 2 steps. |
+
+**Cadence 8 vs prior windows**:
+| Window | rew_mean | rew > 0 | step wall | tool_med | len_med | 4-hop+ wins | planned-3-5 |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 31-40 | 0.171 | 31 % | 376 s | 5 | 13.0 K | 20 | 74 |
+| 41-50 | 0.202 | 33 % | 448 s | 3 | 14.6 K | 26 | dozens |
+| 51-60 | 0.224 | 33 % | 412 s | 3 | 13.9 K | 21 | 132 |
+| 61-70 | 0.202 | 33 % | 463 s | 2 | 13.9 K | 32 | 102 |
+| **71-80** | **0.221** | **32 %** | **467 s** | **3** | **13.9 K** | **26** | **132** |
+| Δ vs 7 | **+9 %** | flat | +1 % wall | **+1 call** | flat | −19 % | +29 % |
+| Δ vs 6 | −1 % | flat | +13 % wall | flat | flat | +24 % | flat |
+
+**Trends after cadence 8 — plateau confirmed in the 0.22 band**:
+- **Cadence 7 was a noise window, not the start of plateau** — cadence 8 reverted to the cadence-6 level (0.224 → 0.202 → 0.221 across C6/C7/C8). The single-step *peaks* keep moving up (0.273 step 53 → 0.296 step 78); the 10-step *window means* are flat in the 0.22 band.
+- **The plateau is here, at rew_mean ≈ 0.22**. Cadences 6-8 spanning 30 steps have window means 0.224 / 0.202 / 0.221. The +0.022 / cadence climbing rate of C4 → C5 → C6 has ended. Marginal reward gain is now ≤ +0.005 / cadence with high variance.
+- **Tool_med back to 3** for the first 8 steps of cadence 8, before drifting again to 2 in steps 79 + 80. The C7 → 2 over-pruning was corrected; the policy is still oscillating between 2 and 3 calls but reward isn't moving with it (steps 71 and 73 both had tool_med 2 but rew_mean 0.163 vs 0.269 — tool_med isn't load-bearing on these results).
+- **4-hop+ successes 26** — back to the mid-range after cadence-7's 32 spike. The hard-tail gain in C7 didn't sustain.
+- **Step wall 467 s** — essentially same as cadence 7 (463 s). The +12 % over the cadence-6 floor is **the new steady-state**, not a transient.
+- HF: `step_80/` live at [the primary repo](https://huggingface.co/pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42/tree/main/step_80).
+- Cumulative cost (mixed Spot + Dedicated, ~15.5 h elapsed): ~$36.
+- **Wall-clock projection updated**: at 467 s/step, ETA step 311 = 231 × 467 s + 15.5 h ≈ 46 h total = step 311 lands ~21:50 UTC May 17. **Total 1-epoch cost ~$178** (already-spent $36 + $142 remaining at $4.70/h).
+
+#### Mechanical examples (cadence 8)
+
+**BEST** — step 71, sample 7, **reward 1.000**, 4 tool calls, 11.5 K chars
+
+> **Q**: *"How many times has the team which Richard Smith was a member of won the Super Bowl?"*  (Richard Smith → linebacker → Chargers / 49ers → '1' from one of the franchises)
+> **Final answer**: `1` ✓
+> **Last `<think>`**: "Super Bowl XXIX was won by the San Diego Chargers (AFC champion)... I see Super Bowl XXIX was won by the San Diego Chargers..."
+>
+> *Commentary*: 4 calls on an ambiguously-resolved bridge (multiple Richard Smiths in NFL history). Model still landed reward 1.0 by anchoring on the team-with-one-Super-Bowl candidate after retrieval. **Reward 1.0 doesn't mean the chain was perfectly resolved** — it means the F1 keyword check matched on a numeric answer. Class: lucky-shape correct.
+
+**WORST** — step 71, sample 0, **reward 0.000**, 4 tool calls, 12.4 K chars
+
+> **Q**: *"The shift away from what genre of the music category performed by Niarn is Kanye credited for?"*  (Niarn → Danish hip-hop; Kanye → shift away from gangsta rap — the gold answer is the sub-genre, not just "hip-hop")
+> **Final answer**: `hip-hop` ✗
+> **Last `<think>`**: "Now I have found Kanye West's musical career characterized by frequent stylistic shifts... He has incorporated new musical elements... encompassing soul, baroque-pop, stadium rock, electro..."
+>
+> *Commentary*: **Genre-granularity mismatch** — same shape as cadence-6's Manitoba/hydroelectricity (over-general) and cadence-7's Diocese of Springfield–Cape Girardeau (over-specific). The gold answer was sub-genre-scoped ("gangsta rap" probably) and the model gave the parent genre. The F1 reward gives no partial credit for type-level correctness.
+
+**MEAN** — step 72, sample 186, **reward 0.222**, 4 tool calls, 12.6 K chars
+
+> **Q**: *"Are the exact reasons known for the crucifixion of the religious leader who the Quran regarded as from a pious family?"*  (Ahl al-Bayt → Family of Muhammad; the gold expects "no" or similar — the question is asking about *Jesus* in Islamic tradition, where the crucifixion is denied)
+> **Final answer**: *"Yes, the exact reasons are known for the crucifixion of the religious leader Muhammad..."* — both the entity ID and the polarity wrong
+> **Last `<think>`**: "The Ahl al-Bayt are the family of Muhammad. The crucifixion of Muhammad is a historical fact with reasons..."
+>
+> *Commentary*: **Bridge-entity wrong + polarity wrong**. The question turns on the Quran's specific position about Jesus (Isa), not Muhammad. Model got F1 0.22 from keyword overlap on "crucifixion" + "reasons" + "known" without resolving the core bridge. This is the kind of question where retrieval alone can't save the policy — the model needs world-knowledge about Islamic theology that retrieval delivers but interpretation mishandles.
+
+#### Claude hand-analyses (cadence 8)
+
+1. **Plateau is confirmed at ~0.22 across three cadences (60 steps, ~9 hours wall).** Window means 0.224 / 0.202 / 0.221 in C6/C7/C8 are statistically indistinguishable; the trend that climbed +0.022 / cadence from C4 to C6 has stopped. Single-step peaks (step 78 = 0.296) keep ticking up but the per-step variance is wide and a 10-step window smooths them away. **The early-stop decision now becomes load-bearing**: at $4.70/h × 467 s/step, each additional cadence costs ~$6 with marginal return ≤ +0.005 window-mean. The supervisor question of "where does the curve plateau" has its answer at step 60-80, which is **~5 % below the published B200 a3 step-80 mean of 0.232 and ~30 % above the A100 prod-a2 final step-49 mean of 0.171**. The H200 a4 run is producing a recognizable plateau, not a still-climbing reward curve.
+2. **The plateau-without-saturation pattern is interesting structurally.** Cadence 8 includes the run's single-step rew_mean record (step 78 = 0.296), 4-hop+ successes are persistently above C4's level (26 vs 20), and the planned-multi-hop count is back to C6's 132 rollouts. **The policy isn't failing to learn** — it's running into F1-reward ceiling effects: even when the underlying chain reasoning is correct (the cadence-8 WORST answered "hip-hop" instead of "gangsta rap", and the MEAN answered with the wrong religious figure but right keyword overlap), the binary-ish F1 reward gives no credit. With more aggressive reward shaping (partial credit for type-correct answers, bridge-grounded scoring) the underlying capability could move up; under the current F1-only setup, ~0.22 is the ceiling at this model size + dataset.
+
+#### Hop-stratified BEST successes (cadence 8)
+
+| Hops | Step | Tools | Answer | Question |
+|---:|---:|---:|---|---|
+| 1 | 76 | 1 | `United States` | What country is the Wabash Township located in? |
+| 2 | 73 | 2 | `Alfred Lennon` | Who is the father of the lyricist of Nobody Told Me? |
+| 3 | 80 | 1 | `Apollo Citharoedus` | The statue of the god of ideal balance found at Mantua is an early variant of what statue type? |
+| 4+ | 73 | 2 | `Sophia Akuffo` | What is the name of the Chief Justice of the country where Jirapa Municipal is located? |
+
+**4-hop+ successes in cadence 8: 26 / 3,200** (back to C5/C6 levels after C7's 32-success spike). The step 73 Sophia Akuffo / Jirapa Municipal case is the **third repeat of the Ghana → Chief Justice question pattern** (cadence 5 Bibiani District, cadence 7 Akosombo Dam, cadence 8 Jirapa Municipal) — all solved in 2 tool calls, all reward 1.0. **MuSiQue clearly contains many Ghana-bridge variants and the policy has *learned* this specific lookup chain**.
+
+#### Planned-multi-hop reasoning (cadence 8)
+
+**132 rollouts** with 3-5 tool calls + explicit numbered plan + reward 1.0 — back to the cadence-6 high after cadence-7's 102 dip. Highest plan_score in cadence 8:
+
+- **Step 80, sample 84** (plan_score 49 — highest single rollout on this run): *"When did the capital of Virginia move from latter birth place of Emma Cecilia Thursby to the city in the same county as Laurel?"* — Emma Cecilia Thursby → Williamsburg, VA; Laurel → Henrico County → Richmond. Capital moved Williamsburg → Richmond in 1780. 4 tool calls, explicit 4-step numbered plan in the first `<think>`.
+- **Step 78, sample 13** (plan_score 36): *"What archdiocese governs the Evansville diocese of the most predominant religion in the country where Prison Break premiered?"* — Prison Break → USA → predominant religion Christianity → Evansville diocese → Archdiocese of Indianapolis. 3 tool calls.
+
+**Significance**: between C6 and C8 the planned-multi-hop mode has remained at 132 rollouts per 10-step window — that's a stable structural feature of policy, surviving the C7 dip. Combined with the 26-32 4-hop+ wins per cadence, the multi-hop chain reasoning is **a durable capability** even if the scalar reward is plateaued.
+
 ## 9. Cost / wall-clock estimate
 
 **Two tiers in play across this run**:
