@@ -696,6 +696,92 @@ Worked example — **step 46, sample 126**, reward 1.0, 4 tool calls, 5-hop:
 
 **Significance**: between cadence 4 (74 planned rollouts in steps 30-44) and cadence 6 (132 in steps 51-60), planned-multi-hop frequency nearly doubled. The mode is consolidating, not flaring and disappearing.
 
+### Cadence 7: steps 61-70 (through 2026-05-16 ~14:27 UTC, host 126 / dedicated $4.70/h)
+
+| Step | Wall (s) | M:S | rew mean | rew > 0 | tool_med | notes |
+|---:|---:|---:|---:|---:|---:|---|
+| 61 | 478.96 | 7:59 | 0.189 | 30 % | 3 | |
+| 62 | 520.81 | 8:41 | 0.187 | 30 % | 3 | Slowest step of cadence. |
+| 63 | 478.47 | 7:58 | 0.194 | 30 % | 3 | |
+| 64 | 441.97 | 7:22 | 0.213 | 38 % | **2** | **First step with tool_med = 2** since pre-cadence-1. Reward held. |
+| 65 | 433.71 | 7:14 | 0.161 | 28 % | 2 | Lowest rew_mean of cadence. |
+| 66 | 476.80 | 7:57 | 0.234 | 34 % | 3 | |
+| 67 | 445.72 | 7:26 | 0.234 | 43 % | 2 | |
+| 68 | 447.56 | 7:28 | 0.164 | 31 % | 2 | |
+| 69 | 447.00 | 7:27 | 0.209 | 31 % | 2 | |
+| **70** | **463.52** | **7:44** | **0.239** | 33 % | 2 | **Seventh checkpoint** uploaded to HF. Tool_med = 2 across 5 of last 7 steps; reward held in 0.21-0.24 band. |
+
+**Cadence 7 vs prior windows**:
+| Window | rew_mean | rew > 0 | step wall | tool_med | len_med | 4-hop+ wins |
+|---|---:|---:|---:|---:|---:|---:|
+| 21-30 | 0.131 | 26 % | 315 s | 4 | 10.8 K | — |
+| 31-40 | 0.171 | 31 % | 376 s | 5 | 13.0 K | 20 |
+| 41-50 | 0.202 | 33 % | 448 s | 3 | 14.6 K | 26 |
+| 51-60 | 0.224 | 33 % | 412 s | 3 | 13.9 K | 21 |
+| **61-70** | **0.202** | **33 %** | **463 s** | **2** (drift) | **13.9 K** | **32** |
+| Δ vs 6 | **−10 %** | flat | **+12 % wall** | **−1 call** | flat | **+52 %** |
+
+**Trends after cadence 7 — mixed signals; the deceleration is real**:
+- **Window mean rew dipped 0.224 → 0.202 (first regression cadence).** Three steps in the window scored < 0.20 (steps 61, 62, 65, 68 — four actually). But three steps still beat 0.23 (66, 67, 70). Variance is widening, not collapsing toward plateau.
+- **Tool_med dropping again** — 3 → 2 in the back half of the cadence. **The policy is over-pruning calls.** The cadence-6 finding ("3 well-aimed calls beat 5 cross-verifying ones") was the win; cadence-7 is **going one step further and giving back reward** — confirming the +18 % cadence-5 gain came from optimal-call discovery, not from "fewer is always better".
+- **4-hop+ successes JUMPED to 32** (vs 21 / 26 in cadences 5-6). The hardest chains are getting solved more often even as the policy regresses on the mean. Different regimes for different question types: easy 1-2 hops get over-pruned to 1 call and miss the F1 keyword match; hard 4+ hops actually benefit from the leaner search style (single well-aimed query that retrieves the bridge entity, then reasoning).
+- **Step wall jumped to 463 s** (+12 % over cadence 6). Phase breakdown: **generation grew 40 → 49 s (+22 %)**, policy_training grew 300 → 318 s (+6 %). The growth is on the rollout side, not training. With tool_med dropping (fewer turns) but generation getting slower, individual rollouts must be generating more tokens per turn (longer `<think>` blocks). This is the "longer single-call sequences" exploration mode.
+- HF: `step_70/` live at [the primary repo](https://huggingface.co/pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42/tree/main/step_70).
+- Cumulative cost (mixed Spot + Dedicated, ~13.8 h elapsed): ~$30.
+- **Wall-clock projection updated**: at 463 s/step, ETA step 311 = 241 × 463 s + 13.8 h ≈ 45 h total = step 311 lands ~17:00 UTC May 17 (slipped 3 h vs cadence-6 projection).
+
+#### Mechanical examples (cadence 7)
+
+**BEST** — step 61, sample 0, **reward 1.000**, 5 tool calls, 14.3 K chars
+
+> **Q**: *"What North Carolina county holds the community that shares its name with the New Jersey city where Walt Whitman died?"*  (Walt Whitman → Camden, NJ → Camden, NC)
+> **Final answer**: `Camden County` ✓
+> **Last `<think>`**: "1. Walt Whitman died in Camden, New Jersey (Camden County). 2. Camden County [NC] holds the community Fairview... 3. Study confirms Fairview is in Camden County. So the answer is Camden County."
+>
+> *Commentary*: Genuine 3-hop with **explicit numbered post-hoc confirmation** of the chain in the final `<think>`. The model not only resolved the chain but verified each link before committing. 5 calls is on the high side for cadence 7 (median 2) but they were targeted — illustrates that the model still has the capacity for cross-verification when the question rewards it.
+
+**WORST** — step 61, sample 8, **reward 0.000**, 5 tool calls, 16.1 K chars
+
+> **Q**: *"Who was the father of the cast member of The Wall - Live in the city where Alfred Brueckner died?"*  (multi-bridge: actor in Pink Floyd's *The Wall - Live* movie → played in a city → Brückner's city of death → his father)
+> **Final answer**: `Alexander Brückner` ✗
+> **Last `<think>`**: "Alexander Brückner... was a Baltic German historian who was the father of geographer Eduard Brückner. But I'm looking for Arthur Brückner... Wait, there's confusion. Let me re-read..."
+>
+> *Commentary*: **Bridge-entity confusion** with a real-name collision (multiple Brückners in the retrieval). The model named the right family but the wrong Brückner. Distinct from cadence-6's "Manitoba/hydroelectricity" failure (bridge-not-anchored) — this one is **bridge-not-disambiguated**. Both modes will persist; the F1 reward gives no credit even when the response is one entity off.
+
+**MEAN** — step 62, sample 56, **reward 0.200**, 4 tool calls, 10.3 K chars
+
+> **Q**: *"What church is the Diocese of Mike Allen's birthplace a part of?"*  (Mike Allen → Jamesport, Missouri → Roman Catholic Diocese of Springfield–Cape Girardeau)
+> **Final answer**: *"Roman Catholic Diocese of Springfield–Cape Girardeau"*
+> **Last `<think>`**: "Mike Allen's birthplace: Jamesport, Missouri. The Diocese of Jamesport is part of: Roman Catholic Diocese of Springfield–Cape Girardeau..."
+>
+> *Commentary*: Substantively correct 3-hop answer. F1 0.20 is a token-tokenisation effect — the gold answer probably says "Catholic Church" at a higher level of granularity, and the model went one level deeper than the gold expected. Mode: **over-specification**. The model knew the answer at multiple levels of hierarchy and picked the more specific one; F1 docked the keywords it didn't match.
+
+#### Claude hand-analyses (cadence 7)
+
+1. **Deceleration confirmed; the +0.04/cadence early-trend pattern has broken.** Cadences 4 → 5 → 6 climbed 0.171 → 0.202 → 0.224 (steady +0.022 / window). Cadence 7 = 0.202 — a *step backward*. The cadence-6 hand-analysis predicted plateau onset between steps 100-150; if 7 is the start of plateau onset rather than noise, plateau lands earlier than predicted, at rew_mean ≈ 0.21-0.22. **Two more cadences will disambiguate** — if cadence 8 (steps 71-80) is also in the 0.20-0.21 range, plateau is here; if cadence 8 rebounds to 0.23-0.24, cadence 7 was a noise dip on a still-climbing curve.
+2. **Tool_med 2 vs 3 is the policy decision driving everything in cadence 7.** When the median tool count drops to 2, the policy is committing to single-search-grounded answers earlier. This wins on retrieval-friendly questions (the 4-hop+ jump to 32 is consistent with this — well-aimed single queries that pull bridge entities directly) and loses on cross-verification-needed questions (Camden-County WORST analogue: when bridges are ambiguous, 2 calls aren't enough). The reward distribution is widening because the single policy is being applied across question types of differing difficulty. **The next regime change probably has to be at the prompt/decoder level** (e.g. a "doubt detector" that triggers extra calls on ambiguous bridges) rather than at the gross tool_count.
+
+#### Hop-stratified BEST successes (cadence 7)
+
+| Hops | Step | Tools | Answer | Question |
+|---:|---:|---:|---|---|
+| 1 | 66 | 1 | `1978` | In what year did the last to be crowned pope die? |
+| 2 | 66 | 1 | `1821` | What year did the country that has a political party David Lara Compean was a member of gain independence from Spain? |
+| 3 | 69 | 1 | `1806` | What year was the dissolution of the empire that the state of Palatinate-Sulzbach was once part of? |
+| 4+ | 62 | 2 | `Sophia Akuffo` | What is the name of the Chief Justice of the country where Akosombo Dam is located? |
+
+**4-hop+ successes in cadence 7: 32 / 3,200** — the highest count on this run (vs 26 / 21 / 20 in cadences 5 / 6 / 4). The Akosombo Dam → Ghana → Chief Justice Sophia Akuffo case is the **same fact-pattern as cadence 5's Bibiani District → Ghana → Sophia Akuffo BEST** — but cadence 5 used 4 tool calls, cadence 7 used 2. Tool-efficiency is improving on the hard tail even as the median dips.
+
+#### Planned-multi-hop reasoning (cadence 7)
+
+**102 rollouts** in steps 61-70 had a 3-5 tool call + explicit-numbered-plan structure with reward = 1.0 (vs 132 in cadence 6). The slight decline tracks the tool_med 3 → 2 shift; fewer rollouts are using the planned multi-call mode because more are committing to the shorter shape. The highest plan_scores:
+
+- **Step 64, sample 293** (plan_score 25): *"What is the highest point in the US state whose name is used by the band singing Dixieland Delight?"* — Dixieland Delight → Alabama → Mount Cheaha. Solved in 3 tool calls with an explicit 3-step plan in the first `<think>`.
+- **Step 70, sample 144** (plan_score 24): *"Who sings the rap in Baby, by the performer of Somebody to Love?"* — required re-parsing the question structure ("the rap in 'Baby' by [the performer of 'Somebody to Love']" = Justin Bieber's "Baby"; rap by Ludacris). 4 tool calls.
+- **Step 68, sample 164** (plan_score 21): *"In which county of the state where Dodge City is located in Gunsmoke can Moran also be found?"* — Dodge City → Kansas → Moran's county. 3 tool calls.
+
+**The mode is stable but smaller in cadence 7** (132 → 102 rollouts). The policy is using planned-multi-hop primarily for genuinely hard questions where the bridge is unambiguous; for easier 2-3 hop questions it now defaults to the 1-2 call short form even when planning could help.
+
 ## 9. Cost / wall-clock estimate
 
 **Two tiers in play across this run**:
