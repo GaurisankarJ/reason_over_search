@@ -227,6 +227,37 @@ Step wall-clock + reward signal (rollouts pulled from `train_data_step*.jsonl`):
 
 **Untrained-model rollout cost dropping faster than predicted**: §9 cold-50 estimate had step time at ~18 min through step 50; we're at 6 min by step 12. Updating projection below.
 
+#### Mechanical examples (cadence 1, script-selected from 3,200 trajectories)
+
+**BEST** — step 1, sample 120, **reward 1.000**, 8 tool calls, 27.8 K chars (truncated)
+
+> **Q**: *"Who introduced the first microprocessor for the manufacturer of the System Controller Hub?"*
+> **Final answer**: `Federico Faggin` ✓
+> **Last `<think>`**: "Based on all my searches, I have clear information... the Intel 4004 was introduced by Federico Faggin. He was the sole chip designer among the engineers on the MCS-4 project..."
+>
+> *Commentary*: Cold-start luck — model issued 8 search calls (near the `max_turns: 10` ceiling) and accidentally landed on the right person via a chain of "Intel SCH → Intel 4004 → MCS-4 → Federico Faggin". The thinking is verbose but converges. Reward 1.0 is exact-match on the F1 reward, not partial credit.
+
+**WORST** — step 1, sample 0, **reward 0.000**, 3 tool calls, 8.9 K chars (truncated)
+
+> **Q**: *"What tradition is the basis for the legal system in the place where Coloane Park is located?"*
+> **Final answer**: `Kissing Traditions` ✗  (correct ≈ "Portuguese civil law")
+> **Last `<think>`**: "...the UK has a tradition called 'Kissing traditions'... Wait, that doesn't match what I got. Let me re-examine."
+>
+> *Commentary*: Model never realised Coloane Park is in Macau (Portuguese-influenced civil law tradition). It picked up irrelevant search-result tokens ("Beating the bounds", "Colloquy") and confabulated "Kissing Traditions" — a phrase that doesn't even exist. Classic cold-start hallucination: low retrieval quality + low pre-training prior on Macau-Portugal connection.
+
+**MEAN** — step 1, sample 285, **reward 0.065**, 5 tool calls, 19.8 K chars
+
+> **Q**: *"In what ways did Kanye draw inspiration from U2, Led Zeppelin, and the performer of All Down the Line?"*  ("All Down the Line" → Rolling Stones)
+> **Final answer**: long paragraph ending "Kanye West drew inspiration from U2, Led Zeppelin, and the Rolling Stones for their melodies..." ✓-ish
+> **Last `<think>`**: "...Bob Dylan and Johnny Cash in addition to U2 and Led Zeppelin..."
+>
+> *Commentary*: Got the bridge entity right (Rolling Stones perform "All Down the Line") but pulled in unrelated content (Bob Dylan, Johnny Cash). Partial F1 credit because the gold answer keywords were present but diluted by extra material. Typical cold-cadence-1 behavior: model recognises the question shape but doesn't compress to a clean answer.
+
+#### Claude hand-analyses (cadence 1)
+
+1. **Tool-call ceiling pinning**. 92.7 % of cadence-1 rollouts hit 7.8 K+ chars (the `max_total_sequence_length: 8192` truncation point). Median tool calls = 7 (paper recipe caps at 10). The model has learned the `<tool_call>...</tool_call>` *format* perfectly (100 % rollouts emit `<answer>`), but it doesn't know *when to stop searching* — so it spams until the context budget kicks it out. Phase-1 finding #4 (paper's partial-credit floor masks tool-use signal) is exactly the friction this run was set up to bypass: pure F1 reward, no shaped components, so reward 0 means reward 0 and the policy *must* learn to compress.
+2. **Format learning is already complete; the gap is grounding.** Every rollout has a `<tool_call>` with a `<function=search>` and a `<parameter=query>` — the Qwen3.5-native XML format is rock-solid out of the cold model. What's failing is **multi-hop entity resolution**: questions like "country where Bucer was citizen" or "language of Aavarana" require chaining 2-3 entities, and the model is fragile on the chain. Both WORST and MEAN show the model executing the first hop and then drifting on the second.
+
 ### Cadence 2: steps 14-24 (through 2026-05-16 ~00:50 UTC)
 
 | Step | Wall (s) | M:S | rew mean | rew > 0 | notes |
@@ -258,6 +289,37 @@ Step wall-clock + reward signal (rollouts pulled from `train_data_step*.jsonl`):
 - Cumulative cost since launch: ~$14. Still ~30× under budget.
 - B200 a3 reference (steps 11-20 cadence): rew_mean ~0.115 — H200 at 0.106 is **within 8 % of B200**, same recipe + same hardware-class except for the GDN patch. The patch's compute overhead does not visibly hurt learning.
 
+#### Mechanical examples (cadence 2)
+
+**BEST** — step 11, sample 16, **reward 1.000**, 8 tool calls, 32.0 K chars (truncated)
+
+> **Q**: *"In which municipality of the province where Sydney-Victoria is located can Dean be found?"*
+> **Final answer**: `Halifax` ✓
+> **Last `<think>`**: "Sydney-Victoria is in British Columbia... Wait, Sydney-Victoria is in *Nova Scotia* (Cape Breton)... Andrew Dean, Ephraim Dean represented Liverpool township in Nova Scotia House of Assembly..."
+>
+> *Commentary*: Model **self-corrected** mid-reasoning: started with the wrong province (British Columbia) but the search results forced a correction to Nova Scotia → Halifax. This is the post-cold-start regime: model trusts retrieval over its prior. Still 8 tool calls — the policy is exploring more than necessary, but the trade is paying off in reward.
+
+**WORST** — step 11, sample 0, **reward 0.000**, 11 tool calls (above paper `max_turns: 10`!), 36.0 K chars
+
+> **Q**: *"When did the first restaurant from which McDonaldization got its name open in the country where the author of Judgement of Martin Bucer Concerning Divorce was a citizen?"*
+> **Final answer**: `Beijing` ✗  (correct ≈ "1948" or similar McDonald's US founding date; Bucer was German, but Milton wrote the *Judgement* and was English, so country = England or Germany depending on interpretation)
+> **Last `<think>`**: "This is not giving the citizenship info I need. Let me try searching for 'Martin Bucer' again..."
+>
+> *Commentary*: Three-hop question collapsed. Model never resolved "author of *Judgement of Martin Bucer Concerning Divorce*" = John Milton (English) and ran out of context. Final answer `Beijing` is unhinged — it appears to be a free-text bailout pattern (note the system prompt's example uses Beijing). This is the **bailout-on-failure** failure mode: model has learned to emit *something* in `<answer>` even when it has no signal.
+
+**MEAN** — step 11, sample 49, **reward 0.105**, 4 tool calls, 9.7 K chars
+
+> **Q**: *"What is the highest point in the state where Hanna Theatre is located?"*
+> **Final answer**: literal text "*tag.\n</think>\n\nBased on my search results, Hanna Theatre is located in Cleveland, Ohio. The highest point... is Campbell Hill...*" (the model emitted the `<answer>` opener mid-stream and the F1 scorer caught "Campbell Hill" inside)
+> **Last `<think>`**: "...Campbell Hill (Ohio). Let me format this properly with the `<answer>` tag."
+>
+> *Commentary*: **Knew the answer (Campbell Hill) but botched the formatting** — emitted `<answer>` tag prematurely inside the `<think>` block, so the F1 scorer only caught fragments. F1 0.105 means partial keyword match. With a stricter EM scorer this would be 0. Format-vs-content split: the gradient should push the policy toward consistent `<answer>X</answer>` emission at the very end.
+
+#### Claude hand-analyses (cadence 2)
+
+1. **Tool-call median dropped from 7 to 4 in one cadence.** The biggest single behavioural shift in the run so far. Truncation dropped 92.7 % → 69 %. Mean rollout length 25 K → 11.5 K chars (−54 %). The model has internalised that *more search calls do not reliably mean better answers*. Reward mean climbed +62 % (0.066 → 0.107) on a +54 % shorter rollout — pure efficiency gain.
+2. **A new failure mode appears: `<answer>` mid-stream.** MEAN above shows the model emitting `<answer>` *inside* a `<think>` block ("Let me format this properly with the `<answer>` tag" — and then doing so prematurely). This wasn't visible in cadence 1 where rollouts were truncated before reaching this state. As rollouts get shorter, the model gets closer to formatting the answer correctly, but it's not yet consistent. Expect the policy to push this toward 100 % at the END pattern in cadences 3-4.
+
 ### Cadence 3: steps 25-30 (through 2026-05-16 ~01:38 UTC)
 
 | Step | Wall (s) | M:S | rew mean | rew > 0 | notes |
@@ -283,6 +345,37 @@ Step wall-clock + reward signal (rollouts pulled from `train_data_step*.jsonl`):
 - HF: `step_30/` live at [the primary repo](https://huggingface.co/pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42/tree/main/step_30).
 - Cumulative cost: ~$18. Steps 1-30 wall: ~9 h.
 - B200 a3 cadence-3 same range: rew_mean 0.143 — H200 at 0.131 is **within 9 % of B200** (still tracking).
+
+#### Mechanical examples (cadence 3)
+
+**BEST** — step 21, sample 0, **reward 1.000**, 3 tool calls, 6.6 K chars
+
+> **Q**: *"Who won season 5 of Bigg Boss presented in the language of the novel Aavarana?"*  ("Aavarana" → Kannada novel by S.L. Bhyrappa)
+> **Final answer**: `Chandan Shetty` ✓
+> **Last `<think>`**: "...Bigg Boss Kannada (which the user asked about since they mentioned the language)... Chandan Shetty was declared the winner..."
+>
+> *Commentary*: This is the **asymptotic ideal**: 3 tool calls, 6.6 K chars, clean answer. Model correctly resolved "language of Aavarana" → Kannada, mapped to Bigg Boss Kannada Season 5, retrieved winner. The B200 a3 cadence-2 commentary described this exact pattern ("minimum tool calls, minimum tokens, correct answer") as the convergence target — we hit it cleanly here.
+
+**WORST** — step 21, sample 1, **reward 0.000**, 3 tool calls, 6.2 K chars
+
+> **Q**: *Same question* as BEST.
+> **Final answer**: `Sanjay Dutt and Salman Khan` ✗
+> **Last `<think>`**: "...Bigg Boss season 5 in Hindi. The show features Sanjay Dutt and Salman Khan as the hosts... There's no evidence in the search results that the show existed in Bangla/Avarana language."
+>
+> *Commentary*: **Bridge corruption**. Same prompt, same number of tools, but the model defaulted to Bigg Boss *Hindi* season 5 (the most famous one) instead of resolving "language of Aavarana" first. Also emitted the *hosts* rather than the *winner*. Two-error compound failure on a question that the BEST rollout (sibling in the same step!) got right. GRPO advantage estimator should see a large reward gap between these two and push the policy strongly toward the BEST-style chain.
+
+**MEAN** — step 26, sample 180, **reward 0.136**, 4 tool calls, 11.1 K chars
+
+> **Q**: *"Where in the colonial holding in Aruba's continent that was governed by the country where Prazeres is located are most of the German descendants found?"*
+> **Final answer**: rambling paragraph about "ABC islands... Dutch colonial holdings... German descendants" — keyword-rich but doesn't name a clean place
+> **Last `<think>`**: "...German descendants are primarily found in the Dutch colonial hol[dings]..."
+>
+> *Commentary*: 4-hop question (Prazeres → Portugal → South America → Suriname → German descendants in interior). Model collapsed to "Dutch ABC islands" — wrong continent entirely (Aruba's "continent" is S. America; Prazeres is in Portugal so it points to Brazil, where many Germans settled in Rio Grande do Sul). F1 partial-credit on keyword overlap. Multi-hop entity resolution still the major gap.
+
+#### Claude hand-analyses (cadence 3)
+
+1. **GRPO advantage at maximum signal**. The BEST/WORST sibling pair at step 21 (same question, reward 1.0 vs 0.0, both with 3 tool calls) gives the GRPO group-relative advantage estimator a clean direction: identical input, divergent reward → advantage maximises the policy gradient toward the BEST-style chain. This is exactly the dynamic the algorithm is designed to exploit, and we see it materialising in cadence 3's +24 % reward gain over cadence 2.
+2. **Re-exploration emerging — model starts adding a 5th search.** Tool-call mean crept from 4.00 (cadence 2) to 4.29 (cadence 3). Median still 4 but the distribution thickens at 5 and 6. This is the **B200 a3 "re-exploration" regime** at the same step range, where the policy starts trading wall-clock for accuracy on harder questions. Next cadence will confirm whether tool count + length + reward all continue rising together (worth the trade) or whether reward plateaus while tools grow (not worth it).
 
 ### Cadence 4: steps 31-40 (through 2026-05-16 ~02:42 UTC)
 
@@ -313,6 +406,37 @@ Step wall-clock + reward signal (rollouts pulled from `train_data_step*.jsonl`):
 - HF: `step_40/` live at [the primary repo](https://huggingface.co/pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42/tree/main/step_40).
 - Cumulative cost: ~$22.
 - B200 a3 cadence-4 published rew_mean ≈ 0.160 — H200 at 0.171 is **+7 % above B200**, first window where we lead. Likely batch noise but worth tracking.
+
+#### Mechanical examples (cadence 4)
+
+**BEST** — step 31, sample 28, **reward 1.000**, 4 tool calls, 10.1 K chars
+
+> **Q**: *"The home country of Así's singer has Gila monsters. What state do the monsters live in?"*  (Así → Mexican song by Pablo Alborán covered widely; Gila monsters live in Sonora)
+> **Final answer**: `Sonora` ✓
+> **Last `<think>`**: "...the Gila monster is native to the Mexican state of Sonora. From the context of the song mentioned (likely a Western theme song or similar), assuming the question is asking about the home country's state, the answer would be Sonora."
+>
+> *Commentary*: Clean 4-call chain on a 3-hop question (song → singer's home country → state with Gila monsters). Notably the model is **slightly uncertain** about the song's identity but executes the question's *structure* correctly anyway: "assuming the question is asking about the home country's state" — that's robust hop-handling, not lucky guessing. This is exactly the policy behaviour GRPO is supposed to instil: trust the question's chain even under uncertainty on intermediate entities.
+
+**WORST** — step 31, sample 0, **reward 0.000**, 3 tool calls, 7.1 K chars (almost truncated)
+
+> **Q**: *"Why did the country beaten by the US in the Miracle on Ice complain about the action of the U.S. to the organization that legislated United Nations Security Council Resolution 731?"*  (Miracle on Ice → USSR/Russia; UN SC R-731 → about Pan Am Lockerbie, legislated by UN Security Council; so country = Russia/USSR complaining to UN SC)
+> **Final answer**: `China opposed the U.S. Resolution 731 claim` ✗  (wrong country and wrong substance)
+> **Last `<think>`**: "...In 1993, a false claim was made by the United States in 1993 about the 'Yinhe incident'... Looking at this, the question is asking about a country (presumably China, given Resolution 731's context)..."
+>
+> *Commentary*: **Bridge corruption again** — model fixated on the Yinhe incident (China-USA, 1993) instead of resolving "Miracle on Ice country" = USSR. The 1980 Olympics ice-hockey upset is well-known enough that the cold model should have it; this looks like a search-result-anchored failure where the retrieval pulled Yinhe and the model committed. Same class of failure as the Bigg Boss WORST in cadence 3.
+
+**MEAN** — step 35, sample 205, **reward 0.169**, 6 tool calls, 19.8 K chars
+
+> **Q**: *"What effort was the Canadian Military known for in the country which means Ashkenaz in Hebrew?"*  (Ashkenaz → Germany)
+> **Final answer**: "*The Canadian Military was most notably known for their efforts in Operation Veritable, which involved an invasion of Sicily and Italy to free France...*"
+> **Last `<think>`**: "The country meaning Ashkenaz in Hebrew is Germany. The Canadian Military had a significant role in World War II..."
+>
+> *Commentary*: Got the Ashkenaz → Germany bridge correct. Got "WWII Canadian military in Germany" partially correct (Operation Veritable was Rhineland 1945, not Sicily/Italy as the model wrote). F1 0.169 means keyword overlap on "Operation Veritable" + "Canadian Military" but mixed with wrong facts ("Sicily and Italy"). **Confabulation under partial knowledge**: model has the right entity but fabricates supporting detail.
+
+#### Claude hand-analyses (cadence 4)
+
+1. **The 5th tool call is paying off — but at a context cost.** Cadence 4 added one tool call to the median (4 → 5), bought +17 % wall, returned +30 % reward (window mean 0.131 → 0.171). Truncation rate jumped 79 % → 94 % (rollouts hitting 7.8 K+ chars). The model is using the extra tokens for **cross-verification searches** — issuing a second search to confirm an entity it already has, rather than a brand-new query. Reward gain says the verification is worth it; truncation rate says we're back at the context ceiling that we escaped in cadence 2.
+2. **Crossed A100's recorded ceiling at the same step number (step 37).** A100's published max was rew_mean 0.1997 at step 37 across the entire 49-step run. H200 step 37 = 0.209, +5 %. With smoother gradient from mb=2 (vs A100's mb=1) and same recipe otherwise, we are now in territory the A100 reference cannot speak to. The next cadence (steps 41-50) will tell us whether the policy keeps climbing or plateaus — if it plateaus near 0.20-0.22 we're in the regime where the paper expected step-100+ improvements to be smaller (+ 0.02 / 50 steps), and the early-stop decision becomes load-bearing.
 
 ## 9. Cost / wall-clock estimate
 
