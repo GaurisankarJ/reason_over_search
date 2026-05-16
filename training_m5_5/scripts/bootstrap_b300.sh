@@ -140,14 +140,19 @@ info "step 5/9 — cmake 4.x (Ubuntu 24.04 ships 3.28; sm_120 needs 3.31+)"
 CMAKE_VER="$(cmake --version 2>/dev/null | head -1 | awk '{print $3}' | cut -d. -f1)"
 if [[ "${CMAKE_VER:-0}" -lt 4 ]]; then
     info "installing cmake 4.x via uv tool"
-    uv tool install --force cmake >/dev/null
-    if [[ -e /usr/bin/cmake && ! -L /usr/bin/cmake ]]; then
-        mv /usr/bin/cmake /usr/bin/cmake.apt
-    elif [[ -L /usr/bin/cmake ]]; then
-        rm /usr/bin/cmake
+    # Don't redirect to /dev/null — errors here cause silent script death
+    # (e.g. transient PyPI hiccup). Show last 5 lines on either path.
+    if ! uv tool install --force cmake 2>&1 | tail -5; then
+        fail "uv tool install cmake failed — see output above"
     fi
-    ln -sf "$HOME/.local/bin/cmake" /usr/bin/cmake
 fi
+# Make the new cmake the system default (some tools call /usr/bin/cmake directly)
+if [[ -e /usr/bin/cmake && ! -L /usr/bin/cmake ]]; then
+    mv /usr/bin/cmake /usr/bin/cmake.apt
+elif [[ -L /usr/bin/cmake ]]; then
+    rm /usr/bin/cmake
+fi
+ln -sf "$HOME/.local/bin/cmake" /usr/bin/cmake
 cmake --version | head -1
 ok "cmake supports sm_120"
 
@@ -178,11 +183,25 @@ info "step 7/9 — V2 worker venv (tarball fast-path → falls back to source co
 #      torch.cuda.init() at install time and the actor has no GPU.
 #
 # Override:
-#   V2_BUILD_FROM_SOURCE=1   skip the tarball path; always compile
-#   V2_VENV_HF_REPO=<repo>   override the HF repo for the tarball
+#   V2_BUILD_FROM_SOURCE=1     skip the tarball path; always compile
+#   V2_VENV_HF_REPO=<repo>     override the HF repo for the tarball
+#   V2_VENV_HF_FILE=<name>     override the filename
+#   USER_V2_VENV_HF_REPO=<repo>  per-arch fallback location (own HF repo),
+#                                tried before pantomiman's generic one
 V2_VENV="${REPO_ROOT}/training/nemo_rl/venvs/nemo_rl.models.policy.workers.dtensor_policy_worker_v2.DTensorPolicyWorkerV2"
-V2_VENV_HF_REPO="${V2_VENV_HF_REPO:-pantomiman/reason-over-search-v1-venvs}"
-V2_VENV_HF_FILE="${V2_VENV_HF_FILE:-dtensor_policy_worker_v2.tar.gz}"
+# Per-arch tarball: <user-or-pantomiman>/<repo>:dtensor_policy_worker_v2_sm${CC}.tar.gz
+# Bootstrap tries the user's own HF repo first (auto-built from HF_TOKEN's
+# username when not overridden), then falls back to pantomiman's Hopper-only
+# tarball, then to source compile.
+V2_VENV_HF_FILE="${V2_VENV_HF_FILE:-dtensor_policy_worker_v2_sm${DETECTED_CC}.tar.gz}"
+# Resolve USER_V2_VENV_HF_REPO from HF_TOKEN's whoami if not set explicitly.
+if [[ -z "${USER_V2_VENV_HF_REPO:-}" && -n "${HF_TOKEN:-}" && -x training_m5_5/nemo_rl/.venv/bin/hf ]]; then
+    HF_USER="$(HF_TOKEN="${HF_TOKEN}" training_m5_5/nemo_rl/.venv/bin/hf auth whoami 2>/dev/null | head -1 | tr -d '[:space:]')"
+    [[ -n "${HF_USER}" ]] && USER_V2_VENV_HF_REPO="${HF_USER}/reason-over-search-venvs"
+fi
+# Final repo to try. Override V2_VENV_HF_REPO to pin a specific repo and
+# skip the user-repo lookup entirely.
+V2_VENV_HF_REPO="${V2_VENV_HF_REPO:-${USER_V2_VENV_HF_REPO:-pantomiman/reason-over-search-v1-venvs}}"
 
 # Smoke-test the V2 venv at runtime: import the kernels we actually use.
 # More aggressive than Vast's `import nemo_automodel` because we want to
@@ -224,39 +243,73 @@ build_from_source() {
       uv sync --locked --extra automodel --directory training_m5_5/nemo_rl
 }
 
+try_tarball() {
+    # Args: repo file
+    local repo="$1" file="$2"
+    info "  trying ${repo}:${file}"
+    local td; td="$(mktemp -d)"
+    local venv_hf="${REPO_ROOT}/training_m5_5/nemo_rl/.venv/bin/hf"
+    [[ -x "${venv_hf}" ]] || venv_hf="$(command -v hf)"
+    rm -rf "${V2_VENV}"
+    mkdir -p "$(dirname "${V2_VENV}")"
+    if HF_HUB_ENABLE_HF_TRANSFER=1 HF_TOKEN="${HF_TOKEN:-}" \
+            "${venv_hf}" download "${repo}" "${file}" \
+            --repo-type dataset --local-dir "${td}" >/tmp/_hf_dl.log 2>&1; then
+        info "    extracting (~2 min)..."
+        tar -xzf "${td}/${file}" -C "$(dirname "${V2_VENV}")"
+        rm -rf "${td}"
+        if v2_imports_ok; then
+            ok "  V2 venv usable from ${repo}:${file}"
+            return 0
+        else
+            warn "  tarball extracted but imports failed (likely arch mismatch). Wiping."
+            rm -rf "${V2_VENV}"
+        fi
+    else
+        info "    not available (download failed or file absent in repo)"
+        rm -rf "${td}"
+    fi
+    return 1
+}
+
 if v2_imports_ok; then
     ok "V2 worker venv already usable"
 elif [[ "${V2_BUILD_FROM_SOURCE:-0}" == "1" ]]; then
     build_from_source
 else
-    info "attempting fast-path: tarball from HF ${V2_VENV_HF_REPO}:${V2_VENV_HF_FILE}"
+    info "attempting fast-path tarballs (user repo → pantomiman → source compile)"
     if [[ -n "${HF_TOKEN:-}" ]]; then
         info "  (authenticated via HF_TOKEN from .env)"
     else
-        warn "  no HF_TOKEN in env — anonymous download (may rate-limit on large tarball)"
+        warn "  no HF_TOKEN in env — anonymous fetch (may rate-limit on large tarball)"
     fi
-    rm -rf "${V2_VENV}"
-    mkdir -p "$(dirname "${V2_VENV}")"
-    TARBALL_DIR="$(mktemp -d)"
-    VENV_HF="${REPO_ROOT}/training_m5_5/nemo_rl/.venv/bin/hf"
-    # Use parent venv's hf CLI if available, else fall back to uv tool's hf
-    [[ -x "${VENV_HF}" ]] || VENV_HF="$(command -v hf)"
-    if HF_HUB_ENABLE_HF_TRANSFER=1 HF_TOKEN="${HF_TOKEN:-}" \
-            "${VENV_HF}" download "${V2_VENV_HF_REPO}" "${V2_VENV_HF_FILE}" \
-            --repo-type dataset --local-dir "${TARBALL_DIR}" 2>&1 | tail -3; then
-        info "extracting (~2 min, ~5 GB → ~10 GB on disk)"
-        tar -xzf "${TARBALL_DIR}/${V2_VENV_HF_FILE}" -C "$(dirname "${V2_VENV}")"
-        rm -rf "${TARBALL_DIR}"
-        if v2_imports_ok; then
-            ok "V2 venv usable via tarball (saved ~20-30 min vs compile)"
-        else
-            warn "tarball extracted but imports failed on B300 (likely no sm_120 SASS/PTX). Wiping + compiling."
-            rm -rf "${V2_VENV}"
-            build_from_source
+
+    # Build the list of repos to try, in order. Skip duplicates.
+    declare -a TRY_REPOS=()
+    [[ -n "${USER_V2_VENV_HF_REPO:-}" ]] && TRY_REPOS+=("${USER_V2_VENV_HF_REPO}")
+    # If V2_VENV_HF_REPO was set explicitly to something different, include it
+    if [[ "${V2_VENV_HF_REPO}" != "${USER_V2_VENV_HF_REPO:-}" ]]; then
+        TRY_REPOS+=("${V2_VENV_HF_REPO}")
+    fi
+    # Always try pantomiman's Hopper-tarball as a last resort
+    [[ " ${TRY_REPOS[*]} " == *" pantomiman/reason-over-search-v1-venvs "* ]] \
+        || TRY_REPOS+=("pantomiman/reason-over-search-v1-venvs")
+
+    TARBALL_HIT=0
+    for repo in "${TRY_REPOS[@]}"; do
+        # Try arch-tagged file first, then the legacy unversioned name
+        if try_tarball "${repo}" "${V2_VENV_HF_FILE}"; then
+            TARBALL_HIT=1; break
         fi
-    else
-        warn "HF tarball download failed; falling back to source compile"
-        rm -rf "${TARBALL_DIR}"
+        if [[ "${V2_VENV_HF_FILE}" != "dtensor_policy_worker_v2.tar.gz" ]]; then
+            if try_tarball "${repo}" "dtensor_policy_worker_v2.tar.gz"; then
+                TARBALL_HIT=1; break
+            fi
+        fi
+    done
+
+    if [[ "${TARBALL_HIT}" -eq 0 ]]; then
+        info "no usable tarball in any repo — building from source"
         build_from_source
     fi
 fi
