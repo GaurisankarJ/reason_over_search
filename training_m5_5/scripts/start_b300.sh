@@ -41,7 +41,17 @@ MODE="prod_b300"
 SEED="42"
 DRY_RUN=0
 SMOKE_FIRST=0
-NUM_RETRIEVER="${NUM_RETRIEVER:-8}"
+# Auto-pick num_retriever based on host RAM. Each FAISS worker mmaps ~16 GB
+# of IVF index resident. 8 workers (128 GB) is fine on a 270 GB B300 box
+# but OOM-killed during prod warmup on a 200 GB H200 box (RESULTS_M5_5_B300
+# post-mortem covers the exact failure mode). Override with NUM_RETRIEVER=N.
+if [[ -z "${NUM_RETRIEVER:-}" ]]; then
+    HOST_RAM_GB="$(awk '/MemTotal/ {print int($2/1024/1024)}' /proc/meminfo 2>/dev/null || echo 0)"
+    if   [[ "${HOST_RAM_GB}" -ge 256 ]]; then NUM_RETRIEVER=8   # B300-class
+    elif [[ "${HOST_RAM_GB}" -ge 128 ]]; then NUM_RETRIEVER=4   # H200-class
+    else                                       NUM_RETRIEVER=2  # A100/4090-class
+    fi
+fi
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -175,6 +185,9 @@ fi
 # Smoke is fine on anything ≥20 GB. Use the smoke path for validation on 4090/A6000/etc.
 if [[ "${MODE}" == prod_b300* && "${GPU_VRAM_MB}" -lt 80000 ]]; then
     fail "--mode ${MODE} needs ≥80 GB VRAM (B300 config peaks ~100 GB at micro=4/seq=8192). Got ${GPU_VRAM_MB} MB. For cheaper validation use --mode smoke."
+fi
+if [[ "${MODE}" == "prod_h200" && "${GPU_VRAM_MB}" -lt 120000 ]]; then
+    fail "--mode prod_h200 needs ≥120 GB VRAM (H200 config peaks ~127 GB with vLLM at gpu_mem=0.5). Got ${GPU_VRAM_MB} MB. Use --mode prod for ≤80 GB cards or --mode smoke for validation."
 fi
 if [[ "${MODE}" != *smoke* && "${GPU_LINE}" != *B300* && "${GPU_LINE}" != *B200* ]]; then
     warn "${MODE} is tuned for Blackwell-class GPUs; running on ${GPU_LINE} may underperform or OOM. Smoke first."

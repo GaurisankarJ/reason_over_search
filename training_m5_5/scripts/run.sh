@@ -59,10 +59,11 @@ case "$MODE" in
     smoke_2xa100)     CONFIG="training_m5_5/configs/m5_smoke_2xa100.yaml" ;;
     prod)             CONFIG="training_m5_5/configs/m5_5_research_paper.yaml" ;;
     prod_2xa100)      CONFIG="training_m5_5/configs/m5_5_research_paper_2xa100.yaml" ;;
+    prod_h200)        CONFIG="training_m5_5/configs/m5_5_research_paper_h200.yaml" ;;
     prod_b300)        CONFIG="training_m5_5/configs/m5_5_research_paper_b300.yaml" ;;
     prod_b300_2xgpu)  CONFIG="training_m5_5/configs/m5_5_research_paper_b300_2xgpu.yaml" ;;
-    "")               echo "error: --mode is required (smoke|smoke_2xa100|prod|prod_2xa100|prod_b300|prod_b300_2xgpu)" >&2; exit 2 ;;
-    *)                echo "error: --mode must be smoke|smoke_2xa100|prod|prod_2xa100|prod_b300|prod_b300_2xgpu (got: $MODE)" >&2; exit 2 ;;
+    "")               echo "error: --mode is required (smoke|smoke_2xa100|prod|prod_2xa100|prod_h200|prod_b300|prod_b300_2xgpu)" >&2; exit 2 ;;
+    *)                echo "error: --mode must be smoke|smoke_2xa100|prod|prod_2xa100|prod_h200|prod_b300|prod_b300_2xgpu (got: $MODE)" >&2; exit 2 ;;
 esac
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
