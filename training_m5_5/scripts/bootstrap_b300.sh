@@ -190,16 +190,31 @@ info "step 7/9 — V2 worker venv (tarball fast-path → falls back to source co
 # ============================================================
 #
 # Two paths to materialize the DTensorPolicyWorkerV2 venv:
-#   a. FAST: download the pre-built tarball from HF dataset
-#      `pantomiman/reason-over-search-v1-venvs` and extract (~3-5 min for
-#      ~5 GB). Smoke-test that imports work on B300 (sm_120) — the tarball
-#      was built on Hopper-class hardware, so the cuda kernels may not have
-#      sm_120 SASS but should have PTX for JIT fallback. If any import
-#      fails (no PTX, ABI drift, etc.), wipe and fall through to (b).
+#   a. FAST: download a pre-built tarball from HF and extract (~3-5 min for
+#      ~6 GB). Smoke-test imports — fall through to (b) if they fail
+#      (different SM than what the tarball was built for, ABI drift, etc.).
+#
+#      Per-arch tarballs known to exist (2026-05-16):
+#        Hopper (sm_70/80/89/90): pantomiman/reason-over-search-v1-venvs
+#                                 :dtensor_policy_worker_v2.tar.gz
+#        Blackwell-Ultra (sm_103): cobaltbluefire/reason-over-search-venvs
+#                                  :dtensor_policy_worker_v2_sm103.tar.gz
+#
+#      Lookup order (auto-resolved from HF_TOKEN's whoami):
+#        1. <your_hf_user>/reason-over-search-venvs:..._sm${CC}.tar.gz
+#        2. <your_hf_user>/reason-over-search-venvs:dtensor_policy_worker_v2.tar.gz
+#        3. pantomiman/reason-over-search-v1-venvs:..._sm${CC}.tar.gz
+#        4. pantomiman/reason-over-search-v1-venvs:dtensor_policy_worker_v2.tar.gz
+#        5. source compile
+#
 #   b. SLOW: compile transformer-engine + nv-grouped-gemm + deep-ep +
 #      causal-conv1d + mamba-ssm from source (~15-25 min). Runs from the
 #      host shell, not a Ray actor — nv-grouped-gemm.setup.py calls
 #      torch.cuda.init() at install time and the actor has no GPU.
+#
+# After a successful source build on a new SM, publish via:
+#   bash training_m5_5/scripts/package_v2_venv.sh
+# to add your tarball to step 1 of the lookup order above for future runs.
 #
 # Override:
 #   V2_BUILD_FROM_SOURCE=1     skip the tarball path; always compile

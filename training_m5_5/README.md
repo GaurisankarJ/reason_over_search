@@ -98,12 +98,30 @@ chmod 600 training_m5_5/.env
 | 4 | uv | ~30 sec | Install + symlink to `/usr/local/bin/uv` so Ray actors find it |
 | 5 | cmake 4.x | ~30 sec | `uv tool install cmake` + override `/usr/bin/cmake` (sm_103 / sm_120 need 3.31+) |
 | 6 | Main NeMo-RL venv | ~3-5 min | `setup.sh` → `uv sync --extra vllm`. Downloads torch 2.10+cu129, vLLM 0.17, deep-ep, etc. |
-| 7 | V2 worker venv | **~3 min fast / ~10-15 min source** | Try tarball fast-path: `<your-hf>/reason-over-search-venvs:dtensor_policy_worker_v2_sm${CC}.tar.gz` → fall back to `pantomiman/reason-over-search-v1-venvs` (Hopper) → fall back to source compile with `NVTE_CUDA_ARCHS` matched to detected SM |
+| 7 | V2 worker venv | **~3 min fast / ~10-15 min source** | Try tarball fast-path: `<your-hf>/reason-over-search-venvs:dtensor_policy_worker_v2_sm${CC}.tar.gz` → fall back to `pantomiman/reason-over-search-v1-venvs` (Hopper) → fall back to source compile with `NVTE_CUDA_ARCHS` matched to detected SM. See "Pre-built V2 venv tarballs" below. |
 | 8 | Qwen3.5-0.8B HF cache | ~10 sec | Pre-fetch model weights (avoids slow anonymous DL at vLLM warmup); uses `HF_TOKEN` |
 | 9 | Retriever venv | ~30 sec | `local_retriever/.venv_cpu` with faiss-cpu |
 | 10 | Retriever assets | ~5-10 min | wiki-18 corpus (14 GB), IVF-SQ8 index (15 GB), e5-base-v2 encoder (0.5 GB), MuSiQue parquet + M4 prompt |
 
 **Parallelization opportunities** (not yet wired into bootstrap, but feasible): steps 6 and 10 are independent of each other after step 5. Future enhancement: kick off step 10 (asset downloads, mostly network-bound) in the background once step 5 finishes, run steps 6+7 (compile-bound) in foreground. Would save ~5-8 min on cold boxes.
+
+### Pre-built V2 venv tarballs
+
+The bootstrap auto-discovers per-arch tarballs in your HF account (via the `HF_TOKEN` whoami → `<user>/reason-over-search-venvs`) before falling back to pantomiman's Hopper-only legacy tarball. Currently published tarballs:
+
+| GPU family | SM | Repo | File | torch / TE | Source |
+|---|---|---|---|---|---|
+| Hopper (H100, H200) | sm_70/80/89/90 | `pantomiman/reason-over-search-v1-venvs` | `dtensor_policy_worker_v2.tar.gz` | torch 2.10+cu129, TE 2.14+71bbefbf | Vast.ai bootstrap (NeMo-RL upstream tarball) |
+| Blackwell-Ultra (B300) | **sm_103** | `cobaltbluefire/reason-over-search-venvs` (private) | `dtensor_policy_worker_v2_sm103.tar.gz` | torch 2.10+cu129, TE 2.14+71bbefbf | Built 2026-05-16 on Verda B300 (commit `907af71`) — see [package_v2_venv.sh](scripts/package_v2_venv.sh) |
+
+To bake your own tarball after a successful bootstrap on a new SM:
+
+```bash
+bash training_m5_5/scripts/package_v2_venv.sh
+# uploads to <your_hf_user>/reason-over-search-venvs:dtensor_policy_worker_v2_sm${CC}.tar.gz
+```
+
+**Reuse semantics**: a tarball built on one SM only works on the **same SM** (sm_103 binaries can't run on sm_90, etc.). PTX forward-compat only works within a major architecture family and only sm_X → sm_Y where Y > X. See [docs/setup/B300_RUNBOOK.md](../docs/setup/B300_RUNBOOK.md#what-each-sm_xx-actually-is) for the full SM table.
 
 ---
 

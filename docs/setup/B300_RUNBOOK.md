@@ -99,9 +99,31 @@ UV_PROJECT_ENVIRONMENT="$V2_VENV" \
   uv sync --locked --extra automodel --directory training_m5_5/nemo_rl
 ```
 
-**Faster alternative — fast-path via pre-built tarball (added 2026-05-16)**: the Vast image downloads the pre-built v2 venv from `pantomiman/reason-over-search-v1-venvs` (HF dataset, file `dtensor_policy_worker_v2.tar.gz`, ~5 GB compressed). **This is provider-agnostic** — the tarball is just a vendored Python venv with compiled `.so` files; it works on Verda the same as on Vast. The only risk is that the kernels inside may not have a sm_120 SASS binary (built on Hopper-class hardware), but they typically embed PTX for the highest arch which JIT-compiles on B300 at first use.
+**Faster alternative — fast-path via pre-built tarball**: `bootstrap_b300.sh` tries multiple per-arch tarballs in order and falls back to source compile only if all fail. Currently published:
 
-`bootstrap_b300.sh` now tries this path first and falls back to source compile only if the smoke import (`torch, transformer_engine, causal_conv1d, mamba_ssm, deep_ep, nemo_automodel`) fails — saving ~20-30 min on the next fresh box. Original framing in this runbook ("Verda has no such tarball, so we compile") was wrong — I copied it from `SETUP_INSTANCE.md` without checking. The tarball is publicly downloadable from any host with HF access.
+| GPU family | SM | Repo | File | Notes |
+|---|---|---|---|---|
+| Hopper (H100/H200) | sm_70/80/89/90 | `pantomiman/reason-over-search-v1-venvs` | `dtensor_policy_worker_v2.tar.gz` | Hopper-built; SASS for sm_70/80/89/90, PTX for sm_90 → will NOT run on Blackwell |
+| **Blackwell-Ultra (B300)** | **sm_103** | **`cobaltbluefire/reason-over-search-venvs` (private)** | **`dtensor_policy_worker_v2_sm103.tar.gz`** | **Built 2026-05-16 on Verda B300 (commit `907af71`); torch 2.10+cu129, TE 2.14+71bbefbf** |
+
+The bootstrap auto-discovers your private tarballs by querying `hf auth whoami` against `HF_TOKEN` — no env-var plumbing needed. Lookup order:
+1. `<your_hf_user>/reason-over-search-venvs:dtensor_policy_worker_v2_sm${CC}.tar.gz`
+2. `<your_hf_user>/reason-over-search-venvs:dtensor_policy_worker_v2.tar.gz` (unversioned legacy)
+3. `pantomiman/reason-over-search-v1-venvs:dtensor_policy_worker_v2_sm${CC}.tar.gz`
+4. `pantomiman/reason-over-search-v1-venvs:dtensor_policy_worker_v2.tar.gz`
+5. Source compile (last resort)
+
+Total fast-path savings: ~20-30 min vs source compile per fresh B300 box.
+
+**To bake your own tarball** after a successful bootstrap (one-time per SM):
+```bash
+bash training_m5_5/scripts/package_v2_venv.sh
+# uploads to <your_hf_user>/reason-over-search-venvs:dtensor_policy_worker_v2_sm${CC}.tar.gz
+```
+
+Each tarball only works on its **exact SM** (sm_103 binaries can't run on sm_90 etc. — different SASS, and PTX forward-compat is only within a major arch family). Build once per SM you ever provision.
+
+Original framing in this runbook ("Verda has no such tarball, so we compile") was wrong — I copied it from `SETUP_INSTANCE.md` without checking. Pantomiman's tarball is publicly downloadable from any host but it's Hopper-only, hence the per-SM tarballs above.
 
 ### 6. transformer-engine compiles for **7 GPU architectures by default**
 
@@ -312,7 +334,7 @@ After this, `bash training_m5_5/scripts/start_b300.sh` is your single trigger fo
 | `NVTE_CUDA_ARCHS="90;120"` (vs default 7-arch) | **~3.5×** | The single biggest knob. Must include at least one non-stripped arch (i.e. NOT just "120"). |
 | `MAX_JOBS=32` / `CMAKE_BUILD_PARALLEL_LEVEL=32` | ~2× until single-file tail | 60 vCPUs → up to 32 parallel nvcc procs. Tail-limited. |
 | `TORCH_CUDA_ARCH_LIST="12.0+PTX"` | ~1.5× | Affects `deep-ep`, `causal-conv1d`, `mamba-ssm` (not TE). |
-| Pre-built tarball from `pantomiman/reason-over-search-v1-venvs` (fast-path, default) | ~10× | Provider-agnostic — `bootstrap_b300.sh` tries this first and falls back to source compile only if the B300 smoke import fails. |
+| Pre-built per-arch tarball (default fast-path) | ~10× | Bootstrap tries `<your_hf>/reason-over-search-venvs:…_sm${CC}.tar.gz` first, then pantomiman's Hopper tarball, then source compile. For B300 specifically: `cobaltbluefire/reason-over-search-venvs:dtensor_policy_worker_v2_sm103.tar.gz`. See §5 above. |
 
 The remaining slow tail is dominated by a handful of large TE kernels (`cast_transpose_fusion`, `ln_fwd_cuda_kernel`, etc) that take 1-3 min each per arch and can't parallelize across files because `--threads 1`.
 
