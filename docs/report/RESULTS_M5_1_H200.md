@@ -1142,6 +1142,55 @@ Compare cadence-9 step 91 idx 241 ("Aqeel Khan / Kotri railway"), reward 1.0, 3 
 
 The cadence-9 0.228 / cadence-8 0.221 / cadence-6 0.224 *is* the F1 ceiling. More PPO/GRPO steps on the same reward will produce a noisy slow climb (the 153-rollout planned-multi-hop count keeps rising; the 4-hop+ generalisation works for non-Ghana bridges as of cadence 9) but cannot push the scalar reward past the F1-reward-design ceiling without changing what is being scored.
 
+### Measured chain-flip rate across cadences (added 2026-05-16 post-cadence-11)
+
+A regex-based silent-flip detector (the M8.1 chain-consistency penalty algorithm from [`docs/milestone_8/MILESTONE_8.md`](../milestone_8/MILESTONE_8.md)) was applied to every reward ≥ 0.9 rollout across cadences 5-11. **The flip rate fluctuates in an 18-40 % band; it does not decrease with training.** Reward and flip-rate climb *together*, not inversely — direct empirical evidence that under F1-only reward, GRPO cannot select for chain coherence.
+
+| Cadence | Steps | Perfect rollouts (rew ≥ 0.9) | Silent-flip detected | **Flip rate** |
+|---|---|---:|---:|---:|
+| C5 | 41-50 | 417 | 158 | **37.9 %** |
+| C6 | 51-60 | 491 | 137 | **27.9 %** |
+| C7 | 61-70 | 381 | 153 | **40.2 %** |
+| C8 | 71-80 | 469 | 156 | **33.3 %** |
+| **C9** | 81-90 | 472 | 88 | **18.6 %** ← run low |
+| C10 | 91-100 | 486 | 127 | **26.1 %** |
+| **C11 partial** | 101-105 | 304 | 123 | **40.5 %** ← run high |
+
+**Reading**:
+- The run's "best" cadence by chain-flip rate (C9, 18.6 %) was *not* the cadence with the highest reward (C10 = 0.232, C11 partial = 0.258).
+- C11 partial co-occurs with the highest single-step rewards on the run (step 102 = 0.332, step 105 = 0.355) **and** the highest flip rate (40.5 %).
+- The Pearson correlation between cadence-mean reward and cadence flip-rate is **positive** across this run, not negative.
+
+**Caveats** (real, not hand-waved):
+
+1. **The regex detector has false positives.** When the model writes "Country: France" in `<think>_i` and "Country: Germany" in `<think>_{i+1}` after a `<tool_response>` mentions Germany, the regex catches this as a flip if the retrieval chunk doesn't contain "Germany" verbatim (e.g. the chunk says "the German national team"). Some "flipped" rollouts are legitimate corrections.
+2. **And false negatives.** The cue regex only matches "country | city | state | nation | place | location" prefixes; numeric / date / person-name flips are not counted. The true silent-flip rate is plausibly *higher* than these numbers.
+3. **C11 partial sample is smaller** (5 steps, 304 perfect rollouts) vs full cadences (10 steps, 380-500). Larger error bar.
+4. The detector is **uniformly applied** across cadences — cross-cadence comparison is the load-bearing claim, not the absolute level.
+
+**Why this matters for the M8 case**:
+
+The 18-40 % range over 70 steps of training is direct evidence that **F1-only reward leaves chain-coherence under-determined**. The optimiser doesn't push toward cleaner chains because it can't see chains; it pushes toward token-likely-correct shapes. The M8.1 chain-consistency penalty (penalty = 0.2 per silent flip) would have applied to **18-40 % of the perfect rollouts per cadence**, multiplying their reward by 0.6-0.8 and creating a real advantage gap inside GRPO groups. Without that, the policy will continue to mix chain-correct and chain-hacked rollouts in roughly the proportion the question distribution allows.
+
+#### Second supporting trace (cadence 11, step 102 idx 240)
+
+The cadence-9 step 93 Fox Island trace was the original silent-flip example. Cadence 11 produced an even cleaner example of token-alignment-without-chain-correctness:
+
+**Q**: *"Where did the country that won the 2014 event, that is recognized as the first HDTV broadcast in Europe, finish in the 2006 world cup?"*
+
+**Correct chain**: 2014 World Cup winner = **Germany**; Germany's 2006 finish = **3rd place**. Correct answer: `third`.
+
+**What the model did** (4 tool calls, reward 1.0, plan_score 23):
+
+| Call | Model's reasoning | Reality |
+|---:|---|---|
+| 1 | "Brazil won the 2014 event" | Brazil hosted; Germany won. Wrong. |
+| 2 | "Italy won the 2006 World Cup, so Italy finished in third" | Italy WON 2006 (1st place), didn't finish third. Wrong on two counts. |
+| 3 (verification) | "Italy finished in third place" — re-affirmed | Still wrong. |
+| 4 | Final answer: `third place` | Gold = "third" → **reward 1.0** by accident of the model and gold both saying "third" through entirely different reasoning |
+
+Three wrong bridge resolutions; the final answer matches gold for the *correct* chain (Germany → 3rd) by Goodhart-style token alignment. Under M8.2 composed reward this rollout's chain_inconsistency penalty would catch the Brazil ↔ Italy bridge flip; the retrieval-grounded factor would still credit it (the answer tokens "third" are in the retrieved chunks), so net reward ≈ 0.8 × 1.0 ≈ 0.7 instead of 1.0. Less of a discount than the Fox Island case but enough to create a within-group advantage gap against a clean-chain sibling.
+
 ### Two cheap reward extensions for a future run
 
 Neither is wired into M5.1; documented here as the natural next experiment after M5.1's recipe-stack ablation block, sized to fit in the ≤10 h / 1× A100 budget per run.
