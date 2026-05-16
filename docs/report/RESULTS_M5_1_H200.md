@@ -284,6 +284,36 @@ Step wall-clock + reward signal (rollouts pulled from `train_data_step*.jsonl`):
 - Cumulative cost: ~$18. Steps 1-30 wall: ~9 h.
 - B200 a3 cadence-3 same range: rew_mean 0.143 — H200 at 0.131 is **within 9 % of B200** (still tracking).
 
+### Cadence 4: steps 31-40 (through 2026-05-16 ~02:42 UTC)
+
+| Step | Wall (s) | M:S | rew mean | rew > 0 | tool_med | notes |
+|---:|---:|---:|---:|---:|---:|---|
+| 31 | 362.79 | 6:03 | 0.148 | 34 % | 4 | |
+| 32 | 358.71 | 5:59 | 0.173 | 30 % | 4 | |
+| 33 | 384.18 | 6:24 | 0.110 | 26 % | **5** | First step with 5-call median — model adds a search. |
+| 34 | 341.26 | 5:41 | 0.150 | 25 % | 4 | |
+| 35 | 366.21 | 6:06 | 0.208 | 38 % | 5 | **Crosses A100 ceiling (0.1997 step 37)** at our step 35. |
+| 36 | 387.28 | 6:27 | 0.174 | 33 % | 5 | |
+| 37 | 383.16 | 6:23 | **0.209** | **40 %** | 5 | **Peak rew_mean & peak rew > 0 so far**. |
+| 38 | 373.23 | 6:13 | 0.176 | 28 % | 5 | |
+| 39 | 363.06 | 6:03 | 0.192 | 33 % | 5 | |
+| **40** | **441.32** | **7:21** | 0.181 | 32 % | 5 | **Fourth checkpoint** (6.4 GB) uploaded to HF in 21 s. Step-40 was a wall-outlier (+17 % vs window mean) — not yet clear if drift or batch noise. |
+
+**Cadence 4 vs 3 (10-step window means)**:
+| Window | rew_mean | rew > 0 | step wall | tool_med | len_med |
+|---|---:|---:|---:|---:|---:|
+| 21-30 | 0.131 | 26 % | 315 s | 4 | 10.8 K |
+| **31-40** | **0.171** | **31 %** | 370 s | **5** | 13.0 K |
+| Δ | **+30 %** | +19 % | +17 % wall | +1 tool call | +20 % context |
+
+**Trends after cadence 4**:
+- **Reward broke through the A100 ceiling** of 0.1997 (A100 49-step max at step 37). H200 at step 37 = 0.209 — same step number, +5 % reward. Entering territory the A100 reference cannot speak to.
+- **Re-exploration regime is paying off**: model added one tool call (median 4 → 5), bought +17 % wall, returned +30 % reward. Worth the trade.
+- **Step time rose to ~370 s (6 min)**, with step 40 at 441 s (outlier). If step 41-50 hold at 370 s, ETA step 311 = 273 × 370 s + ~9 h elapsed ≈ 37 h total wall = step 311 lands ~08:00 UTC May 17.
+- HF: `step_40/` live at [the primary repo](https://huggingface.co/pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42/tree/main/step_40).
+- Cumulative cost: ~$22.
+- B200 a3 cadence-4 published rew_mean ≈ 0.160 — H200 at 0.171 is **+7 % above B200**, first window where we lead. Likely batch noise but worth tracking.
+
 ## 9. Cost / wall-clock estimate
 
 **Confirmed rate: $1.95/h** (Spheron ES Spot, 1× H200 SXM5, US Central 1, instance ID `6a072a4e`). Validated 2026-05-15 ~22:30 UTC against dashboard: $12.25 total at 6.28 h elapsed = $1.951/h. (The $15.15/h figure in `HARDWARE_COMPARISON.md` is the 8× cluster tier; not what we're on.)
