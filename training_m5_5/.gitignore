@@ -21,3 +21,4 @@ nemo_rl/dist/
 __pycache__/
 *.egg-info/
 *.pyc
+_runs/

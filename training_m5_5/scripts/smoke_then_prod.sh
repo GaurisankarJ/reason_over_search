@@ -53,6 +53,46 @@ if ! grep -qE "Step\s+4/4|train_data_step4" "${SMOKE_LOG}"; then
     exit 1
 fi
 
+# Lesson from B300 run 2026-05-16 (RESULTS_M5_5_B300_seed42.md): a smoke can
+# reach "Step 4/4" with the retriever completely broken (FastAPI /health
+# returning 200 while FAISS workers are OOM-killed). Every <tool_response>
+# in those rollouts was "Errno 111 Connection refused". Model trained on
+# "this tool is permanently broken" and the production run learned a
+# zero-tool policy. Catch this BEFORE handing off to prod by scanning the
+# smoke's rollout JSONLs for retriever error strings.
+banner "validating smoke retriever payloads (catch /health-lies-while-workers-dead)..."
+SMOKE_EXP_DIR="$(ls -dt /root/reason_over_search/logs/exp_* 2>/dev/null | head -1)"
+ROLLOUT_FILE=""
+if [[ -n "${SMOKE_EXP_DIR}" ]]; then
+    ROLLOUT_FILE="$(ls -t ${SMOKE_EXP_DIR}/train_data_step*.jsonl 2>/dev/null | head -1)"
+fi
+if [[ -n "${ROLLOUT_FILE}" && -s "${ROLLOUT_FILE}" ]]; then
+    # Count tool_response error markers in smoke's most recent rollout. If
+    # ≥10% of all tool_responses are connection-refused style errors, the
+    # retriever is broken and prod must not launch.
+    ERR_COUNT="$(grep -oE 'Max retries exceeded|Errno 111|Connection refused|Retriever failed' "${ROLLOUT_FILE}" 2>/dev/null | wc -l | tr -d ' ')"
+    TR_COUNT="$(grep -oE '<tool_response>' "${ROLLOUT_FILE}" 2>/dev/null | wc -l | tr -d ' ')"
+    banner "  rollout: $(basename ${ROLLOUT_FILE})  tool_responses=${TR_COUNT}  retriever_errors=${ERR_COUNT}"
+    if [[ "${TR_COUNT}" -gt 0 ]]; then
+        # Anything above ~10% error rate means the retriever is broken enough
+        # that prod will degrade to no-tool policy. Bail out.
+        ERR_PCT=$(( 100 * ERR_COUNT / TR_COUNT ))
+        if [[ "${ERR_PCT}" -gt 10 ]]; then
+            banner "❌ smoke retriever validation FAILED: ${ERR_PCT}% of tool_responses are connection errors"
+            banner "   This means /batch_search is broken even though /health may be lying."
+            banner "   Common cause: FAISS worker OOM during vLLM warmup."
+            banner "   Fixes: drop num_retriever to 2, check dmesg | grep -i killed, lower gpu_memory_utilization"
+            banner "   Refusing to launch prod with broken retriever."
+            exit 1
+        fi
+        banner "  ✓ retriever payloads look healthy (${ERR_PCT}% error rate, threshold 10%)"
+    else
+        banner "⚠ no <tool_response> tags in smoke rollout — model may not have called search at all (check prompt)"
+    fi
+else
+    banner "⚠ couldn't locate smoke rollout JSONL for payload validation — proceeding without check"
+fi
+
 banner "✅ SMOKE PASSED at $(date -u)"
 echo
 

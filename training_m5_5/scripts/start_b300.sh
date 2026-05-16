@@ -185,10 +185,39 @@ command -v tmux >/dev/null 2>&1 || fail "tmux not installed (apt-get install -y 
 ok   "tmux:           $(tmux -V)"
 
 # -------- 2. retriever bring-up --------
+#
+# Lesson from B300 run 2026-05-16 (RESULTS_M5_5_B300_seed42.md): /health
+# was returning 200 while the FAISS worker processes were already dead
+# (OOM-killed during prod vLLM warmup). Training proceeded with every
+# /batch_search returning "Errno 111 Connection refused", and the model
+# learned to stop using search entirely. /health is NOT a real liveness
+# check — must actually hit /batch_search with a known query.
+
+probe_retriever() {
+    # POST a real query and confirm the response is a list-of-list of docs
+    # (anything else means workers are dead even if FastAPI is up).
+    local resp
+    resp="$(curl -sS --max-time 10 -X POST http://127.0.0.1:3005/batch_search \
+        -H 'Content-Type: application/json' \
+        -d '{"query":["What is the capital of France?"],"top_n":3,"return_score":false}' 2>&1 || true)"
+    # Real response shape: [[{"id":"...","contents":"..."},...]]
+    if [[ "${resp}" == *'"contents"'* ]]; then
+        return 0
+    fi
+    return 1
+}
+
 info "retriever check..."
-if curl -sS --max-time 3 http://127.0.0.1:3005/health 2>/dev/null | grep -q healthy; then
-    ok   "retriever:      already healthy on :3005"
-else
+if probe_retriever; then
+    ok   "retriever:      /batch_search returns real docs on :3005"
+elif curl -sS --max-time 3 http://127.0.0.1:3005/health 2>/dev/null | grep -q healthy; then
+    warn "retriever /health healthy but /batch_search not returning docs — workers may be dead. Restarting."
+    tmux kill-session -t retriever 2>/dev/null || true
+    pkill -9 -f retriever_serving 2>/dev/null || true
+    sleep 2
+fi
+
+if ! probe_retriever; then
     if [[ ${DRY_RUN} -eq 1 ]]; then
         warn "retriever not running (dry-run; would launch with ${NUM_RETRIEVER} workers)"
     else
@@ -198,17 +227,23 @@ else
         if tmux has-session -t retriever 2>/dev/null; then
             tmux kill-session -t retriever
         fi
+        # Tee retriever stdout/stderr to the chain log path so it's preserved
+        # alongside the training log when logs are pulled. Also keep the
+        # separate retriever.log for backwards-compat.
         tmux new-session -d -s retriever -c "${REPO_ROOT}/local_retriever" \
             "${RETRIEVER_VENV} retriever_serving.py --port 3005 --num_retriever ${NUM_RETRIEVER} 2>&1 | tee /root/logs/retriever.log"
-        info "waiting for /health..."
-        for i in $(seq 1 120); do
-            if curl -sS --max-time 2 http://127.0.0.1:3005/health 2>/dev/null | grep -q healthy; then
-                ok "retriever:      healthy after ${i}×3 s"
+        info "waiting for /batch_search to return real docs (up to 8 min on cold start)..."
+        # Cold-start needs time: 8 workers each load 16 GB FAISS index into mmap.
+        # We probe /batch_search directly (not /health) since /health lies when
+        # workers are dead.
+        for i in $(seq 1 160); do
+            if probe_retriever; then
+                ok "retriever:      /batch_search returns real docs after ${i}×3 s"
                 break
             fi
             sleep 3
-            if [[ $i -eq 120 ]]; then
-                fail "retriever did not come up after 6 min. Inspect: tmux attach -t retriever (or /root/logs/retriever.log)"
+            if [[ $i -eq 160 ]]; then
+                fail "retriever /batch_search did not return real docs after 8 min. Inspect: tmux attach -t retriever (or /root/logs/retriever.log). Check dmesg for OOM-killed workers: dmesg | tail -50 | grep -i killed"
             fi
         done
     fi
@@ -227,6 +262,15 @@ if tmux has-session -t train 2>/dev/null; then
     fail "tmux session 'train' already exists. Inspect: tmux attach -t train. Kill it (tmux kill-session -t train) and re-run if you want a fresh launch."
 fi
 
+# ---- Resource watcher (RAM/disk/retriever liveness; alerts but does not kill) ----
+# Detached background process; survives SSH drops. Logs to its own file so
+# it doesn't compete with the chain/training log. Replaces any stale watcher.
+RESOURCE_LOG="/root/logs/m5_5_resources_seed${SEED}_${TS}.log"
+pkill -f "watch_resources.sh" 2>/dev/null || true
+nohup bash "${SCRIPT_DIR}/watch_resources.sh" --log "${RESOURCE_LOG}" \
+    > /dev/null 2>&1 & disown
+ok "resource watcher launched (pid $!; log: ${RESOURCE_LOG}). Tail it alongside training: tail -f ${RESOURCE_LOG}"
+
 if [[ "${SMOKE_FIRST}" -eq 1 ]]; then
     CHAIN_LOG="/root/logs/m5_5_chain_seed${SEED}_${TS}.log"
     info "launching SMOKE → ${MODE} chain (tmux session 'train'; chain log: ${CHAIN_LOG})"
@@ -238,10 +282,11 @@ if [[ "${SMOKE_FIRST}" -eq 1 ]]; then
     echo "  if smoke passes: ${MODE} starts automatically"
     echo "  if smoke fails:  prod does NOT launch; chain exits"
     echo
-    echo "  tail chain:  tail -f ${CHAIN_LOG}"
-    echo "  attach:      tmux attach -t train       (Ctrl-b d to detach)"
-    echo "  stop:        tmux kill-session -t train"
-    echo "  retriever:   tmux attach -t retriever"
+    echo "  tail chain:    tail -f ${CHAIN_LOG}"
+    echo "  tail watcher:  tail -f ${RESOURCE_LOG}"
+    echo "  attach:        tmux attach -t train       (Ctrl-b d to detach)"
+    echo "  stop:          tmux kill-session -t train"
+    echo "  retriever:     tmux attach -t retriever"
 else
     TRAIN_LOG="/root/logs/m5_5_b300_${MODE}_seed${SEED}_${TS}.log"
     info "launching training (tmux session 'train'; log: ${TRAIN_LOG})..."
@@ -249,10 +294,11 @@ else
         "bash training_m5_5/scripts/run.sh --mode ${MODE} --seed ${SEED} 2>&1 | tee ${TRAIN_LOG}"
     ok "training launched."
     echo
-    echo "  tail log:    tail -f ${TRAIN_LOG}"
-    echo "  attach:      tmux attach -t train       (Ctrl-b d to detach)"
-    echo "  stop:        tmux kill-session -t train"
-    echo "  retriever:   tmux attach -t retriever"
+    echo "  tail log:      tail -f ${TRAIN_LOG}"
+    echo "  tail watcher:  tail -f ${RESOURCE_LOG}"
+    echo "  attach:        tmux attach -t train       (Ctrl-b d to detach)"
+    echo "  stop:          tmux kill-session -t train"
+    echo "  retriever:     tmux attach -t retriever"
     echo
     echo "First step typically lands in ~15-20 min (vLLM warm-up + first generation pass)."
 fi
