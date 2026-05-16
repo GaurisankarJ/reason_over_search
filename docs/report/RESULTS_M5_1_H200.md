@@ -258,6 +258,17 @@ Step wall-clock + reward signal (rollouts pulled from `train_data_step*.jsonl`):
 1. **Tool-call ceiling pinning**. 92.7 % of cadence-1 rollouts hit 7.8 K+ chars (the `max_total_sequence_length: 8192` truncation point). Median tool calls = 7 (paper recipe caps at 10). The model has learned the `<tool_call>...</tool_call>` *format* perfectly (100 % rollouts emit `<answer>`), but it doesn't know *when to stop searching* — so it spams until the context budget kicks it out. Phase-1 finding #4 (paper's partial-credit floor masks tool-use signal) is exactly the friction this run was set up to bypass: pure F1 reward, no shaped components, so reward 0 means reward 0 and the policy *must* learn to compress.
 2. **Format learning is already complete; the gap is grounding.** Every rollout has a `<tool_call>` with a `<function=search>` and a `<parameter=query>` — the Qwen3.5-native XML format is rock-solid out of the cold model. What's failing is **multi-hop entity resolution**: questions like "country where Bucer was citizen" or "language of Aavarana" require chaining 2-3 entities, and the model is fragile on the chain. Both WORST and MEAN show the model executing the first hop and then drifting on the second.
 
+#### Hop-stratified BEST successes (cadence 1, rew ≥ 0.9, most efficient by tool count)
+
+| Hops | Step | Tools | Answer | Question |
+|---:|---:|---:|---|---|
+| 1 | 9 | 1 | `Germany` | What country is Großbottwar located in? |
+| 2 | 8 | 1 | `Chicago blues` | The musician who first recorded I'm Your Hoochie Cooche Man was part of what subgenre of the blues? |
+| 3 | 6 | 1 | `House of Representatives` | In which body, that presides over any impeachment of the U.S. president, of the assembly in charge of new issues not mentioned in the Constitution, must revenue bills originate? |
+| **4+** | **10** | **1** | **`Edward VIII`** | Who was the abdicating king of the country to which the king having the regnal name of the Duke of York came back? |
+
+**4-hop+ successes total in cadence 1: 10 / 3,200 rollouts (0.3 %).** Note: the 4-hop "1 search" example is the **retrieval-does-the-work** pattern — a single well-aimed query returns Wikipedia chunks that connect every entity in the chain. This is asymptotically ideal but partly a function of retrieval quality, not just policy reasoning. The model's parametric-knowledge fallback (the system prompt allows answering without searching if the model is confident) also lets it short-circuit shallow chains.
+
 ### Cadence 2: steps 14-24 (through 2026-05-16 ~00:50 UTC)
 
 | Step | Wall (s) | M:S | rew mean | rew > 0 | notes |
@@ -320,6 +331,17 @@ Step wall-clock + reward signal (rollouts pulled from `train_data_step*.jsonl`):
 1. **Tool-call median dropped from 7 to 4 in one cadence.** The biggest single behavioural shift in the run so far. Truncation dropped 92.7 % → 69 %. Mean rollout length 25 K → 11.5 K chars (−54 %). The model has internalised that *more search calls do not reliably mean better answers*. Reward mean climbed +62 % (0.066 → 0.107) on a +54 % shorter rollout — pure efficiency gain.
 2. **A new failure mode appears: `<answer>` mid-stream.** MEAN above shows the model emitting `<answer>` *inside* a `<think>` block ("Let me format this properly with the `<answer>` tag" — and then doing so prematurely). This wasn't visible in cadence 1 where rollouts were truncated before reaching this state. As rollouts get shorter, the model gets closer to formatting the answer correctly, but it's not yet consistent. Expect the policy to push this toward 100 % at the END pattern in cadences 3-4.
 
+#### Hop-stratified BEST successes (cadence 2)
+
+| Hops | Step | Tools | Answer | Question |
+|---:|---:|---:|---|---|
+| 1 | 15 | 1 | `September 25, 2015` | when did the iphone 6s plus by the creator of Swift come out? |
+| 2 | 18 | 1 | `March 15, 2018` | What was the release date of Freaky Friday, featuring the performer of Bassline? |
+| 3 | 18 | 1 | `1410` | when was the astronomical clock in the city where most of the acedemies insitutions were located built? |
+| 4+ | 19 | 1 | `India` | In what part of the country where the author of Odayil Ninnu is from is Delhi located? |
+
+**4-hop+ successes total in cadence 2: 11 / 3,200 rollouts** (+10 % vs cadence 1). Most multi-hop successes still use 1 tool call — the "retrieval-does-the-work" pattern dominates.
+
 ### Cadence 3: steps 25-30 (through 2026-05-16 ~01:38 UTC)
 
 | Step | Wall (s) | M:S | rew mean | rew > 0 | notes |
@@ -376,6 +398,17 @@ Step wall-clock + reward signal (rollouts pulled from `train_data_step*.jsonl`):
 
 1. **GRPO advantage at maximum signal**. The BEST/WORST sibling pair at step 21 (same question, reward 1.0 vs 0.0, both with 3 tool calls) gives the GRPO group-relative advantage estimator a clean direction: identical input, divergent reward → advantage maximises the policy gradient toward the BEST-style chain. This is exactly the dynamic the algorithm is designed to exploit, and we see it materialising in cadence 3's +24 % reward gain over cadence 2.
 2. **Re-exploration emerging — model starts adding a 5th search.** Tool-call mean crept from 4.00 (cadence 2) to 4.29 (cadence 3). Median still 4 but the distribution thickens at 5 and 6. This is the **B200 a3 "re-exploration" regime** at the same step range, where the policy starts trading wall-clock for accuracy on harder questions. Next cadence will confirm whether tool count + length + reward all continue rising together (worth the trade) or whether reward plateaus while tools grow (not worth it).
+
+#### Hop-stratified BEST successes (cadence 3)
+
+| Hops | Step | Tools | Answer | Question |
+|---:|---:|---:|---|---|
+| 1 | 28 | 1 | `September 19, 2014` | When did the iPhone 6 by the developer of Rhapsody come out? |
+| 2 | 24 | 1 | `ABC` | Who is the original broadcaster of PGA Tour and where I Live? |
+| 3 | 21 | 1 | `Chandan Shetty` | Who won season 5 of Bigg Boss presented in the language of the novel Aavarana? |
+| 4+ | 29 | 1 | `Mexico City` | What is the name of the capital of Mexico in the language of Rafael Alberti? |
+
+**4-hop+ successes total in cadence 3: 15 / 3,200 rollouts** (+50 % vs cadence 1). The capital-of-Mexico/Spanish answer at step 29 is a clever 1-search resolution — the model knew the Mexican capital is "Mexico City" in English (the answer in Spanish would be "Ciudad de México"; but the F1 scorer accepts the English form on this question's gold).
 
 ### Cadence 4: steps 31-40 (through 2026-05-16 ~02:42 UTC)
 
@@ -437,6 +470,26 @@ Step wall-clock + reward signal (rollouts pulled from `train_data_step*.jsonl`):
 
 1. **The 5th tool call is paying off — but at a context cost.** Cadence 4 added one tool call to the median (4 → 5), bought +17 % wall, returned +30 % reward (window mean 0.131 → 0.171). Truncation rate jumped 79 % → 94 % (rollouts hitting 7.8 K+ chars). The model is using the extra tokens for **cross-verification searches** — issuing a second search to confirm an entity it already has, rather than a brand-new query. Reward gain says the verification is worth it; truncation rate says we're back at the context ceiling that we escaped in cadence 2.
 2. **Crossed A100's recorded ceiling at the same step number (step 37).** A100's published max was rew_mean 0.1997 at step 37 across the entire 49-step run. H200 step 37 = 0.209, +5 %. With smoother gradient from mb=2 (vs A100's mb=1) and same recipe otherwise, we are now in territory the A100 reference cannot speak to. The next cadence (steps 41-50) will tell us whether the policy keeps climbing or plateaus — if it plateaus near 0.20-0.22 we're in the regime where the paper expected step-100+ improvements to be smaller (+ 0.02 / 50 steps), and the early-stop decision becomes load-bearing.
+
+#### Hop-stratified BEST successes (cadence 4)
+
+| Hops | Step | Tools | Answer | Question |
+|---:|---:|---:|---|---|
+| 1 | 34 | 1 | `September 19, 2014` | When did the iphone 6 of the company that produces the iPod come out? |
+| 2 | 35 | 1 | `September 25, 2015` | What was the release date of the iphone 6, designed by the developer of Logic Studio? |
+| 3 | 35 | 1 | `Norway` | What is the country of the singer of the song Oah? |
+| 4+ | 34 | 2 | `Aleksandar Vučić` | As of 2017, who was in charge of the country where the village of Sjeverin is found? |
+
+**4-hop+ successes total in cadence 4: 20 / 3,200 rollouts** (+33 % vs cadence 3, +100 % vs cadence 1). The 4-hop "Aleksandar Vučić" case at step 34 used **2 searches** — first to resolve "Sjeverin → Serbia", then "Serbia → 2017 leader". The model is starting to use sequential search-grounding for harder chains rather than relying purely on lucky single-shot retrieval.
+
+#### Why was the prior A100 (mb=1) run reportedly solving 4-hop chains by step 15?
+
+[`RESULTS_m5.md` §4.2.3](RESULTS_m5.md) records the A100 prod-a2 run (killed at step 15, mb=1) solving a 4-hop *Fantasy Land Tour 2004 / Tony Daykin* question at step 15 with reward 1.0 in 3 turns. Two hypotheses:
+
+1. **mb=1 noisier gradient explores faster.** mb=2 produces a +20 % higher reward mean (B200 a3 measurement) due to smoother gradient, but mb=1's noisier updates may push the policy through the multi-hop chain space faster, even if it climbs the *scalar* reward number slower. **Plausible.**
+2. **Data ordering / lucky single example.** A2's full rollout corpus was deleted before smoke verifies (`logs/exp_010/` and `exp_011/` wiped pre-ckpt-verify), so we cannot check the *distribution* of multi-hop successes at step 15. **One success ≠ a rate.** Our H200 run had 11 four-hop+ successes at cadence 2 (steps 11-20); without a2's full corpus we cannot tell if a2 had 1 or 50 at step 15.
+
+We cannot run the controlled comparison. The honest read: **our H200 mb=2 run shows multi-hop chain reasoning emerging by step 6-10** (cadence 1), and the count grows monotonically thereafter. The "by step 15" prior claim looks consistent rather than ahead, once we look at counts not single anecdotes.
 
 ## 9. Cost / wall-clock estimate
 
