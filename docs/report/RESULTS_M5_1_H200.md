@@ -950,7 +950,88 @@ Worked example — **step 46, sample 126**, reward 1.0, 4 tool calls, 5-hop:
 
 **153 rollouts** with explicit numbered plans + reward 1.0 — **new run high** (vs C8/C6's 132, C7's 102). The mode is consolidating further. Top plan_score in cadence 9: **60** (step 88, sample 113, 5 tool calls, 26 K chars) — also the **highest plan_score on this run**. The pattern is robust across question difficulty and stable across cadences; even the C7 dip cadence had 102 planned rollouts.
 
-**The headline structural finding from cadences 5-9 (50 steps):** tool_med locked at 3, planned-multi-hop 100-150 rollouts/cadence, 4-hop+ wins 20-32/cadence, with the 4-hop+ class now generalising beyond the canonical Ghana lookup. **The chain-reasoning capability is mature and stable; reward is plateauing around 0.22-0.23 not because the model can't reason but because F1 keyword scoring stops crediting correct chain-resolutions that produce non-keyword-matching final tokens.**
+**The headline structural finding from cadences 5-9 (50 steps):** tool_med locked at 3, planned-multi-hop 100-150 rollouts/cadence, 4-hop+ wins 20-32/cadence, with the 4-hop+ class now generalising beyond the canonical Ghana lookup. **The chain-reasoning capability is mature and stable; reward is plateauing around 0.22-0.23 not because the model can't reason but because F1 keyword scoring stops crediting correct chain-resolutions that produce non-keyword-matching final tokens.** Doc-level diagnosis follow-up in §9.5 below and dedicated [`docs/milestone_8/MILESTONE_8.md`](../milestone_8/MILESTONE_8.md) (the M8 chain-quality reward extension).
+
+### Cadence 10: steps 91-100 (through 2026-05-16 ~18:46 UTC, host 126 / dedicated $4.70/h)
+
+| Step | Wall (s) | M:S | rew mean | rew > 0 | tool_med | notes |
+|---:|---:|---:|---:|---:|---:|---|
+| 91 | 518 | 8:38 | 0.244 | 36 % | 3 | |
+| 92 | 516 | 8:36 | 0.248 | 38 % | 3 | |
+| 93 | 530 | 8:50 | 0.239 | 31 % | 3 | |
+| 94 | 540 | 9:00 | 0.255 | 37 % | 3 | |
+| 95 | 567 | 9:27 | 0.190 | 28 % | **4** | First step with tool_med=4 since cadence 4. Reward dipped. |
+| 96 | 565 | 9:25 | 0.228 | 31 % | 3 | |
+| 97 | 610 | 10:10 | 0.247 | 35 % | 4 | |
+| 98 | 605 | 10:05 | 0.243 | 32 % | 4 | |
+| 99 | 507 | 8:27 | 0.238 | 38 % | 3 | |
+| **100** | **587** | **9:47** | 0.192 | 32 % | 3 | **Tenth checkpoint** uploaded to HF. **Run is now ~1/3 complete** (100/311). |
+
+**Cadence 10 vs prior windows**:
+| Window | rew_mean | rew > 0 | step wall | tool_med | len_med | 4-hop+ wins | planned-3-5 |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 51-60 (C6) | 0.224 | 33 % | 412 s | 3 | 13.9 K | 21 | 132 |
+| 61-70 (C7) | 0.202 | 33 % | 463 s | 2 | 13.9 K | 32 | 102 |
+| 71-80 (C8) | 0.221 | 32 % | 467 s | 3 | 13.9 K | 26 | 132 |
+| 81-90 (C9) | 0.228 | 34 % | 484 s | 3 | 14.8 K | 29 | 153 |
+| **91-100 (C10)** | **0.232** | **34 %** | **555 s** | **3** (drift up) | **16.1 K** | **27** | **249** |
+| Δ vs 9 | **+2 %** | flat | **+15 % wall** | held | **+9 % len** | flat | **+63 %** |
+| Δ vs 6 (5 cadences) | +4 % | +1 pp | +35 % wall | flat | +16 % len | +29 % | **+89 %** |
+
+**Trends after cadence 10 — slow climb persists; structural costs are growing**:
+- **Window mean 0.232 is the new run high**, beating cadence 9's 0.228. Five-window run from C6 = 0.224 / 0.202 / 0.221 / 0.228 / 0.232 — that's a **monotone climb if C7 is treated as the outlier**, with +0.008 absolute gain over 40 steps post-C6. **Marginal gain ≈ +0.002 / cadence**.
+- **Planned-multi-hop count jumped to 249** rollouts with reward 1.0 + explicit numbered plan — a **63 % increase over cadence 9's 153 and a 89 % increase over cadence 8's 132**. The mode isn't just stable, it's *consolidating aggressively* as the dominant high-reward shape.
+- **But len_med jumped to 16.1 K and step wall to 555 s**. Three of the ten steps had tool_med = 4 (steps 95, 97, 98) — the policy is re-introducing more search per question. Combined with growing context per turn, this is **re-exploration drift** that started in cadence 7 and is still accelerating.
+- **Truncation rate hit 99.6 %** (3,187 / 3,200 rollouts > 7.8 K chars). The 16K-context per rollout is right at the policy's effective ceiling under the current `max_total_sequence_length`.
+- **The 4-hop+ rate at 27 is stable in the 20-32 band.** Cadence 10's BEST 4-hop+ (step 99 Anne Fitzalan-Howard, Duchess of Norfolk, Stratton Strawless → Norfolk, 2 calls) generalises beyond both Ghana and Nigeria — a third country (UK) solved with the same chain shape.
+- HF: `step_100/` live at [the primary repo](https://huggingface.co/pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42/tree/main/step_100).
+- Cumulative cost (mixed Spot + Dedicated, ~18.5 h elapsed): ~$50.
+- **Wall-clock projection slipped**: at 555 s/step, ETA step 311 = 211 × 555 s + 18.5 h ≈ 51 h total = step 311 lands **~01:45 UTC May 18** (was ~22:00 UTC May 17 at cadence-9 timing). **Total 1-epoch cost ~$203** (already $50 + $153 remaining at 555 s/step × $4.70/h).
+
+#### Mechanical examples (cadence 10)
+
+**BEST** — step 91, sample 6, **reward 1.000**, 4 tool calls, 10.0 K chars
+
+> **Q**: *"In what year did the city in which the Gandhi Smriti is located first host the Asian Games?"*  (Gandhi Smriti → Delhi → 1951 Asian Games)
+> **Final answer**: `1951` ✓
+>
+> *Commentary*: Clean 2-hop chain (memorial → city → first hosting year). The model's first `<think>` explicitly decomposes "I need to find that city first, then find its host year for the Asian Games" — the planned mode the cadence-10 count is up about.
+
+**WORST** — step 91, sample 0, **reward 0.000**, 4 tool calls, 10.5 K chars
+
+> **Q**: *"Before the Euro, what currency was used in the country where the village of Dragsvik is located?"*  (Dragsvik → **Finland** village in Raseborg; gold = Finnish markka)
+> **Final answer**: `Norwegian krone` ✗
+>
+> *Commentary*: **Bridge-misresolution failure**. Model resolved Dragsvik to Norway (likely conflated with Norwegian fjord names) and answered the corresponding currency. The chain shape was correct but the entity lookup was wrong. Different failure class from cadence-9's Fox Island silent-flip (that was internal contradiction; this is consistent-but-wrong bridge resolution).
+
+**MEAN** — step 92, sample 112, **reward 0.222**, 4 tool calls, 9.8 K chars
+
+> **Q**: *"When did Thomas H. Makiyama's birth state join the United States?"*  (Makiyama → Hawaii → 1959 statehood)
+> **Final answer**: *`tags.\n</think>\n\n<answer> August 21, 1959`*  (malformed — answer block leaked into final answer string)
+>
+> *Commentary*: Correct factual answer (August 21, 1959 is Hawaii statehood day) but the answer string includes leftover XML markers. F1 0.222 because some matching tokens survive normalisation. **Decode-glitch class**: model knew the answer but emitted it inside a degenerate sequence. Rare class (a few per cadence) but persistent.
+
+#### Claude hand-analyses (cadence 10)
+
+1. **Slow climb continues; cadence-9 was not the top.** Window mean 0.232 at C10 vs 0.228 at C9 vs 0.224 at C6 — the cadence trajectory is **noisy slow climb with average +0.002 / cadence over the last 5 windows**. Single-step peaks haven't exceeded cadence-8's 0.296 since, but the mid-band has shifted up. The reward gain per cadence ($6-9 cost / +0.002 absolute) is **getting marginal**: at this rate, reaching 0.25 window mean takes 9 more cadences ≈ $70 + 14 h wall.
+2. **Planned-multi-hop +63 % to 249 rollouts is the big structural finding of cadence 10.** Even with the C7 dip and the re-exploration drift, the planned mode has more than doubled since cadence 8. This is the policy consolidating its highest-reward shape: numbered-plan + 3-4 calls + final answer. The flip side is the growing len_med (14.8 → 16.1 K) and step wall (484 → 555 s); planned-multi-hop costs tokens. **The policy isn't pre-pruning** — it's discovering that the planned shape pays off and adding it back into the rollout distribution. If the M8 chain-consistency penalty was wired in, this consolidation would *also* be biased toward chains that don't silently flip; cadence 10 highlights how much that bias matters at the scale of 249 planned rollouts per 10-step window.
+
+#### Hop-stratified BEST successes (cadence 10)
+
+| Hops | Step | Tools | Answer | Question |
+|---:|---:|---:|---|---|
+| 1 | 98 | 1 | `August 16, 1958` | The Queen of Popular Music was born on what date? |
+| 2 | 93 | 2 | `Alfred Lennon` | Who is the father of the performer of Nobody Told Me? |
+| 3 | 95 | 2 | `Prague Castle` | What is the name of the castle in the city where Emil Hlobil died? |
+| 4+ | 99 | 2 | `8 April 2013` | On what date was the death of Anne Fitzalan-Howard, Duchess of the state where Stratton Strawless is located? |
+
+**4-hop+ successes in cadence 10: 27** (vs 29 / 26 / 32 / 21 in C9 / C8 / C7 / C6). The Anne Fitzalan-Howard case generalises the chain shape to a **third country** (UK; prior hits were Ghana × 3 in C5/C7/C8 + Nigeria in C9). Three countries on the same 4-hop chain template is solid evidence the policy has *internalised* the "place → country/state → official → date" template.
+
+#### Planned-multi-hop reasoning (cadence 10)
+
+**249 rollouts** with 3-5 tool calls + explicit numbered plan + reward 1.0 — **new run high by 63 % over cadence 9** (which itself was a high over C6's 132). The planned mode is consolidating *aggressively*. At ~486 reward-1.0 rollouts per cadence (15.2 % of 3,200), nearly **8 % of all rollouts in this cadence are reward-1.0 *with* an explicit numbered plan** — the dominant high-reward shape.
+
+The cadence-9 step 93 idx 10 Fox Island trace (reward 1.0 via silent flip USA → UK; plan_score 38) and its clean-chain sibling step 91 idx 241 (Kotri railway) are reproduced in §9.5 below as the canonical M8-target examples. The 249 planned-rollouts count in cadence 10 implies the M8 chain-consistency penalty would touch ~25-37 rollouts per 10-step window if the 10-15 % silent-flip rate holds at the planned-mode subset; that's the population the penalty is designed to act on.
 
 ## 9. Cost / wall-clock estimate
 
