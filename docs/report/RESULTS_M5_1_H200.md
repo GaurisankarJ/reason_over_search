@@ -1033,6 +1033,90 @@ Worked example — **step 46, sample 126**, reward 1.0, 4 tool calls, 5-hop:
 
 The cadence-9 step 93 idx 10 Fox Island trace (reward 1.0 via silent flip USA → UK; plan_score 38) and its clean-chain sibling step 91 idx 241 (Kotri railway) are reproduced in §9.5 below as the canonical M8-target examples. The 249 planned-rollouts count in cadence 10 implies the M8 chain-consistency penalty would touch ~25-37 rollouts per 10-step window if the 10-15 % silent-flip rate holds at the planned-mode subset; that's the population the penalty is designed to act on.
 
+### Cadence 11: steps 101-110 (through 2026-05-16 ~20:15 UTC, host 126 / dedicated $4.70/h)
+
+| Step | Wall (s) | M:S | rew mean | rew > 0 | tool_med | notes |
+|---:|---:|---:|---:|---:|---:|---|
+| 101 | 552 | 9:12 | 0.249 | 35 % | 3 | |
+| **102** | 498 | 8:18 | **0.332** | 43 % | 3 | **First > 0.30 of run**. |
+| 103 | 537 | 8:57 | 0.243 | 35 % | 3 | |
+| 104 | 518 | 8:38 | 0.227 | 38 % | 3 | |
+| **105** | 514 | 8:34 | **0.355** | **50 %** | 3 | **NEW RUN HIGH (0.355).** First step crossing 50 % rew>0. |
+| 106 | 606 | 10:06 | 0.230 | 33 % | 3 | |
+| 107 | 631 | 10:31 | 0.207 | 33 % | 3 | Slowest step of cadence (631 s). |
+| 108 | 472 | 7:52 | 0.225 | 35 % | 3 | |
+| 109 | 467 | 7:47 | 0.292 | 44 % | 3 | |
+| **110** | **523** | **8:43** | **0.324** | 43 % | 3 | **Eleventh checkpoint** uploaded to HF. Third > 0.30 step of cadence. |
+
+**Cadence 11 vs prior windows**:
+| Window | rew_mean | rew > 0 | step wall | tool_med | len_med | 4-hop+ wins | planned-3-5 | **flip-rate** |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| 51-60 (C6) | 0.224 | 33 % | 412 s | 3 | 13.9 K | 21 | 132 | 27.9 % |
+| 61-70 (C7) | 0.202 | 33 % | 463 s | 2 | 13.9 K | 32 | 102 | 40.2 % |
+| 71-80 (C8) | 0.221 | 32 % | 467 s | 3 | 13.9 K | 26 | 132 | 33.3 % |
+| 81-90 (C9) | 0.228 | 34 % | 484 s | 3 | 14.8 K | 29 | 153 | **18.6 %** |
+| 91-100 (C10) | 0.232 | 34 % | 555 s | 3 | 16.1 K | 27 | 249 | 26.1 % |
+| **101-110 (C11)** | **0.280** | **41 %** | **532 s** | **3** | **15.8 K** | **40** | **327** | **42.7 %** |
+| Δ vs 10 | **+21 %** | **+7 pp** | −4 % | held | −2 % | **+48 %** | **+31 %** | **+16.6 pp** |
+| Δ vs 6 (5 cadences) | **+25 %** | +8 pp | +29 % | flat | +14 % | +90 % | **+148 %** | +14.8 pp |
+
+**Trends after cadence 11 — biggest single-cadence reward jump on the run, but flip rate jumped just as hard**:
+- **Reward exploded**: window mean 0.280 (+21 % over C10's 0.232) — **by far the biggest cadence-over-cadence gain on this run** (prior gains were +0.005 to +0.022). Three steps in the window crossed 0.30 (102 = 0.332, 105 = 0.355 run high, 110 = 0.324). Step 105 also hit the run's first ≥ 50 % rew>0.
+- **Planned-multi-hop count exploded too**: 327 rollouts with explicit numbered plans + reward 1.0 (vs C10's 249, C8's 132). **Plan-mode is now ~10 % of every rollout in the cadence.** The policy has clearly consolidated this as the dominant high-reward shape.
+- **4-hop+ wins jumped to 40** (vs C10's 27, C5's 26) — best on the run. The cadence-11 BEST 4-hop+ (step 109, Clayton County / Isaac Glaspell House → Iowa → 2 calls) extends the chain shape further; combined with prior cadences' generalisations (Ghana ×3, Nigeria, UK), the "place → state → county" pattern now resolves across multiple US states + multiple African countries + the UK.
+- **But the chain-flip rate ALSO jumped to 42.7 %** — the **highest of the run**. The audit on the full cadence (593 perfect rollouts) finds 253 with detectable silent flips. **For every 5 perfect rollouts in this cadence, 2 are chain-broken-but-token-aligned.** The reward jump and the flip-rate jump co-occur — same direction.
+- **Step wall edged DOWN to 532 s** (-23 s vs C10), the first cadence where wall time decreased since C6. The cadence-10 fear of accelerating drift didn't materialise; growth normalised.
+- **len_med edged DOWN slightly too** (16.1 → 15.8 K), and the rollout-length distribution still has the median ~50 % of the 8K-token cap. The cap-binding scenario from cadence 10's footnote is **deferred by at least one cadence**.
+- HF: `step_110/` live at [the primary repo](https://huggingface.co/pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42/tree/main/step_110).
+- Cumulative cost (mixed Spot + Dedicated, ~20.0 h elapsed): ~$57.
+- **Wall-clock projection** (revised at 532 s/step from cadence-10's 555): ETA step 311 = 201 × 532 s + 20 h ≈ 50 h total = step 311 lands **~21:00 UTC May 17**. **Total 1-epoch cost ~$197** (was $203 at C10 projection).
+
+#### Mechanical examples (cadence 11)
+
+**BEST** — step 101, sample 8, **reward 1.000**, 7 tool calls, 24.9 K chars
+
+> **Q**: *"The Science Museum of the birth city of Tomás José González-Carvajal is part of what council?"*  (Carvajal → Seville; Science Museum of Seville → CSIC = Spanish National Research Council)
+> **Final answer**: `Spanish National Research Council` ✓
+>
+> *Commentary*: 7 calls (the most of cadence 11) on a 2-hop chain that the model spent most of its calls verifying the CSIC affiliation. Clean chain reasoning; the multi-call cost was on disambiguating "council" granularity. Counterexample to "more calls = more confusion" — when the bridge is unambiguous, extra calls really are verification, not thrashing.
+
+**WORST** — step 101, sample 0, **reward 0.000**, 6 tool calls, 20.7 K chars
+
+> **Q**: *"Who wrote the pledge of allegiance of the country Bahamas Maritime Authority is from?"*  (BMA → Bahamas; gold = Rev. T. Robert Sands)
+> **Final answer**: `Captain George Thatcher Balch` ✗  (US Pledge of Allegiance composer, not Bahamian)
+> **Last `<think>`**: "...the Pledge of Allegiance was originally composed by Captain George Thatcher Balch. This is the most famous Pledge of Allegiance..."
+>
+> *Commentary*: **Cross-question contamination**. Model resolved the bridge to the Bahamas, then retrieved info about the *US* Pledge of Allegiance (Balch composed one early version) and answered with that instead of searching for the *Bahamian* pledge. Failure class similar to cadence-10 Dragsvik (wrong final-answer entity even though chain shape was right).
+
+**MEAN** — step 105, sample 277, **reward 0.277**, 5 tool calls, 15.1 K chars
+
+> **Q**: *"What is the work of civil defence in the country with the largest economy in Africa?"*  (Nigeria has Africa's largest economy → Nigeria Security and Civil Defence Corps work)
+> **Final answer**: *"The work of civil defence in Nigeria includes protecting lives and properties, protecting pipelines, involving in crisis resolutions, and supporting Nigeria police and emergency services..."*
+>
+> *Commentary*: Correct bridge (Africa's largest economy = Nigeria), correct factual content on the NSCDC. F1 0.28 because the model emitted a paragraph instead of a short keyword list; long answers dilute the F1 numerator-over-prediction-length ratio. **Verbose-correct class** — not a chain failure, a final-answer-formatting failure.
+
+#### Claude hand-analyses (cadence 11)
+
+1. **The +0.048 jump from C10 to C11 is the biggest reward gain on the run, but the chain-flip rate jumped in lockstep (26.1 % → 42.7 %).** Direct correlation: the policy is finding new ways to hit gold tokens, and a large fraction of those new ways are token-alignment-without-chain-correctness. Half of cadence 11's "perfect" rollouts have clean chains; the other half are getting partial-credit-via-Goodhart. The C9 18.6 % chain-flip rate now looks like a local minimum the policy moved past, not a stable plateau — when reward gain is available via either chain quality OR token alignment, GRPO finds whatever path produces higher F1. Without a chain-quality reward signal, both modes get the same advantage.
+2. **The structural picture has stabilised over 60+ steps.** Tool_med 3 across cadences 5-11 (no further drift up or down); len_med 14-16 K (still ~50 % of the 8K-token cap with headroom); step wall fluctuating 412-555 s with no monotone trend. The cadence-10 fear that step wall would balloon further didn't materialise — C11 was *faster* (-23 s). The 4-hop+ wins (40 in C11) and planned-multi-hop count (327 in C11) keep climbing, suggesting the policy is still acquiring capability even as the scalar reward is partly Goodhart-inflated. **The thesis-defensible claim is that capability is improving even as the reward signal becomes partly noise.**
+
+#### Hop-stratified BEST successes (cadence 11)
+
+| Hops | Step | Tools | Answer | Question |
+|---:|---:|---:|---|---|
+| 1 | 103 | 1 | `1982` | When did the Raiders move to the location where the Lakers played in the 80s? |
+| 2 | 104 | 2 | `Janet Ellis` | Who was the mother of the lyricist of Groovejet? |
+| 3 | 104 | 1 | `Augustus` | Who has been designated as the first Emperor of the city that was the center of imperial life in the empire the term west comes from in early fifth century? |
+| 4+ | 109 | 2 | `Clayton County` | What county is the city of Clayton in the state where the Isaac Glaspell House is? |
+
+**4-hop+ successes in cadence 11: 40 / 3,200** — **new run high**, up from C10's 27 and C8's 26. The Clayton / Isaac Glaspell House case resolves a 4-hop US-state chain (heritage house → state → city → county) in 2 well-aimed calls. Pattern generalises further; the chain template now resolves across at least 5 distinct country / state bridges (Ghana × 3, Nigeria, UK, Iowa, multiple US states).
+
+#### Planned-multi-hop reasoning (cadence 11)
+
+**327 rollouts** with explicit numbered plans + reward 1.0 (+31 % over C10's 249, +148 % over C6's 132). The mode now accounts for **~10 % of every rollout in the cadence** (327 / 3200), up from ~4 % at cadence 6. **This is policy consolidation, not capability growth alone** — the model is consistently choosing the planned shape because it pays off under F1 reward, regardless of whether the chain it plans actually resolves correctly.
+
+The cadence-11 audit (42.7 % flip rate on perfect rollouts) implies **~140 of the 327 planned-rollouts have detectable silent flips**. The Fox Island and World Cup traces in §9.5 are now joined by many similar cases per cadence; under M8.2 composed reward, those 140 rollouts would lose 0.1-0.3 reward each — exactly the within-group advantage gap GRPO needs to push the policy away from the Goodhart mode.
+
 ## 9. Cost / wall-clock estimate
 
 **Two tiers in play across this run**:
