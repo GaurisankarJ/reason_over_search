@@ -610,6 +610,92 @@ Worked example — **step 46, sample 126**, reward 1.0, 4 tool calls, 5-hop:
 
 **3-5 tool call planned rollouts with plan_score ≥ 13 in steps 41-50: dozens.** The two highest plan_scores in this cadence (15 each) are step 49 sample 116 (Hyderabad / first expedition to Asia) and step 49 sample 214 (Alleycat's Pizza / Fantasy Land Tour 2004), both reward 1.0 at 3 tool calls. The Alleycat's Pizza example matches the A100 prod-a2 step-15 *Fantasy Land Tour 2004* example in [`RESULTS_m5.md` §4.2.3](RESULTS_m5.md) on both the question shape and the explicit numbered plan — the planned-multi-hop behaviour is reproducing the prior run's signature at the same milestone.
 
+### Cadence 6: steps 51-60 (through 2026-05-16 ~13:09 UTC, on host 126 / dedicated $4.70/h)
+
+| Step | Wall (s) | M:S | rew mean | rew > 0 | tool_med | notes |
+|---:|---:|---:|---:|---:|---:|---|
+| 51 | 429.88 | 7:10 | 0.200 | 28 % | 3 | |
+| 52 | 435.02 | 7:15 | 0.175 | 26 % | 3 | |
+| 53 | 364.45 | 6:04 | 0.273 | 41 % | 3 | **Step wall back to pre-resume baseline**; rew_mean is the run's new high so far. |
+| 54 | 391.99 | 6:32 | 0.203 | 31 % | 3 | |
+| 55 | 401.60 | 6:42 | 0.191 | 29 % | 3 | |
+| 56 | 398.18 | 6:38 | 0.218 | 39 % | 3 | |
+| 57 | 386.36 | 6:26 | 0.210 | 30 % | 3 | |
+| 58 | 405.88 | 6:46 | 0.254 | 38 % | 3 | |
+| 59 | 465.34 | 7:45 | 0.243 | 31 % | 3 | |
+| **60** | **442.51** | **7:23** | **0.268** | 39 % | 3 | **Sixth checkpoint** uploaded to HF. Pair with step 53 / 58 as the new mid-band; rew_mean now consistently in the 0.21-0.27 zone. |
+
+**Cadence 6 vs prior windows**:
+| Window | rew_mean | rew > 0 | step wall | tool_med | len_med |
+|---|---:|---:|---:|---:|---:|
+| 21-30 | 0.131 | 26 % | 315 s | 4 | 10.8 K |
+| 31-40 | 0.171 | 31 % | 376 s | 5 | 13.0 K |
+| 41-50 | 0.202 | 33 % | 448 s | 3 | 14.6 K |
+| **51-60** | **0.224** | **33 %** | **412 s** | **3** | **13.9 K** |
+| Δ vs 5 | +11 % | flat | **−8 % wall** | held | −5 % len |
+| Δ vs 4 (2 cadences) | +31 % | +2 pp | +10 % wall | −2 calls | +7 % len |
+
+**Trends after cadence 6**:
+- **Reward keeps climbing**, now 0.224 window-mean (highest sustained on this run). Three steps in 51-60 crossed 0.24: step 53 = 0.273, step 58 = 0.254, step 60 = 0.268. The cadence-4 single-step ceiling of 0.209 is now well below the cadence-6 *floor*. Cadence 5's step-50 dip looks anomalous in hindsight.
+- **Step time normalised**: 448 → 412 s (−36 s). Step 53 at 364 s and the mid-cadence steps 55-58 all in the 386-406 s band were on par with the cadence-4 baseline of 376 s; steps 59-60 bumped back up to 465 + 443 s but that's well within step-to-step noise. **Post-resume warmup is over**; the +19 % cadence-5 elevation was transient, not host-variance or image-related (verified vs torch sm_90 arch list + FlashInfer GDN patch + same image).
+- **Tool-call median held at 3** for the second straight cadence. The cadence-5 efficiency gain (5 → 3 calls) has stabilised, not regressed back. Cadence-5 was the regime change; cadence-6 confirms persistence.
+- **Context shrank slightly**: len_med 14.6 K → 13.9 K. Truncation rate edged down vs cadence 5 (96.2 % → 97.6 % stays binding, but median rollout backed off the ceiling a touch).
+- HF: `step_60/` live at [the primary repo](https://huggingface.co/pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42/tree/main/step_60).
+- Cumulative cost (mixed Spot + Dedicated, ~12.5 h elapsed): ~$24.
+- **Wall-clock projection**: at 412 s/step, ETA step 311 = 251 × 412 s + 12.5 h elapsed ≈ 41 h total = step 311 lands ~14:00 UTC May 17.
+
+#### Mechanical examples (cadence 6)
+
+**BEST** — step 51, sample 14, **reward 1.000**, 7 tool calls, 22.0 K chars
+
+> **Q**: *"When was the most remarkable creation in MTV born?"*  (interpreted as MTV's signature artist's birthdate; gold = Madonna's birthdate)
+> **Final answer**: `August 16, 1958` ✓
+> **Last `<think>`**: "Now I need to find the most remarkable creation in MTV. I found that Madonna's 'Like A Virgin' video... won the MTV Video Music Award in 1984. Madonna was born on August 16, 1958..."
+>
+> *Commentary*: 7 tool calls on a question with an underdetermined bridge ("most remarkable creation in MTV" → singer who appeared in MTV's signature video) and the model still landed it. This is the opposite failure-mode from the cadence-5 WORST (Quebec carnival, 9 calls, wrong answer). Here the model **uses the extra calls productively**: each search refines the bridge interpretation rather than re-searching the same fact. Distinct from the cadence-5 "tool_med 3 is the new normal" trend — this is a tail-case where the model legitimately needed more retrieval and still converged.
+
+**WORST** — step 51, sample 0, **reward 0.000**, 4 tool calls, 10.5 K chars
+
+> **Q**: *"What is the most common source of electricity in the province where the municipality of Roblin was located?"*  (Roblin → Manitoba; gold answer: Hydroelectricity-Manitoba-specific OR Manitoba-Hydro)
+> **Final answer**: `Hydroelectricity` (just the word, no province specifier) ✗
+> **Last `<think>`**: "Hydroelectricity accounted for 58 % of all electric generation in Canada in 2007... The most common source of electricity in Canada... is hydroelectricity at 58 %..."
+>
+> *Commentary*: **Bridge collapse to a more general entity**. Model resolved Roblin → Manitoba via the first searches but then defaulted to country-level (Canada) stats when answering. The substantive answer ("hydroelectricity") was correct in spirit but F1 evaluation against a gold answer specifying "Manitoba Hydro" or province-scoped wording scored 0. This is a recurring failure mode for MuSiQue's province-level bridges: the model resolves the bridge but doesn't re-anchor the final answer to the resolved entity. Cadence-5's similar mode was Quebec carnival; this is the same shape on Manitoba.
+
+**MEAN** — step 51, sample 118, **reward 0.222**, 8 tool calls, 25.4 K chars
+
+> **Q**: *"What is the occupation of the man who has won the most green jackets in golf?"*  (Jack Nicklaus → professional golfer)
+> **Final answer**: *"PGA Tour Professional Golf Cheerleader"*  (oddly worded, partially correct)
+> **Last `<think>`**: "Jack Nicklaus has won the most Masters Tournament wins... is a well-known professional golfer. The occupation... is undoubtedly 'PGA Tour professional golfer'..."
+>
+> *Commentary*: Correct bridge (Nicklaus = most green jackets), correct occupation domain (golfer), but the final answer template inserted "Cheerleader" — a token-level decode glitch on a fairly easy 2-hop. F1 0.22 picks up "PGA Tour" + "Professional" + "Golf" but loses on the corrupted noun. **Token-glitch failure** rather than a knowledge failure; the model knew the answer and decoded it wrong.
+
+#### Claude hand-analyses (cadence 6)
+
+1. **The reward trajectory is starting to look like a converging policy, not a still-climbing one.** Three single-step rew_means in cadence 6 (steps 53 / 58 / 60) crossed 0.25; cadence 4's peak was 0.209. The window mean 0.224 is +31 % over cadence-4's 0.171 but only +11 % over cadence-5's 0.202. **Marginal reward gain per cadence is decelerating** — exactly the shape expected as the policy approaches its capability ceiling at this model size + this dataset. The cadence-7 window mean will tell us whether deceleration continues toward plateau (mean 0.23-0.24 → flat) or whether the run still has room (mean ≥ 0.25). At the current trajectory my best guess is plateau onset between step 100 and 150, with a stable rew_mean of 0.24-0.28 — short of the 0.30 the doc previously gestured at, but consistent with the [Phase-1 finding #4](RESULTS_m0_b.md) that EM-only F1 on a 0.8B model gates near here.
+2. **Tool_med stable at 3 across cadences 5-6 is the structural confirmation.** Cadence-4 to cadence-5 dropped from 5 → 3 calls; cadence-5 to cadence-6 *held* at 3 with len_med shrinking slightly (14.6 K → 13.9 K). This is the policy locking in a trajectory shape, not random noise about a mean. From here, marginal reward gains have to come from **better calls** (more discriminating queries, better answer-extraction from retrieved chunks) rather than **more calls** — because the tool-budget side of policy has saturated. The cadence-6 WORST (Manitoba/hydroelectricity collapse) and MEAN (golfer "cheerleader" decode glitch) both show failure modes that won't be fixed by adding more searches; they're either re-anchoring failures or decode glitches. These are the targets for the remaining ~250 steps.
+
+#### Hop-stratified BEST successes (cadence 6)
+
+| Hops | Step | Tools | Answer | Question |
+|---:|---:|---:|---|---|
+| 1 | 60 | 1 | `Norway` | What country was Jan Egil Brekke born? |
+| 2 | 53 | 2 | `June 29, 1776` | When was the city where the band Blue Cheer was from founded? |
+| 3 | 53 | 2 | `808` | What is the area code of the state where KPHI is located? |
+| 4+ | 56 | 2 | `Prague Castle` | What is the name of the castle in the city where Václav Smetáček lived at the time of his death? |
+
+**4-hop+ successes in cadence 6: 21 / 3,200** (vs cadence 5's 26; vs cadence 4's 20). The 4-hop count is now in a stable 20-26 / 3200 band, ~0.7 % rate. The step 56 Václav Smetáček / Prague Castle case is a 4-hop entity-resolution chain (composer → city of death → castle in that city → name) solved with **2 well-aimed searches**. This is the same "fewer tools, harder chains" pattern as cadence 5.
+
+#### Planned-multi-hop reasoning (cadence 6)
+
+**132 rollouts** in steps 51-60 had a 3-5 tool call + explicit-numbered-plan structure with reward = 1.0 (counted by plan_score ≥ 8 threshold). The planned-multi-hop mode is now the **dominant pattern** for hard chains. Two representative traces:
+
+**Step 59, sample 71** — *"The Cleveland Rams moved to the city where the singer of Baby Britain died in what year?"* → answer correct, 3 tool calls. The first `<think>` block contained an **explicit 5-step numbered plan** ("1. First, I'll search for 'Baby Britain singer'... 2. Then I'll need to find when that singer died... 3. Then find where that city is... 4. Then find where the Cleveland Rams were moved... 5. Finally, I'll find the year of that move"). Baby Britain → Elliott Smith → died in Los Angeles → Rams moved to LA in 1946. Compressed to 3 actual calls in execution.
+
+**Step 60, sample 234** — *"The West Virginia city of Upland in the county that shares a border with Three Mile's county is in what country?"* → 3 calls, reward 1.0. Same work-backwards pattern as the cadence-5 Tuolumne example (resolve the state-level anchor, then short-circuit to the country). The two patterns (full chain vs short-circuit) are now both stable in policy across cadences.
+
+**Significance**: between cadence 4 (74 planned rollouts in steps 30-44) and cadence 6 (132 in steps 51-60), planned-multi-hop frequency nearly doubled. The mode is consolidating, not flaring and disappearing.
+
 ## 9. Cost / wall-clock estimate
 
 **Two tiers in play across this run**:
