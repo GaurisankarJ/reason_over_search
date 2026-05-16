@@ -104,7 +104,7 @@ UV_PROJECT_ENVIRONMENT="$V2_VENV" \
 | GPU family | SM | Repo | File | Notes |
 |---|---|---|---|---|
 | Hopper (H100/H200) | sm_70/80/89/90 | `pantomiman/reason-over-search-v1-venvs` | `dtensor_policy_worker_v2.tar.gz` | Hopper-built; SASS for sm_70/80/89/90, PTX for sm_90 → will NOT run on Blackwell |
-| **Blackwell-Ultra (B300)** | **sm_103** | **`cobaltbluefire/reason-over-search-venvs` (private)** | **`dtensor_policy_worker_v2_sm103.tar.gz`** | **Built 2026-05-16 on Verda B300 (commit `907af71`); torch 2.10+cu129, TE 2.14+71bbefbf** |
+| **Blackwell-Ultra (B300)** | **sm_103** | **`cobaltbluefire/reason-over-search-venvs` (public)** | **`dtensor_policy_worker_v2_sm103.tar.gz`** | **Built 2026-05-16 on Verda B300 (commit `907af71`); torch 2.10+cu129, TE 2.14+71bbefbf** |
 
 The bootstrap auto-discovers your private tarballs by querying `hf auth whoami` against `HF_TOKEN` — no env-var plumbing needed. Lookup order:
 1. `<your_hf_user>/reason-over-search-venvs:dtensor_policy_worker_v2_sm${CC}.tar.gz`
