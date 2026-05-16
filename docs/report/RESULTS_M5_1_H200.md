@@ -869,6 +869,89 @@ Worked example — **step 46, sample 126**, reward 1.0, 4 tool calls, 5-hop:
 
 **Significance**: between C6 and C8 the planned-multi-hop mode has remained at 132 rollouts per 10-step window — that's a stable structural feature of policy, surviving the C7 dip. Combined with the 26-32 4-hop+ wins per cadence, the multi-hop chain reasoning is **a durable capability** even if the scalar reward is plateaued.
 
+### Cadence 9: steps 81-90 (through 2026-05-16 ~17:06 UTC, host 126 / dedicated $4.70/h)
+
+| Step | Wall (s) | M:S | rew mean | rew > 0 | tool_med | notes |
+|---:|---:|---:|---:|---:|---:|---|
+| 81 | 456 | 7:36 | 0.242 | 36 % | 3 | |
+| 82 | 458 | 7:38 | 0.197 | 30 % | 3 | |
+| 83 | 476 | 7:56 | 0.208 | 33 % | 3 | |
+| 84 | 445 | 7:25 | 0.221 | 35 % | 3 | |
+| 85 | 502 | 8:22 | 0.204 | 32 % | 3 | |
+| 86 | 438 | 7:18 | **0.294** | 42 % | 3 | Second-highest single-step rew_mean (run high is step 78 = 0.296). |
+| 87 | 495 | 8:15 | 0.212 | 32 % | 3 | |
+| 88 | 466 | 7:46 | 0.262 | 38 % | 3 | |
+| 89 | 528 | 8:48 | 0.242 | 34 % | 3 | |
+| **90** | **577** | **9:37** | 0.195 | 29 % | 3 | **Ninth checkpoint** uploaded to HF. **Slowest step of the run** (577 s; vs run mean ~440 s). Step-wall watch item. |
+
+**Cadence 9 vs prior windows**:
+| Window | rew_mean | rew > 0 | step wall | tool_med | len_med | 4-hop+ wins | planned-3-5 |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 31-40 (C4) | 0.171 | 31 % | 376 s | 5 | 13.0 K | 20 | 74 |
+| 41-50 (C5) | 0.202 | 33 % | 448 s | 3 | 14.6 K | 26 | dozens |
+| 51-60 (C6) | 0.224 | 33 % | 412 s | 3 | 13.9 K | 21 | 132 |
+| 61-70 (C7) | 0.202 | 33 % | 463 s | 2 | 13.9 K | 32 | 102 |
+| 71-80 (C8) | 0.221 | 32 % | 467 s | 3 | 13.9 K | 26 | 132 |
+| **81-90 (C9)** | **0.228** | **34 %** | **484 s** | **3** | **14.8 K** | **29** | **153** |
+| Δ vs 8 | **+3 %** | +2 pp | **+4 % wall** | held | +6 % len | +12 % | **+16 %** |
+
+**Trends after cadence 9 — slow climb, not plateau (revising the cadence-8 plateau call)**:
+- **Window mean 0.228 is the new high for any 10-step window** (vs C6's 0.224). The cadence-8 "plateau confirmed" claim was premature: cadences 6 → 7 → 8 → 9 = 0.224 → 0.202 → 0.221 → **0.228**, which on inspection is **noisy slow climb** rather than dead flat. C7 was the outlier.
+- **Tool_med fully stable at 3 across all 10 steps** of cadence 9 — no over-pruning drift. The cadence-7 → 2 episode hasn't recurred. The policy has settled on 3 actual tool calls as the persistent shape.
+- **Planned-multi-hop count is the new high: 153 rollouts** with explicit numbered plans (vs C6/C8's 132 and C7's 102). Plan structure is getting more frequent, not less. The top plan_score on this run (60, step 88 idx 113) was generated this cadence.
+- **4-hop+ generalisation** beyond the Ghana → Sophia Akuffo lookup: step 84 idx 162 solved a Nteje → **Nigeria** → Walter Samuel Nkanu Onnoghen chain in 2 tool calls. The policy isn't just pattern-matching one Wikipedia article; it has learned the general "country → chief justice" chain shape.
+- **Step wall jumped to 484 s** (+17 s vs C8). Steps 89 + 90 were **528 + 577 s** — the latter is the slowest of the entire run. len_med also crept up 13.9 K → 14.8 K. **This is the new watch item**: if cadence 10 stays at 480+ s, exploration drift is real and the wall-clock projection has to expand again.
+- HF: `step_90/` live at [the primary repo](https://huggingface.co/pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42/tree/main/step_90).
+- Cumulative cost (mixed Spot + Dedicated, ~16.8 h elapsed): ~$42.
+- **Wall-clock projection**: at 484 s/step, ETA step 311 = 221 × 484 s + 16.8 h ≈ 47 h total = step 311 lands ~22:30 UTC May 17. **Total 1-epoch cost ~$181** (already-spent $42 + $139 remaining at $4.70/h × 29.7 h).
+
+#### Mechanical examples (cadence 9)
+
+**BEST** — step 81, sample 5, **reward 1.000**, 5 tool calls, 14.8 K chars
+
+> **Q**: *"How many UK UNESCO World Heritage sites are in the country of citizenship of the author of The Devil is an Ass?"*  (Ben Jonson → UK → number of sites)
+> **Final answer**: `17` ✓
+> **Last `<think>`**: "...UK UNESCO World Heritage Sites consist of: Hadrian's Wall, Stonehenge... Avebury and Associated Sites, Tower of London, Jurassic Coast, Westminster, Saltaire, Ironbridge Gorge, Studley Royal Park... Author: Ben Jonson, country: UK..."
+>
+> *Commentary*: 5 calls on a 3-hop chain (author → citizenship → World Heritage Site count). The model **enumerates the actual list of sites in the final `<think>` to verify the count** — this is the cross-verification mode of cadence 4 reappearing on a question that genuinely needs it. Distinct from cadence-8's lucky-shape Super Bowl BEST; this one actually resolved the chain.
+
+**WORST** — step 81, sample 3, **reward 0.000**, 2 tool calls, 3.3 K chars
+
+> **Q**: *"In which county was Jerry Fotheringill born?"*
+> **Final answer**: `and`  ✗
+>
+> *Commentary*: **Truncated / degenerate rollout** — only 3.3 K chars and the model emitted `and` as the answer (likely a decode collapse). The `<think>` block was empty. Failure class: **rollout collapse**, where the model produces no meaningful output. Rare but present in cadence 9 — same kind of single-rollout degenerate that does not move the policy because the group baseline is just as low.
+
+**MEAN** — step 90, sample 135, **reward 0.229**, 5 tool calls, 17.1 K chars
+
+> **Q**: *"The speaker of whom the prime minister of India is responsible to is elected by what?"*  (Lok Sabha Speaker → elected by Lok Sabha members; gold answer expects "Lok Sabha")
+> **Final answer**: *"The President of India is elected by an electoral college consisting of the elected members of the Parliament of India..."* (answers a different question — President of India, not Speaker of Lok Sabha)
+> **Last `<think>`**: "The user is asking for the fact relating to the 'speaker of whom the priminister of india is responsible to'... I'll search for 'prime minister of india' first..."
+>
+> *Commentary*: **Question parse error** — model substituted "President of India" for "Speaker of Lok Sabha" mid-reasoning. The cadence-9 MEAN's typical mode is "wrong entity resolved, right keyword overlap" (F1 0.229 from overlapping "elected by" / "members of Parliament" terms). Cadence 9 surfaces a similar set of failure modes to cadence 8: bridge-not-anchored, decode glitches, question parse errors.
+
+#### Claude hand-analyses (cadence 9)
+
+1. **The cadence-8 plateau call was premature; the curve is a slow noisy climb.** Cadence 9 window mean 0.228 is the new high (beats C6's 0.224). The five-window run from C5 onward looks like: 0.202 / 0.224 / 0.202 / 0.221 / 0.228 — that's a moving-average of 0.215 with C5/C7 as low outliers and C6/C9 as new highs. Implied per-cadence gain since C6 is ≈ +0.001-0.002 with σ ≈ ±0.012. The **honest read is the run is still climbing slowly**, with each cadence buying ~+0.002 absolute reward at a cost of ~$6 + slight tool/length growth. The supervisor question "where does the curve plateau" has a fuzzy answer — there is no clean step where the curve flattens; it just slows. Cadence 10 is the first window where the gain may stop entirely.
+2. **Step time is the new watch item, not reward.** Cadence wall means: 376 → 448 → 412 → 463 → 467 → **484 s**. The trajectory is now a slow upward drift. Combined with len_med growing 13.9 K → 14.8 K, this is **re-exploration cost**: as the policy keeps finding new mode-mixtures of plan structures and call counts, individual rollouts get marginally longer. If C10 step wall continues toward 500 s, the cost projection for 1 epoch slides from $178 to ~$190; the marginal-cost-per-reward-gain is getting worse. **From here, every additional cadence pays approximately $6 for +0.002 to +0.005 expected window-mean** — the early-stop decision is sharply asymmetric in favour of stopping soon.
+
+#### Hop-stratified BEST successes (cadence 9)
+
+| Hops | Step | Tools | Answer | Question |
+|---:|---:|---:|---|---|
+| 1 | 82 | 1 | `Los Angeles Dodgers` | Who did the team that won the most recent world series game play in the world series last year? |
+| 2 | 81 | 1 | `1806` | In what year did the country of the Imperial Diet dissolve? |
+| 3 | 84 | 1 | `David Ruffin` | Who is the brother of the singer of What Becomes of the Broken Hearted? |
+| 4+ | 84 | 2 | `Walter Samuel Nkanu Onnoghen` | Who is the current Chief Justice of the country where the government headquarters of Nteje are found? |
+
+**4-hop+ successes in cadence 9: 29** (vs 26 / 32 / 21 in C8 / C7 / C6 — stable in the 25-30 band). **The Nigeria → Nkanu Onnoghen case is the first non-Ghana 4-hop "country → chief justice" success on this run.** Prior wins (C5 Bibiani → Ghana, C7 Akosombo → Ghana, C8 Jirapa → Ghana) were all the same canonical chain; cadence 9 shows the policy can now apply the same chain shape to a different country's bridge. **Out-of-distribution generalisation on the chain pattern, not memorisation of one article.**
+
+#### Planned-multi-hop reasoning (cadence 9)
+
+**153 rollouts** with explicit numbered plans + reward 1.0 — **new run high** (vs C8/C6's 132, C7's 102). The mode is consolidating further. Top plan_score in cadence 9: **60** (step 88, sample 113, 5 tool calls, 26 K chars) — also the **highest plan_score on this run**. The pattern is robust across question difficulty and stable across cadences; even the C7 dip cadence had 102 planned rollouts.
+
+**The headline structural finding from cadences 5-9 (50 steps):** tool_med locked at 3, planned-multi-hop 100-150 rollouts/cadence, 4-hop+ wins 20-32/cadence, with the 4-hop+ class now generalising beyond the canonical Ghana lookup. **The chain-reasoning capability is mature and stable; reward is plateauing around 0.22-0.23 not because the model can't reason but because F1 keyword scoring stops crediting correct chain-resolutions that produce non-keyword-matching final tokens.**
+
 ## 9. Cost / wall-clock estimate
 
 **Two tiers in play across this run**:
