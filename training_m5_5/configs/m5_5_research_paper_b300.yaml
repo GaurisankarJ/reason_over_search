@@ -166,7 +166,13 @@ policy:
   # ≈ 24 GB at gpu_memory_utilization=0.85. Total peak ≈ 105 GB ≪ 288 GB.
   # 4 micro-batches per step instead of 320 → ~4× fewer DTensor bookkeeping
   # roundtrips on top of the larger-batch matmul efficiency.
-  train_micro_batch_size: 4
+  # [B300 fix 1, REVISED 2026-05-16] Lowered from 4 → 2 after live OOM at
+  # step 1 on a 268 GB B300 (vLLM @ 0.85 = 227 GB + policy log_softmax peak
+  # at micro=4 = ~30 GB, exceeded capacity). micro=2 keeps log_softmax peak
+  # at ~15 GB, well within the remaining ~40 GB budget after vLLM allocation.
+  # Matches the m5_1 B200 prod recipe (also micro=2). Iterate up to 3 if
+  # we see headroom after step 5.
+  train_micro_batch_size: 2
   generation_batch_size: 32
   logprob_batch_size: ${policy.train_micro_batch_size}
   max_total_sequence_length: 8192
@@ -180,9 +186,13 @@ policy:
     enabled: true
     cpu_offload: false
     sequence_parallel: false
-    # [B300 fix 3] Activations fit through the backward pass with room to
-    # spare; pay the activation memory to skip the ~25-30% recompute tax.
-    activation_checkpointing: false
+    # [B300 fix 3, REVISED 2026-05-16] Re-enabled after live OOM at step 1.
+    # Activations + log_softmax + DTensor base together exceeded the
+    # post-vLLM budget on a 268 GB B300. Activation checkpointing trades
+    # ~25-30% recompute time for ~40 GB of activation memory — worth it
+    # to fit the working set. Can flip back off after we lower
+    # gpu_memory_utilization further.
+    activation_checkpointing: true
     tensor_parallel_size: 1
     context_parallel_size: 1
     custom_parallel_plan: null
@@ -351,10 +361,12 @@ policy:
       tensor_parallel_size: 1
       pipeline_parallel_size: 1
       expert_parallel_size: 1
-      # [B300 fix 2] 0.85 × 288 ≈ 245 GB to vLLM; sleep-mode resident ~24 GB
-      # leaves ~110 GB of headroom for policy peak (DTensor + log_softmax)
-      # plus ~30 GB cushion. Bigger KV cache = more concurrent rollouts.
-      gpu_memory_utilization: 0.85
+      # [B300 fix 2, REVISED 2026-05-16] Lowered 0.85 → 0.7 after live OOM
+      # on a 268 GB B300. With micro=2 + act-ckpt on, policy worker peak is
+      # ~70 GB. Setting vLLM to 0.7 × 268 = 188 GB leaves ~80 GB of slack
+      # for policy + cushion. Sleep-mode resident still ~19 GB. Bump
+      # back to 0.8+ after seeing the live memory headroom at step 5+.
+      gpu_memory_utilization: 0.7
       max_model_len: ${policy.max_total_sequence_length}
       enforce_eager: false
       use_deep_gemm: false
