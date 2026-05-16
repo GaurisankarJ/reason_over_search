@@ -250,8 +250,14 @@ V2_VENV_HF_REPO="${V2_VENV_HF_REPO:-${USER_V2_VENV_HF_REPO:-pantomiman/reason-ov
 # More aggressive than Vast's `import nemo_automodel` because we want to
 # catch sm_120 mismatches (PTX missing → "no kernel image available") early.
 v2_imports_ok() {
+    # Smoke-test the V2 venv. Captures stderr to a log so we can inspect WHY
+    # a tarball failed (Python version mismatch, torch ABI drift, missing
+    # SASS for current SM, etc.). Was 2>/dev/null in the original — that
+    # made debugging tarball failures impossible (H200 bring-up 2026-05-16
+    # post-mortem).
     [[ -x "${V2_VENV}/bin/python" ]] || return 1
-    "${V2_VENV}/bin/python" - <<'PY' 2>/dev/null
+    local err_log="/tmp/v2_imports_err_$(date +%s).log"
+    if "${V2_VENV}/bin/python" - >/dev/null 2> "${err_log}" <<'PY'
 import sys
 try:
     import torch
@@ -265,9 +271,22 @@ try:
     torch.zeros(1, device="cuda")
     print("OK")
 except Exception as e:
+    import traceback
     print(f"FAIL: {type(e).__name__}: {e}", file=sys.stderr)
+    traceback.print_exc(file=sys.stderr)
     sys.exit(1)
 PY
+    then
+        rm -f "${err_log}"
+        return 0
+    else
+        # Surface the first ~10 lines of the actual error into the bootstrap
+        # log so operators see exactly what broke. Keep the full log on disk
+        # for deep inspection.
+        echo "  v2 import error (full log: ${err_log}):"
+        head -12 "${err_log}" 2>/dev/null | sed 's/^/    /'
+        return 1
+    fi
 }
 
 build_from_source() {
