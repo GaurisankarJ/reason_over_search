@@ -99,28 +99,37 @@ echo "[pkg] creating ${TAR_PATH} (~5-10 GB compressed; takes 1-3 min)..."
 tar -czf "${TAR_PATH}" -C "$(dirname "${V2_VENV}")" "$(basename "${V2_VENV}")"
 ls -lh "${TAR_PATH}"
 
-# Upload
+# Upload (free local tarball as soon as upload succeeds; verify step needs
+# another ~5-10 GB of disk for the round-trip download and is rarely useful
+# in practice — the `hf upload` exit code + commit URL already tell us if
+# it worked).
 VENV_HF="${REPO_ROOT}/training_m5_5/nemo_rl/.venv/bin/hf"
 [[ -x "${VENV_HF}" ]] || VENV_HF="$(command -v hf)"
 echo "[pkg] uploading to HF ${REPO_ID} (private=$([[ -n "$PRIVATE_FLAG" ]] && echo yes || echo no))..."
 HF_TOKEN="${HF_TOKEN}" "${VENV_HF}" repo create "${REPO_ID}" --repo-type dataset ${PRIVATE_FLAG} -y 2>&1 | tail -3 || true
-HF_HUB_ENABLE_HF_TRANSFER=1 HF_TOKEN="${HF_TOKEN}" \
-    "${VENV_HF}" upload "${REPO_ID}" "${TAR_PATH}" "${FILE_NAME}" --repo-type dataset 2>&1 | tail -5
-# Also upload the metadata sidecar
-HF_TOKEN="${HF_TOKEN}" "${VENV_HF}" upload "${REPO_ID}" "${META}" "${FILE_NAME%.tar.gz}.meta.txt" --repo-type dataset 2>&1 | tail -3
+if HF_HUB_ENABLE_HF_TRANSFER=1 HF_TOKEN="${HF_TOKEN}" \
+        "${VENV_HF}" upload "${REPO_ID}" "${TAR_PATH}" "${FILE_NAME}" --repo-type dataset 2>&1 | tail -5; then
+    echo "[pkg] ✅ tarball uploaded — deleting local copy to free disk"
+    rm -f "${TAR_PATH}"
+else
+    echo "[pkg] ⚠️  tarball upload failed — keeping local at ${TAR_PATH}"
+fi
+# Upload metadata sidecar (small, no disk pressure)
+HF_TOKEN="${HF_TOKEN}" "${VENV_HF}" upload "${REPO_ID}" "${META}" "${FILE_NAME%.tar.gz}.meta.txt" --repo-type dataset 2>&1 | tail -3 || true
+rm -f "${META}"
 
-# Verify upload by listing
-echo "[pkg] verifying upload..."
-HF_TOKEN="${HF_TOKEN}" "${VENV_HF}" download "${REPO_ID}" "${FILE_NAME}" --repo-type dataset --local-dir /tmp/_verify >/dev/null 2>&1 \
-    && echo "[pkg] ✅ uploaded + downloaded round-trip OK" \
-    || echo "[pkg] ⚠️  upload reported success but re-download fails — check HF UI"
-rm -rf /tmp/_verify
+# Optional verify (disabled by default — needs ~6 GB of free disk to re-download.
+# Set VERIFY_UPLOAD=1 to re-enable on boxes with disk headroom.)
+if [[ "${VERIFY_UPLOAD:-0}" == "1" ]]; then
+    echo "[pkg] verifying upload (re-download)..."
+    HF_TOKEN="${HF_TOKEN}" "${VENV_HF}" download "${REPO_ID}" "${FILE_NAME}" --repo-type dataset --local-dir /tmp/_verify >/dev/null 2>&1 \
+        && echo "[pkg] ✅ round-trip OK" \
+        || echo "[pkg] ⚠️  re-download failed — check HF UI manually"
+    rm -rf /tmp/_verify
+fi
 
 echo
-echo "Future bootstraps on sm_${DETECTED_CC:-?} can use this tarball via:"
-echo "    V2_VENV_HF_REPO=${REPO_ID} \\"
-echo "    V2_VENV_HF_FILE=${FILE_NAME} \\"
-echo "    bash training_m5_5/scripts/bootstrap_b300.sh"
-echo
-echo "Or persist into training_m5_5/.env so they auto-load."
-rm -f "${TAR_PATH}" "${META}"
+echo "Future bootstraps on sm_${DETECTED_CC:-?} auto-discover this tarball via your HF_TOKEN's whoami:"
+echo "    bootstrap_b300.sh probes ${REPO_ID}:${FILE_NAME} first."
+echo "Override manually if needed:"
+echo "    V2_VENV_HF_REPO=${REPO_ID} V2_VENV_HF_FILE=${FILE_NAME} bash training_m5_5/scripts/bootstrap_b300.sh"
