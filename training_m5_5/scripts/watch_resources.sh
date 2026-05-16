@@ -10,8 +10,15 @@
 # retriever's /batch_search to catch the "/health-lies-while-workers-dead"
 # failure mode mid-run.
 #
-# It does NOT kill anything — it just makes the failure visible so the
-# operator (or another script) can intervene early. Designed to run as a
+# With save_period=10 (changed from 50 in commit on 2026-05-16 so a crash
+# never costs more than 10 steps), 311 prod steps generates up to 31
+# checkpoints × 3.2 GB = ~99 GB of ckpt data. That can fill disk on
+# 200-256 GB boxes. The watcher's prune_old_ckpts() fires when disk hits
+# WARN: deletes step_N/ directories under <ckpt_dir>/m5_5_*/seed*/
+# except the KEEP_LAST_N_CKPTS most recent (default 5 = ~16 GB kept).
+#
+# The watcher itself does NOT kill the training process or the retriever
+# — it just makes failures visible and prunes ckpts. Designed to run as a
 # detached background process via `disown`.
 #
 # Usage:
@@ -19,15 +26,21 @@
 #                                                  [--ram-warn <GB>] [--ram-crit <GB>]
 #                                                  [--disk-warn <GB>] [--disk-crit <GB>]
 #                                                  [--retriever-url <url>]
+#                                                  [--ckpt-dir <path>] [--keep-ckpts <N>]
+#                                                  [--trace-every <steps>] [--trace-log <path>]
 #
 # Defaults (tuned for Verda B300, 270 GB RAM / 193 GB disk):
 #   --log              /root/logs/m5_5_resources_<TS>.log
+#   --trace-log        /root/logs/m5_5_traces_<TS>.log
 #   --poll             30 s
 #   --ram-warn         30 GB free (early warning)
 #   --ram-crit         10 GB free (OOM imminent)
-#   --disk-warn        15 GB free (rollouts will fill it soon)
-#   --disk-crit         5 GB free (Ray plasma about to fail)
+#   --disk-warn        15 GB free (triggers ckpt prune; rollouts will fill / soon)
+#   --disk-crit         5 GB free (Ray plasma about to fail; emergency prune)
 #   --retriever-url    http://127.0.0.1:3005
+#   --ckpt-dir         /root/reason_over_search/results/grpo
+#   --keep-ckpts       5 (per seed; older ones deleted on disk WARN)
+#   --trace-every      10 steps (invokes check_trace.py periodically)
 
 set -uo pipefail
 
@@ -39,6 +52,8 @@ DISK_CRIT_GB=5
 RETRIEVER_URL="http://127.0.0.1:3005"
 TRACE_EVERY_N_STEPS=10           # auto-analyze rollouts every N steps
 ROLLOUT_DIR=""                   # auto-detect /root/reason_over_search/logs/exp_*
+CKPT_DIR="/root/reason_over_search/results/grpo"  # parent of m5_5_<mode>/seed<N>/step_M
+KEEP_LAST_N_CKPTS=5              # when pruning fires, keep this many newest
 TS="$(date -u +%Y%m%dT%H%MZ)"
 LOG="/root/logs/m5_5_resources_${TS}.log"
 TRACE_LOG="/root/logs/m5_5_traces_${TS}.log"
@@ -55,6 +70,8 @@ while [[ $# -gt 0 ]]; do
         --retriever-url) RETRIEVER_URL="$2"; shift 2 ;;
         --trace-every) TRACE_EVERY_N_STEPS="$2"; shift 2 ;;
         --rollout-dir) ROLLOUT_DIR="$2"; shift 2 ;;
+        --ckpt-dir) CKPT_DIR="$2"; shift 2 ;;
+        --keep-ckpts) KEEP_LAST_N_CKPTS="$2"; shift 2 ;;
         -h|--help) sed -n '2,30p' "$0"; exit 0 ;;
         *) echo "unknown arg: $1" >&2; exit 2 ;;
     esac
@@ -76,8 +93,9 @@ probe_retriever() {
     [[ "${resp}" == *'"contents"'* ]]
 }
 
-emit INFO "watcher start  poll=${POLL_S}s  thresholds: ram_warn=${RAM_WARN_GB}G ram_crit=${RAM_CRIT_GB}G disk_warn=${DISK_WARN_GB}G disk_crit=${DISK_CRIT_GB}G  retriever=${RETRIEVER_URL}  trace_every=${TRACE_EVERY_N_STEPS}_steps"
+emit INFO "watcher start  poll=${POLL_S}s  thresholds: ram_warn=${RAM_WARN_GB}G ram_crit=${RAM_CRIT_GB}G disk_warn=${DISK_WARN_GB}G disk_crit=${DISK_CRIT_GB}G  retriever=${RETRIEVER_URL}  trace_every=${TRACE_EVERY_N_STEPS}_steps  keep_last=${KEEP_LAST_N_CKPTS}_ckpts"
 emit INFO "  trace log: ${TRACE_LOG}"
+emit INFO "  ckpt dir:  ${CKPT_DIR} (prune fires when disk hits WARN, keeps last ${KEEP_LAST_N_CKPTS} per seed)"
 trap 'emit INFO "watcher stop (signal)"; exit 0' INT TERM
 
 LAST_RAM_LEVEL=""
@@ -126,6 +144,42 @@ find_latest_rollout_step() {
     fi
     ls -t "${dir}"/train_data_step*.jsonl 2>/dev/null | head -1 | \
         sed -E 's|.*train_data_step([0-9]+)\.jsonl|\1|' || echo 0
+}
+
+prune_old_ckpts() {
+    # When disk goes WARN, delete all step_N/ directories under
+    # ${CKPT_DIR}/m5_5_*/seed*/ EXCEPT the ${KEEP_LAST_N_CKPTS} highest-N
+    # ones. Atomic: NeMo-RL's checkpoint.py writes tmp_step_N/ first and
+    # renames on flush, so deleting non-tmp dirs while training is running
+    # is safe (mid-write dirs are excluded by name).
+    #
+    # Each ckpt is ~3.2 GB. Keeping last 5 = ~16 GB. Frees ~15-50 GB on
+    # a run that's accumulated 10-20 saves.
+    local freed=0 deleted=0
+    local seed_dirs
+    seed_dirs="$(ls -d ${CKPT_DIR}/m5_5_*/seed* 2>/dev/null || true)"
+    [[ -z "${seed_dirs}" ]] && { emit INFO "  prune: no ckpt dirs under ${CKPT_DIR}/m5_5_*/seed*"; return; }
+    for seed_dir in ${seed_dirs}; do
+        # List step_N dirs sorted by N descending, skip the first KEEP_LAST_N,
+        # delete the rest.
+        local to_delete
+        to_delete="$(ls -d "${seed_dir}"/step_* 2>/dev/null \
+            | grep -v '/tmp_step_' \
+            | sed -E 's|.*/step_([0-9]+)$|\1 &|' \
+            | sort -rn \
+            | tail -n +$((KEEP_LAST_N_CKPTS + 1)) \
+            | awk '{print $2}')"
+        for d in ${to_delete}; do
+            local sz; sz="$(du -sm "$d" 2>/dev/null | awk '{print $1}')"
+            rm -rf "$d" && {
+                freed=$((freed + ${sz:-0}))
+                deleted=$((deleted + 1))
+            }
+        done
+    done
+    if [[ "${deleted}" -gt 0 ]]; then
+        emit INFO "  prune: deleted ${deleted} old ckpts, freed ~$((freed / 1024)) GB. Kept last ${KEEP_LAST_N_CKPTS} per seed."
+    fi
 }
 
 while true; do
@@ -184,8 +238,12 @@ while true; do
     fi
     if [[ "${DISK_LEVEL}" != "${LAST_DISK_LEVEL}" ]]; then
         case "${DISK_LEVEL}" in
-            CRIT) emit CRIT "Disk free ${DISK_FREE_GB} GB (<${DISK_CRIT_GB} GB). Ray plasma spill will fail. Free space NOW (rollout JSONLs, /tmp, /root/.cache/uv/git-v0/checkouts)." ;;
-            WARN) emit WARN "Disk free ${DISK_FREE_GB} GB (<${DISK_WARN_GB} GB). Rollout accumulation will fill /. Consider periodic cleanup." ;;
+            CRIT) emit CRIT "Disk free ${DISK_FREE_GB} GB (<${DISK_CRIT_GB} GB). Ray plasma spill will fail. Pruning ckpts now and freeing tmp; check rollout JSONLs + /root/.cache/uv/git-v0/checkouts manually."
+                  prune_old_ckpts
+                  ;;
+            WARN) emit WARN "Disk free ${DISK_FREE_GB} GB (<${DISK_WARN_GB} GB). Pruning ckpts older than the ${KEEP_LAST_N_CKPTS} newest per seed."
+                  prune_old_ckpts
+                  ;;
             OK)   [[ -n "${LAST_DISK_LEVEL}" ]] && emit INFO "Disk recovered to ${DISK_FREE_GB} GB free" ;;
         esac
         LAST_DISK_LEVEL="${DISK_LEVEL}"

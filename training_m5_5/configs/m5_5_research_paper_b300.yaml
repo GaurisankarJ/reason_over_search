@@ -144,7 +144,10 @@ checkpointing:
   metric_name: null
   higher_is_better: false
   keep_top_k: null
-  save_period: 50
+  # [resume policy 2026-05-16] save_period: 50 → 10 so a crash never costs
+  # more than 10 steps. 311 × 1/10 = 31 saves × ~3.2 GB = ~99 GB worst case.
+  # watch_resources.sh auto-prunes ckpts >5 deep when disk hits WARN.
+  save_period: 10
   checkpoint_must_save_by: null
   model_save_format: "safetensors"
   save_consolidated: true

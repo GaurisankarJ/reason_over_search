@@ -228,6 +228,45 @@ python training_m5_5/scripts/check_trace.py --no-samples
 
 Exit codes: `0` = healthy, `1` = ≥1 red flag, `2` = couldn't read rollouts.
 
+### §6.3 Checkpoints + crash recovery
+
+All prod configs now save a checkpoint **every 10 steps** (was 50 before 2026-05-16). On crash, the worst-case lost work is 10 steps (~30 min on B300, ~50 min on H200). NeMo-RL's checkpoint dir layout:
+
+```
+results/grpo/m5_5_<mode>/seed<N>/
+├── step_10/policy/weights/   # consolidated fp32 safetensors (~3.2 GB)
+├── step_10/policy/tokenizer/
+├── step_10/training_info.json
+├── step_20/...
+└── step_<latest>/...
+```
+
+**Resume** — `run.sh` auto-resumes from the latest `step_M/` in the checkpoint dir when re-launched with the same `--mode` and `--seed`:
+
+```bash
+# Same command as the original launch — NeMo-RL picks up from the latest step
+bash training_m5_5/scripts/start_b300.sh --mode prod_h200 --seed 42
+# (or whatever mode the crashed run was using)
+```
+
+For a fully fresh run, delete the seed dir first:
+
+```bash
+rm -rf /root/reason_over_search/results/grpo/m5_5_h200/seed42/
+```
+
+**Disk math** — 311 steps × 1 save/10 = 31 saves × ~3.2 GB = **~99 GB worst case**. To prevent disk-fill:
+
+- `watch_resources.sh` runs `prune_old_ckpts()` when disk hits WARN (<15 GB free), keeping only the 5 most recent saves per seed (~16 GB).
+- Manual prune at any time:
+  ```bash
+  ls -d /root/reason_over_search/results/grpo/m5_5_*/seed*/step_* | \
+      sort -t_ -k2n | head -n -5 | xargs rm -rf
+  ```
+- Override the auto-prune keep-count via `--keep-ckpts N` to the watcher (e.g., `KEEP_LAST_N_CKPTS=10` for a 10-deep safety net on bigger disks).
+
+`save_optimizer: false` is intentional — checkpoints are ~3.2 GB instead of ~8.9 GB. Optimizer state re-warms fast at the constant LR; minor disturbance on resume.
+
 Expected timings on B300:
 - Bootstrap (cold): ~30-45 min
 - Smoke (4 steps): ~5-10 min
