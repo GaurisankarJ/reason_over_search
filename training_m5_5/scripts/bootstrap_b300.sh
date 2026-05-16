@@ -42,7 +42,26 @@ if [[ -f "${ENV_FILE}" ]]; then
 fi
 
 # -----------------------------------------------------------------------------
-NVTE_CUDA_ARCHS="${NVTE_CUDA_ARCHS:-90;120}"
+# Auto-detect local GPU compute capability so this script can be validated on
+# cheaper hardware (4090, A100, H100, etc) before launching against B300.
+#
+# Returns one of: 70 (V100), 75 (T4), 80 (A100), 86 (3090), 89 (4090/L40S),
+# 90 (H100/H200), 100 (B100/B200), 120 (B300/Blackwell-Ultra). Multi-GPU box:
+# uses GPU 0's arch.
+DETECTED_CC="$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -1 | tr -d '. ')"
+
+# Pick a sensible NVTE_CUDA_ARCHS default. TE's CMakeLists strips 100/110/120
+# into NVTE_SPECIFIC_ARCHS and leaves CMAKE_CUDA_ARCHITECTURES empty if that
+# was the only entry — so for B300 we must pair "120" with a "stable" arch.
+# For other GPUs the detected arch alone works.
+if [[ -z "${NVTE_CUDA_ARCHS:-}" ]]; then
+    case "${DETECTED_CC}" in
+        100|120)   NVTE_CUDA_ARCHS="90;${DETECTED_CC}" ;;   # B200/B300: pair with Hopper
+        70|75|80|86|89|90) NVTE_CUDA_ARCHS="${DETECTED_CC}" ;;
+        "")        NVTE_CUDA_ARCHS="90;120" ;;  # no GPU detected; default to B300 expectation
+        *)         NVTE_CUDA_ARCHS="${DETECTED_CC}" ;;
+    esac
+fi
 MAX_JOBS="${MAX_JOBS:-32}"
 SKIP_QWEN_CACHE="${SKIP_QWEN_CACHE:-}"
 
@@ -52,6 +71,8 @@ warn() { printf '\033[1;33m[warn]\033[0m %s\n' "$*"; }
 fail() { printf '\033[1;31m[fail]\033[0m %s\n' "$*"; exit 1; }
 
 interactive() { [[ -t 0 ]] && [[ -t 1 ]]; }
+
+info "detected GPU compute_cap=${DETECTED_CC:-unknown} → NVTE_CUDA_ARCHS=${NVTE_CUDA_ARCHS}"
 
 # ============================================================
 info "step 1/9 — apt prereqs (ninja, cmake, tmux, IB dev, build-essential)"

@@ -150,6 +150,57 @@ Optionally set `HF_TOKEN` to bypass anon rate limits altogether.
 
 ---
 
+## Cheap validation on a 4090 (or any GPU) before paying for B300
+
+The bootstrap auto-detects local GPU compute capability and picks
+`NVTE_CUDA_ARCHS` accordingly, so you can validate the install pipeline
+on a $0.30/hr Vast 4090 before spinning up the $5.94/hr B300.
+
+```bash
+# On a fresh Vast.ai 4090 instance (bare Ubuntu, no docker image):
+ssh root@<4090_host>
+cd /root && git clone https://github.com/<your-fork>/reason_over_search.git
+cd reason_over_search
+git checkout m5.5_b300
+
+# Write your HF + WANDB tokens before running so no interactive prompts fire
+cat > training_m5_5/.env <<EOF
+WANDB_API_KEY=<your_key>
+HF_TOKEN=<your_hf_token>
+EOF
+chmod 600 training_m5_5/.env
+
+# Run the bootstrap — auto-detects sm_89 (4090) and builds V2 venv for it
+bash training_m5_5/scripts/bootstrap_b300.sh
+
+# Validate the loop end-to-end with the smoke config (~5-10 min, fits 24 GB)
+bash training_m5_5/scripts/start_b300.sh --mode smoke
+```
+
+**What this proves**:
+- ✅ apt prereqs install cleanly (ninja, cmake, tmux, IB headers, cudnn)
+- ✅ CUDA 12.9 toolkit + symlink swap works
+- ✅ `uv` symlinks correctly so Ray actors find it
+- ✅ V2 venv builds (compile path; tarball fast-path would skip this)
+- ✅ Retriever assets download
+- ✅ Qwen3.5-0.8B HF download succeeds (with token, no rate limit)
+- ✅ Full GRPO loop runs end-to-end through 4 smoke steps
+
+**What this does NOT prove** (only B300 can):
+- B300-specific memory headroom at micro=4/seq=8192 (will OOM on 24 GB)
+- sm_120 SASS / PTX correctness in V2 venv kernels
+- TP=2 across two B300s
+- Wall-clock projections for full 622-step prod run
+
+**Cost math**: 4090 on Vast spot ~$0.30-0.60/hr × ~30-40 min ≈ **~$0.20-0.40**.
+Compare to first B300 bring-up: ~2.5 h × $5.94/hr ≈ ~$15. Even if you only
+validate once, the 4090 catches every system-level failure mode for ~3% of
+the cost.
+
+The launcher (`start_b300.sh`) refuses to run `--mode prod_b300*` on a GPU
+with <80 GB VRAM (would OOM immediately), so there's no risk of accidentally
+running prod on the small box — only smoke.
+
 ## Quickstart — next time, run these in this order
 
 Assumes a fresh Verda B300 box, repo synced to `/root/reason_over_search/`. **Total runtime: ~30-45 min cold** (most of it is the V2 venv compile).

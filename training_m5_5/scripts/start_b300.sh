@@ -150,18 +150,23 @@ if ! command -v nvidia-smi >/dev/null 2>&1; then
 fi
 GPU_LINE="$(nvidia-smi --query-gpu=name,memory.total --format=csv,noheader | head -1)"
 GPU_COUNT="$(nvidia-smi --query-gpu=name --format=csv,noheader | wc -l | tr -d ' ')"
-if [[ "${GPU_LINE}" != *B300* && "${GPU_LINE}" != *B200* ]]; then
-    warn "GPU is not B300 (got: ${GPU_LINE}). Continuing anyway."
-else
-    ok   "gpu:            ${GPU_COUNT}× ${GPU_LINE}"
-fi
+GPU_VRAM_MB="$(nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits | head -1 | tr -d ' ')"
+ok   "gpu:            ${GPU_COUNT}× ${GPU_LINE}"
 
-# Mode↔GPU-count sanity check
+# Mode↔GPU sanity checks
 if [[ "${MODE}" == "prod_b300_2xgpu" && "${GPU_COUNT}" -lt 2 ]]; then
     fail "--mode prod_b300_2xgpu requires 2 GPUs but only ${GPU_COUNT} visible. Use --mode prod_b300 for 1 GPU, or check CUDA_VISIBLE_DEVICES."
 fi
 if [[ "${MODE}" == "prod_b300" && "${GPU_COUNT}" -ge 2 ]]; then
     warn "${GPU_COUNT} GPUs visible but --mode prod_b300 only uses GPU 0. For both, re-run with --mode prod_b300_2xgpu (~1.7× speedup)."
+fi
+# Refuse to launch prod_b300* on too-small GPUs (B300 yaml is 100+ GB peak; <80 GB will OOM).
+# Smoke is fine on anything ≥20 GB. Use the smoke path for validation on 4090/A6000/etc.
+if [[ "${MODE}" == prod_b300* && "${GPU_VRAM_MB}" -lt 80000 ]]; then
+    fail "--mode ${MODE} needs ≥80 GB VRAM (B300 config peaks ~100 GB at micro=4/seq=8192). Got ${GPU_VRAM_MB} MB. For cheaper validation use --mode smoke."
+fi
+if [[ "${MODE}" != *smoke* && "${GPU_LINE}" != *B300* && "${GPU_LINE}" != *B200* ]]; then
+    warn "${MODE} is tuned for Blackwell-class GPUs; running on ${GPU_LINE} may underperform or OOM. Smoke first."
 fi
 
 # tmux for backgrounding
