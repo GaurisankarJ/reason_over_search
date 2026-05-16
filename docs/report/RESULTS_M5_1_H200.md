@@ -517,6 +517,99 @@ Worked example — **step 39, sample 158**, reward 1.0, 3 tool calls:
 
 **Significance for the convergence story**: GRPO's group-relative advantage estimator sees a strong signal when (planned, reward=1.0) sibling rollouts coexist with (single-search-failed, reward=0) on the same question, which is happening with increasing frequency. The next several cadences should show this pattern stabilising as the dominant mode for 3-4 hop questions.
 
+### Cadence 5: steps 41-50 (through 2026-05-16 ~12:00 UTC, first cadence on host 126 post-resume)
+
+| Step | Wall (s) | M:S | rew mean | rew > 0 | tool_med | notes |
+|---:|---:|---:|---:|---:|---:|---|
+| 41 | 452.32 | 7:32 | 0.166 | 26 % | 3 | First step post-resume on 126; engine re-warm. |
+| 42 | 379.20 | 6:19 | 0.222 | 39 % | 3 | |
+| 43 | 483.70 | 8:04 | 0.179 | 30 % | 3 | |
+| 44 | 459.79 | 7:40 | 0.191 | 35 % | 3 | |
+| 45 | 411.92 | 6:52 | 0.226 | 39 % | 3 | |
+| 46 | 439.82 | 7:20 | 0.222 | 32 % | 3 | |
+| 47 | 455.83 | 7:36 | 0.208 | 32 % | 3 | |
+| 48 | 427.26 | 7:07 | **0.257** | 35 % | 3 | **Peak rew_mean of run so far.** |
+| 49 | 452.99 | 7:33 | 0.201 | 35 % | 3 | |
+| **50** | **518.39** | **8:38** | 0.146 | 24 % | 3 | **Fifth checkpoint** (6.4 GB) uploaded to HF. Slowest step of cadence and lowest reward; co-occurs with a noticeable step-50 dip. |
+
+**Cadence 5 vs 4 (10-step window means)**:
+| Window | rew_mean | rew > 0 | step wall | tool_med | len_med |
+|---|---:|---:|---:|---:|---:|
+| 21-30 | 0.131 | 26 % | 315 s | 4 | 10.8 K |
+| 31-40 | 0.171 | 31 % | 376 s | 5 | 13.0 K |
+| **41-50** | **0.202** | **33 %** | **448 s** | **3** | 14.6 K |
+| Δ vs 4 | **+18 %** | +2 pp | **+19 % wall** | **−2 calls** | +12 % context |
+
+**Trends after cadence 5**:
+- **Reward keeps climbing**: window mean 0.171 → 0.202 (+18 %). Peak per-step at step 48 = 0.257, the highest single-step rew_mean on this run. Step 50 dipped to 0.146; likely batch noise on a hard subset, not regression.
+- **Tool-call median dropped 5 → 3**. Cadence 4 added a tool call ("cross-verification"); cadence 5 took two off. The model is becoming **more efficient**: fewer searches per question, higher reward. This is the canonical convergence-toward-shorter-trajectories pattern of a well-shaped RL run; the "5th call paying off" of cadence 4 was a transient over-search regime that policy gradient is now collapsing back out.
+- **Step wall +19 % vs cadence 4** (448 s vs 376 s) despite fewer tool calls — and stays elevated across all 10 steps, not just the first 2-3. AdamW re-warm should have decayed by step 47; it didn't. Most likely host-to-host variance on Spheron Spot (cadence 4 was on host 247, cadence 5 is on 126). Re-exploration drift cannot be ruled out, but the flat tool_med-3 argues against it.
+- **Context still growing**: len_med 13.0 K → 14.6 K. With fewer tool calls but longer rollouts, individual `<think>` blocks and tool responses are getting wordier.
+- HF: `step_50/` live at [the primary repo](https://huggingface.co/pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42/tree/main/step_50).
+- Cumulative cost (at $1.95/h, ~11.5 h elapsed): ~$22.
+- **Wall-clock projection**: at 448 s/step, ETA step 311 = 261 × 448 s + 11.5 h elapsed ≈ 44 h total = step 311 lands ~14:30 UTC May 17 (was ~37 h with cadence-4 timing).
+
+#### Mechanical examples (cadence 5)
+
+**BEST** — step 41, sample 0, **reward 1.000**, 4 tool calls, 9.6 K chars
+
+> **Q**: *"Who is the chief justice of the country containing the Bibiani/Anhwiaso/Bekwai District?"*  (Bibiani/Anhwiaso/Bekwai → Ghana)
+> **Final answer**: `Sophia Akuffo` ✓
+> **Last `<think>`**: "Now I have confirmed that the chief justice is Sophia Akuffo, who was the Chief Justice of Ghana and appointed in 2017... I'll use that name."
+>
+> *Commentary*: Clean 4-call chain on a 3-hop question (district → country → person → year). Model resolves Ghana from the district name, then runs successive searches to confirm both the role and the person before committing. Verification-by-search is the right behaviour here; the question is exactly the kind of low-prior fact (small Ghanaian district name) where the cold model would not trust its prior.
+
+**WORST** — step 41, sample 5, **reward 0.000**, 9 tool calls, 29.7 K chars (deeply truncated)
+
+> **Q**: *"When did the first large winter carnival take place in the city where Jean Pelletier died?"*  (Jean Pelletier → Quebec City)
+> **Final answer**: `1955` ✗  (gold answer not 1955 per scorer)
+> **Last `<think>`**: "Based on all my research... the first large winter carnival in Quebec City took place in 1955..."
+>
+> *Commentary*: 9 tool calls is **3× the median** and shows the model thrashing. Quebec City's *modern* Carnaval de Québec started in 1955, but the question's gold answer is from MuSiQue's bridge resolution and depends on the dataset's exact source page. Two failures stacked: (1) over-search loop (9 calls, 30 K chars, near-truncation), (2) anchor on the wrong "first" date. The "thrashing → wrong answer" mode is the inverse of cadence 4's 5-call cross-verification mode; same model, different distribution tail.
+
+**MEAN** — step 41, sample 233, **reward 0.182**, 5 tool calls, 15.2 K chars
+
+> **Q**: *"What early Huguenot Church was established in the country where IK Tellus's sport comes from?"*  (IK Tellus → Sweden association football club; the gold answer expected refers to the French Reformed Church established in Stockholm after the Edict of Nantes)
+> **Final answer**: *"Sweden's Huguenot Church was established after the Edict of Nantes in 1598..."*
+> **Last `<think>`**: "...I need to find the Huguenot Church in Sweden... The information I have about Huguenots refers to French Huguenots, so I need to find the Huguenot Church in Sweden."
+>
+> *Commentary*: Correct bridge resolution (IK Tellus → Sweden) and correct era anchor (Edict of Nantes 1598). F1 0.18 = partial keyword overlap. The model is doing the right *kind* of chain but stops short of returning the church's specific name. Classic mid-band rollout: factually grounded, half the answer present.
+
+#### Claude hand-analyses (cadence 5)
+
+1. **Tool calls dropping 5 → 3 while reward rises +18 % is the headline finding of this cadence.** GRPO is now actively pruning over-search behaviour. The cadence-4 story was "5th call buys +30 % reward"; cadence-5 inverts it — "3 well-aimed calls beat 5 cross-verifying ones". This is consistent with cadence 4's truncation rate of 94 % being a binding constraint on the policy: the model could not buy more tokens to verify with, so it learned to spend tokens better. Worth watching: if cadence 6 holds at tool_med=3 with rew_mean ≥ 0.20, the policy has converged on a stable trajectory shape. If it slides back to 4-5 with no reward gain, we are in noise.
+2. **Step time +19 % over cadence 4 is the worry — and host variance is the most likely explanation, not AdamW.** Cadence 4 averaged 376 s; cadence 5 averaged 448 s, with the elevation distributed across all 10 steps (not concentrated at 41-43 as AdamW re-warm would predict). The same recipe ran 370 s on host 247; on host 126 it runs 448 s. Spheron Spot has known per-host variance (different memory generations, NIC, neighbour load). A more troubling alternative is *exploration drift*: len_med crept 13.0 K → 14.6 K even with fewer tool calls, so per-rollout decode tokens went up. We cannot disentangle host vs drift from one cadence; cadence 6 (same host 126) should clarify — if step time drops back to 400 s as exploration normalises, drift was a factor; if it stays 440-450 s, it's just host 126.
+
+#### Hop-stratified BEST successes (cadence 5)
+
+| Hops | Step | Tools | Answer | Question |
+|---:|---:|---:|---|---|
+| 1 | 47 | 1 | `September 25, 2015` | When did the iPhone 6s Plus come out from the iPod manufacturer? |
+| 2 | 45 | 2 | `1946` | When did the country encompassing petra the lost city of stone gain independence? |
+| 3 | 45 | 2 | `August 1, 1876` | When did the state where Tarryall Creek is located become part of the US? |
+| 4+ | 48 | 2 | `1963` | In what year was the unification of the country where the village of Bario can be found? |
+
+**4-hop+ successes in cadence 5: 26 / 3,200 rollouts** (+30 % vs cadence 4's 20). The step 48 Bario / Malaysia unification 1963 case resolves a 4-hop chain (village → district → country → year of unification) with only **2 well-aimed searches**. The trend is **fewer tools, harder chains** — same pattern as the window aggregates.
+
+#### Planned-multi-hop reasoning (cadence 5)
+
+Worked example — **step 46, sample 126**, reward 1.0, 4 tool calls, 5-hop:
+
+**Q**: *"In which country is Tuolumne, a city in the county sharing a border with Camp Connell's county in the state where Some Like It Hot was filmed?"*  →  `<answer> United States </answer>` ✓
+
+**First `<think>` (planning step, explicit work-backwards decomposition):**
+> *"The user is asking for the country of residence of Tuolumne, a city, given its county sharing a border with Camp Connell's county, and that county is in the state where Some Like It Hot was filmed. I need to work backwards this chain.*
+> *First, I need to find out what Some Like It Hot was filmed in, and then find the county sharing a border with Camp Connell's county in that state, which should lead me to the district/city of Tuolumne.*
+> *Let me break this down:*
+> *1. First, find the location of 'Some Like It Hot' (to find where it was filmed)*
+> *2. Then find that state and the county sharing a border..."*
+
+**Execution**: 4 calls resolved Some Like It Hot → California, then Camp Connell → California, then Tuolumne County → California, then concluded Tuolumne → United States. The chain never fully resolved which California county shares a border with Camp Connell's (it didn't need to — the country was forced once California was confirmed); the model recognised the shortcut and answered correctly.
+
+**Distinct from the cadence-4 Chaka Khan / Trump Tower example**: that one needed full chain resolution (Chicago vs NY disambiguation). This one shows the model **short-circuiting when intermediate hops aren't load-bearing for the final answer**. Both are present in policy by cadence 5; the policy now has two distinct decomposition strategies and picks between them.
+
+**3-5 tool call planned rollouts with plan_score ≥ 13 in steps 41-50: dozens.** The two highest plan_scores in this cadence (15 each) are step 49 sample 116 (Hyderabad / first expedition to Asia) and step 49 sample 214 (Alleycat's Pizza / Fantasy Land Tour 2004), both reward 1.0 at 3 tool calls. The Alleycat's Pizza example matches the A100 prod-a2 step-15 *Fantasy Land Tour 2004* example in [`RESULTS_m5.md` §4.2.3](RESULTS_m5.md) on both the question shape and the explicit numbered plan — the planned-multi-hop behaviour is reproducing the prior run's signature at the same milestone.
+
 ## 9. Cost / wall-clock estimate
 
 **Confirmed rate: $1.95/h** (Spheron ES Spot, 1× H200 SXM5, US Central 1, instance ID `6a072a4e`). Validated 2026-05-15 ~22:30 UTC against dashboard: $12.25 total at 6.28 h elapsed = $1.951/h. (The $15.15/h figure in `HARDWARE_COMPARISON.md` is the 8× cluster tier; not what we're on.)
