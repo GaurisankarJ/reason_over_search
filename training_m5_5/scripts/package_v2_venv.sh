@@ -43,11 +43,20 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Default REPO_ID: <hf_user>/reason-over-search-venvs
+# Parse `hf auth whoami` output carefully — it prints an ANSI-colored "✓ Logged in"
+# banner on stdout line 1 and the username on line 2 ("  user: cobaltbluefire").
+# Strip ANSI escapes, grep for "user:", take the value.
 if [[ -z "${REPO_ID}" ]]; then
     VENV_HF="${REPO_ROOT}/training_m5_5/nemo_rl/.venv/bin/hf"
     [[ -x "${VENV_HF}" ]] || VENV_HF="$(command -v hf)"
-    HF_USER="$(HF_TOKEN="${HF_TOKEN}" "${VENV_HF}" auth whoami 2>/dev/null | head -1 | tr -d '[:space:]')"
-    [[ -n "${HF_USER}" ]] || { echo "error: hf auth whoami failed — token invalid or no network." >&2; exit 1; }
+    HF_USER="$( (HF_TOKEN="${HF_TOKEN}" "${VENV_HF}" auth whoami 2>/dev/null || true) \
+        | sed 's/\x1b\[[0-9;]*m//g' \
+        | grep -E '^\s*user:' \
+        | head -1 \
+        | sed -E 's/^\s*user:\s*//' \
+        | tr -d '[:space:]' || true )"
+    [[ -n "${HF_USER:-}" ]] || { echo "error: hf auth whoami didn't return a username — token invalid or no network." >&2; exit 1; }
+    echo "[pkg] HF user: ${HF_USER}"
     REPO_ID="${HF_USER}/reason-over-search-venvs"
 fi
 

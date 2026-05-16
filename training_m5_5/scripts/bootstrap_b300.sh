@@ -217,7 +217,14 @@ V2_VENV_HF_FILE="${V2_VENV_HF_FILE:-dtensor_policy_worker_v2_sm${DETECTED_CC}.ta
 # Guard against pipefail: `hf auth whoami` may fail (no network / bad token),
 # and with `set -o pipefail` that would kill the script. `|| true` swallows it.
 if [[ -z "${USER_V2_VENV_HF_REPO:-}" && -n "${HF_TOKEN:-}" && -x training_m5_5/nemo_rl/.venv/bin/hf ]]; then
-    HF_USER="$( (HF_TOKEN="${HF_TOKEN}" training_m5_5/nemo_rl/.venv/bin/hf auth whoami 2>/dev/null || true) | head -1 | tr -d '[:space:]' || true )"
+    # `hf auth whoami` prints an ANSI-colored "✓ Logged in" line then "  user: <name>".
+    # Strip ANSI, grep for the user line, extract value.
+    HF_USER="$( (HF_TOKEN="${HF_TOKEN}" training_m5_5/nemo_rl/.venv/bin/hf auth whoami 2>/dev/null || true) \
+        | sed 's/\x1b\[[0-9;]*m//g' \
+        | grep -E '^\s*user:' \
+        | head -1 \
+        | sed -E 's/^\s*user:\s*//' \
+        | tr -d '[:space:]' || true )"
     [[ -n "${HF_USER:-}" ]] && USER_V2_VENV_HF_REPO="${HF_USER}/reason-over-search-venvs"
 fi
 # Final repo to try. Override V2_VENV_HF_REPO to pin a specific repo and
