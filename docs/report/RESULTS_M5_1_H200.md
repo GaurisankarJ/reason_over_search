@@ -1028,6 +1028,175 @@ If we ran the entire epoch on dedicated from cold-start (e.g. for a future seed)
 
 ETA step 311 at 400 s/step from 12:30 UTC 2026-05-16: **~17:00 UTC 2026-05-17 (~28.6 h)**, no further preemption assumed (now guaranteed by the dedicated tier).
 
+## 9.5. F1-reward ceiling: the structural plateau cause + chain-quality reward designs (added 2026-05-16 post-cadence-9)
+
+The cadence 5-9 trajectory (0.202 / 0.224 / 0.202 / 0.221 / 0.228) ran into a plateau in the **0.22-0.24 band** that is structurally bound by the F1-only reward, not by model capability. Documented here so the recipe-search story for the thesis has a precise diagnostic.
+
+### Trace-level evidence
+
+Cadence-9 step 93 idx 10 ("Fox Island / Pan-African Conference") earned reward 1.0 with `<answer> United Kingdom </answer>` matching MuSiQue's gold — but the chain-of-thought is **internally inconsistent**:
+
+| Call | Retrieved | Model's `<think>` between calls |
+|---:|---|---|
+| 1 (`Fox Island country containing it`) | Fox Island Rhode Island (USA), Alaska Fox Islands (USA), Michigan Fox Islands (USA) | *"Good, I found that Fox Island is in Rhode Island, United States of America. The country containing Fox Island is the **United States of America**"* |
+| 2 (`first Pan-African Conference held city`) | London 1900 ✓ | (silent flip) *"Country containing Fox Island: **United Kingdom**"* — no justification, model even notes *"I'm a bit confused"* |
+| 3 (`representative of United Kingdom in London`) | Karen Pierce ✓ | *"Nation of that representative: United Kingdom"* |
+
+Compare cadence-9 step 91 idx 241 ("Aqeel Khan / Kotri railway"), reward 1.0, 3 tool calls, clean chain:
+- Call 1: Aqeel Khan → Karachi ✓ (named retrieval citation)
+- Call 2: Karachi-Kotri railway → April 1858 commenced, opened 13 May 1861 ✓
+- Call 3: verification of same dates → commit
+- Final answer matches gold by chain resolution, not by lucky token alignment.
+
+**Both rollouts return reward 1.0; the optimiser cannot tell them apart.**
+
+### Why this is structural under F1-only reward
+
+| Mechanism | Implication |
+|---|---|
+| `reward = f1(extract_solution(rollout), gold)` (training_m5_1/src/rewards/search_r1.py:113) | Chain quality is invisible to the optimiser |
+| GRPO advantage = per-rollout scalar | Two rollouts in the same group with same scalar reward get same advantage, regardless of how they got there |
+| MuSiQue gold answers are mostly **common entities** (countries, dates, well-known names) | Probability mass on gold-token-alignment is non-trivial even for broken-chain rollouts; the F1 metric cannot disambiguate "right because of chain" from "right because of token-overlap luck" |
+| Phase-1 finding #4 (RESULTS_m0_b.md) predicted this for the partial-credit variant; M5.1 dropped the floor but kept F1-only | The floor was one source of the reward signal collapsing; the lack of chain-grounded credit is another, and it's the one that bites at plateau |
+
+The cadence-9 0.228 / cadence-8 0.221 / cadence-6 0.224 *is* the F1 ceiling. More PPO/GRPO steps on the same reward will produce a noisy slow climb (the 153-rollout planned-multi-hop count keeps rising; the 4-hop+ generalisation works for non-Ghana bridges as of cadence 9) but cannot push the scalar reward past the F1-reward-design ceiling without changing what is being scored.
+
+### Two cheap reward extensions for a future run
+
+Neither is wired into M5.1; documented here as the natural next experiment after M5.1's recipe-stack ablation block, sized to fit in the ≤10 h / 1× A100 budget per run.
+
+#### A. Chain-consistency reward (entity-flip penalty)
+
+**Intuition**: penalise the silent-switch pattern of the Fox Island trace. If the model's intermediate `<think>` blocks contradict each other on the same bridge entity *without an intervening tool_response that justifies the change*, the rollout is reward-hacking.
+
+**Where it plugs in**: `training_m5_1/src/rewards/search_r1.py` — add a new function and modify `compute_search_r1_reward` to return `reward = f1 * (1 - chain_inconsistency_penalty)`.
+
+**Algorithm (cheap version, no external model)**:
+
+```python
+import re
+from collections import Counter
+
+# Pre-compiled patterns
+_THINK_RE = re.compile(r"<think>(.*?)</think>", re.S)
+_TOOL_RE = re.compile(r"<tool_response>(.*?)</tool_response>", re.S)
+_BRIDGE_RE = re.compile(
+    r"(?:country|city|state|nation)\s+(?:is|=|:|containing|of)?\s*[\"']?([A-Z][A-Za-z ]{2,40})[\"']?",
+    re.I,
+)
+
+def chain_inconsistency_penalty(rollout: str) -> float:
+    """0.0 = clean chain, up to 0.5 = silent entity flip detected."""
+    thinks = _THINK_RE.findall(rollout)
+    tools = _TOOL_RE.findall(rollout)
+    if len(thinks) < 2:
+        return 0.0
+    # Extract last named bridge in each <think>
+    bridges = []
+    for t in thinks:
+        cands = _BRIDGE_RE.findall(t)
+        bridges.append(cands[-1].strip() if cands else None)
+    flips = 0
+    for i in range(1, len(bridges)):
+        prev, curr = bridges[i-1], bridges[i]
+        if prev is None or curr is None or prev == curr:
+            continue
+        # Did an intervening tool_response mention `curr`?
+        intervening_tools = tools[i-1:i] if i-1 < len(tools) else []
+        if not any(curr.lower() in tr.lower() for tr in intervening_tools):
+            flips += 1
+    if flips == 0:
+        return 0.0
+    return min(0.5, 0.2 * flips)  # cap so reward stays >= 0.5 * f1
+
+
+def compute_search_r1_reward_v2(solution_str: str, golden_answers) -> dict:
+    base = compute_search_r1_reward(solution_str, golden_answers)
+    penalty = chain_inconsistency_penalty(solution_str)
+    base["chain_inconsistency"] = penalty
+    base["reward"] = base["f1"] * (1.0 - penalty)
+    return base
+```
+
+**What it costs to add**: ~30 lines, no new dependencies, no extra HTTP calls. Reward function is already called per-rollout in the env (env's `step()` invokes `compute_search_r1_reward` when an `<answer>` is detected).
+
+**Sharpening**: replace the regex-based bridge extraction with a small NER call (spaCy `en_core_web_sm` is ~50 MB, would run in the same Ray worker). Per-rollout overhead ~5 ms, negligible vs the 500 s step wall.
+
+**Wiring**: change the import in `training_m5_1/src/environments/search_r1_env.py` line 56-60 from `compute_search_r1_reward` to `compute_search_r1_reward_v2`. Add a unit test that synthesises the Fox Island trace and asserts penalty > 0.
+
+#### B. Retrieval-grounded scoring (answer-from-evidence check)
+
+**Intuition**: a correct answer must appear in at least one retrieved chunk *or* be derivable from one. If the answer tokens are nowhere in the retrieval payload, the model is hallucinating from prior — not doing retrieval-augmented reasoning, which is what the recipe is supposed to teach.
+
+**Where it plugs in**: same `compute_search_r1_reward`, augment with a second factor.
+
+**Algorithm (token-level)**:
+
+```python
+def retrieval_grounded_factor(rollout: str, predicted_answer: str) -> float:
+    """1.0 = answer fully grounded in retrieved chunks; <1.0 = partial; 0.0 = ungrounded."""
+    if not predicted_answer:
+        return 0.0
+    tools = _TOOL_RE.findall(rollout)
+    if not tools:
+        # No retrieval happened; if the model still answered correctly, that's
+        # a *retrieval-bypass* — credit at the baseline factor (0.5 here)
+        return 0.5
+    retrieved_text = " ".join(tools).lower()
+    answer_tokens = normalize_answer(predicted_answer).split()
+    if not answer_tokens:
+        return 0.0
+    grounded = sum(1 for tok in answer_tokens if tok in retrieved_text)
+    return grounded / len(answer_tokens)
+
+
+def compute_search_r1_reward_v3(solution_str: str, golden_answers) -> dict:
+    base = compute_search_r1_reward(solution_str, golden_answers)
+    answer = base["extracted_answer"]
+    grounded = retrieval_grounded_factor(solution_str, answer or "")
+    base["retrieval_grounded"] = grounded
+    # Weighted: full f1 credit only if fully grounded; floor at 0.3 to avoid
+    # crushing the signal when retrieval is partial but the prior carries
+    base["reward"] = base["f1"] * max(0.3, grounded)
+    return base
+```
+
+**What it costs to add**: ~20 lines, no new deps, no extra HTTP. Same hook point as A.
+
+**Sharpening**: instead of plain token overlap, use the FlashRAG retriever's existing similarity scorer to check `answer ∈ chunk` at the embedding level (so paraphrased answers still get credit). Adds one local embedding call per rollout (~50 ms with the `e5-base-v2` retriever already running) — still negligible.
+
+#### A + B composed
+
+A reward of the shape
+
+```python
+reward = base_f1 * (1 - chain_inconsistency_penalty) * max(0.3, retrieval_grounded_factor)
+```
+
+penalises both failure modes simultaneously. For the cadence-9 step 93 Fox Island trace, this yields:
+- `base_f1 = 1.0`
+- `chain_inconsistency_penalty ≈ 0.2` (one silent flip USA → UK)
+- `retrieval_grounded_factor = 1.0` (the answer "United Kingdom" does appear in call-3's Karen Pierce snippet)
+- → `reward ≈ 0.8` instead of `1.0`
+
+For the cadence-9 step 91 Kotri trace:
+- `base_f1 = 1.0`
+- `chain_inconsistency_penalty = 0.0`
+- `retrieval_grounded_factor = 1.0`
+- → `reward = 1.0`
+
+A 0.2 advantage gap between chain-broken and chain-clean rollouts in the same GRPO group is enough to push the policy away from the silent-flip mode without zeroing out partial-credit signal.
+
+#### Predicted effect on the curve
+
+The 0.22-0.24 plateau is **F1-only-reward-bound**. Under composed reward (A+B):
+- Many cadence-5+ rollouts currently at `reward = 1.0` would drop to 0.7-0.9 because their chains are broken (~10-15 % of the perfect-reward population per cadence-9 hand-sampling).
+- The *window mean* might briefly dip in the first 5-10 steps of a fresh run as the policy re-explores under stricter reward.
+- **The asymptote should be higher** because the policy can no longer exploit chain-broken shortcuts. Predicted new ceiling at this model size: 0.27-0.32 (compared to 0.22-0.24 under F1-only).
+- The 4-hop+ generalisation observed in cadence 9 (Nteje → Nigeria) suggests the model *has* the capability; the reward signal just isn't selecting for it strongly enough.
+
+Wiring this into a future seed run is **one ~30-line edit + a unit test + a 50-step smoke**. Both A and B require zero changes to the env, the retriever, or the dataset; only `training_m5_1/src/rewards/search_r1.py` changes. The natural next experiment after the M5.1 stable-ablation block.
+
 ## 10. The four prior losses (recap)
 
 | # | When | Cost | Cause | Mitigation in a4 |
