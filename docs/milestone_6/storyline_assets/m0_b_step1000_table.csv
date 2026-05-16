@@ -1,0 +1,5 @@
+label,step_at_cut,reward_mean,tool_calls,response_length
+p1_basic_w_ex (v0 instruct <search>),1000,0.192902896077709,2.0,2025.0656037026263
+r2_concise (v1 instruct <tool_call>),1000,0.14361553626178308,0.9912790697674418,1057.4796490336573
+base_state_machine_a (v1 base),999,-2.3617869244060975e-05,0.0,90.91190483456566
+base_state_machine_b (v1 base),999,-2.4329430483959603e-05,0.0,116.5226187933059

@@ -3,7 +3,7 @@ title: MILESTONE 6 — Literature review + experiment planning for publication
 tags: [milestone, literature-review, planning, publication, thesis]
 source: internal
 created: 2026-05-11
-updated: 2026-05-11 (Phase-1 salvage + data audit added)
+updated: 2026-05-16 (Phase 1, 2, 3 artifacts frozen; supervisor brief + presentation outline authored)
 ---
 
 # Milestone 6: Literature review and experiment planning for publication
@@ -156,10 +156,14 @@ Estimated effort: 2-3 working days.
 | [`LOG.md`](LOG.md) | Append-only chronological record for M6 | Append-only |
 | [`PHASE_1_SALVAGE.md`](PHASE_1_SALVAGE.md) | Three Phase-1 findings reusable as paper motivation, with file:line citations and the limit of each claim | Authored 2026-05-11; revised if a salvage finding gets new evidence |
 | [`DATA_AUDIT_PHASE_1.md`](DATA_AUDIT_PHASE_1.md) | Deep-dive: what is measured cleanly, what is read-off-heterogeneous-data, what is missing entirely, and what would close each gap | Authored 2026-05-11; revised when the picked pair lands and closes a gap |
-| `LANDSCAPE_TABLE_2026-05.md` | Phase 1 output: frozen 2026 competitive landscape table | Frozen once Phase 1 closes |
-| `CANDIDATE_EXPERIMENTS.md` | Phase 2 output: 3-5 candidate pairs with cost / criterion / risk | Frozen once Phase 2 closes |
-| `PICKED_PAIR.md` | Phase 3 output: the chosen two experiments with defended rationale | Frozen once Phase 3 closes |
-| `PUBLICATION_FRAMING.md` | Phase 3 output: the publication-framing brief | Frozen once Phase 3 closes |
+| [`LITERATURE_GAP_AUDIT_2026-05-16.md`](LITERATURE_GAP_AUDIT_2026-05-16.md) | 2025-11 → 2026-05 papers missing from the frozen 2026-05-04 pass (18 entries; 5 Tier-1, 4 Tier-2, 9 Tier-3) | Authored 2026-05-16 |
+| [`LANDSCAPE_TABLE_2026-05.md`](LANDSCAPE_TABLE_2026-05.md) | Phase 1 output: frozen 2026 competitive landscape table | **Frozen 2026-05-16** |
+| [`CANDIDATE_EXPERIMENTS.md`](CANDIDATE_EXPERIMENTS.md) | Phase 2 output: five candidates filtered to two viable pairs (C+R defensive, C+M ambitious) | **Frozen 2026-05-16** |
+| [`PICKED_PAIR.md`](PICKED_PAIR.md) | Phase 3a output: pick #1 = C frozen, pick #2 user choice pending | **Provisional 2026-05-16** |
+| [`PUBLICATION_FRAMING.md`](PUBLICATION_FRAMING.md) | Phase 3b output: venue probability + 200-word related-work + threats-to-validity (both pair variants drafted) | **Provisional 2026-05-16** (freezes on user pick #2) |
+| [`PRESENTATION_OUTLINE.md`](PRESENTATION_OUTLINE.md) | Terse 17-slide outline for talk + thesis defense | Authored 2026-05-16 |
+| [`STORYLINE.md`](STORYLINE.md) | Running document: the project narrative, fact-checked, with critical NeurIPS assessment + the math example for the F1+0.1 floor + standardised step-1000 plots | Living; authored 2026-05-16 |
+| [`../report/SUPERVISOR_MEETING_2026-05-16_m0_to_6.md`](../report/SUPERVISOR_MEETING_2026-05-16_m0_to_6.md) | M0-to-M6 narrative; successor to the 2026-05-07 brief | Authored 2026-05-16 |
 
 ### Pre-Phase-1 update (2026-05-11)
 
@@ -167,21 +171,20 @@ Following the 2026-05-11 critical review of the Phase-1 record, two Phase-2-anti
 
 ## What's left (task table)
 
-| # | Task | Phase | Owner | Blocked on |
+| # | Task | Phase | Status | Blocked on |
 |---|---|---|---|---|
-| 1 | Create folder + initial three docs (this, `CONVERSATION_CONTEXT.md`, `LOG.md`) | — | — | nothing |
-| 2 | Read Tree-GRPO end-to-end and capture in landscape table | 1 | — | (1) |
-| 3 | Read JustRL end-to-end and capture in landscape table | 1 | — | (1) |
-| 4 | Re-read MC-GRPO with search-tool transfer lens; capture in landscape table | 1 | — | (1) |
-| 5 | Skim Agentic-RL survey 2026-04 update + Awesome-Agentic-Search repo for missed 2026-04/05 entries | 1 | — | (1) |
-| 6 | Freeze [`LANDSCAPE_TABLE_2026-05.md`](LANDSCAPE_TABLE_2026-05.md) | 1 | — | (2)-(5) |
-| 7 | Draft [`CANDIDATE_EXPERIMENTS.md`](CANDIDATE_EXPERIMENTS.md) with cost / criterion / risk per candidate | 2 | — | (6) |
-| 8 | Stress-test candidates against the M5.1 mid-training reward trajectory (W&B `uwbodqgt`) | 2 | — | (7), M5.1 step ≥ 100 |
-| 9 | Freeze [`CANDIDATE_EXPERIMENTS.md`](CANDIDATE_EXPERIMENTS.md) | 2 | — | (8) |
-| 10 | Pick the pair; write [`PICKED_PAIR.md`](PICKED_PAIR.md) | 3 | — | (9) |
-| 11 | Write [`PUBLICATION_FRAMING.md`](PUBLICATION_FRAMING.md) | 3 | — | (9) |
-| 12 | Update [`research/CONVERSATION_CONTEXT.md`](../research/CONVERSATION_CONTEXT.md) §"Active question" and [`report/CONVERSATION_CONTEXT.md`](../report/CONVERSATION_CONTEXT.md) | 3 | — | (10), (11) |
-| 13 | Supervisor meeting brief (extend the 2026-05-07 brief or author 2026-05-1X follow-up) | 3 | — | (12) |
+| 1 | Create folder + initial three docs (this, `CONVERSATION_CONTEXT.md`, `LOG.md`) | — | done 2026-05-11 | — |
+| 2 | Read Tree-GRPO, JustRL, MC-GRPO, Agentic-RL survey, Awesome-Agentic-Search; capture in landscape table | 1 | done 2026-05-16 | — |
+| 3 | Literature gap audit (2025-11 → 2026-05): 18 new papers surfaced | 1 | done 2026-05-16 ([`LITERATURE_GAP_AUDIT_2026-05-16.md`](LITERATURE_GAP_AUDIT_2026-05-16.md)) | — |
+| 4 | Freeze [`LANDSCAPE_TABLE_2026-05.md`](LANDSCAPE_TABLE_2026-05.md) | 1 | done 2026-05-16 | — |
+| 5 | Draft + freeze [`CANDIDATE_EXPERIMENTS.md`](CANDIDATE_EXPERIMENTS.md) | 2 | done 2026-05-16 | — |
+| 6 | Pick the pair; write [`PICKED_PAIR.md`](PICKED_PAIR.md) | 3a | **provisional 2026-05-16** (pick #1 = C frozen; pick #2 user choice pending: R default vs M opt-in) | user decision |
+| 7 | Write [`PUBLICATION_FRAMING.md`](PUBLICATION_FRAMING.md) | 3b | **provisional 2026-05-16** (both variants drafted; freezes on user choice) | (6) |
+| 8 | Write supervisor brief: [`../report/SUPERVISOR_MEETING_2026-05-16_m0_to_6.md`](../report/SUPERVISOR_MEETING_2026-05-16_m0_to_6.md) | 3c | done 2026-05-16 | — |
+| 9 | Write terse presentation outline: [`PRESENTATION_OUTLINE.md`](PRESENTATION_OUTLINE.md) | 3c | done 2026-05-16 | — |
+| 10 | Update [`../research/CONVERSATION_CONTEXT.md`](../research/CONVERSATION_CONTEXT.md) §"Active question" and [`../report/CONVERSATION_CONTEXT.md`](../report/CONVERSATION_CONTEXT.md) | 3 | pending | (6) |
+| 11 | Supervisor meeting itself | 3 | pending | (8)(10) |
+| 12 | Pre-flight smoke runs (EM-only @50 steps; MC-GRPO@100 steps if pick #2 = M) | implementation | pending | M5.1 land + (6) |
 
 ## Pointers
 

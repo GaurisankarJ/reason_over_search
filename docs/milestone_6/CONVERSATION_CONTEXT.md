@@ -3,7 +3,7 @@ title: Conversation Context — Milestone 6 (literature review + experiment plan
 tags: [milestone, m6, conversation-context, snapshot]
 source: internal
 created: 2026-05-11
-updated: 2026-05-11
+updated: 2026-05-16
 ---
 
 # Conversation Context: Milestone 6
@@ -12,7 +12,7 @@ updated: 2026-05-11
 >
 > Sibling snapshots: [`../report/CONVERSATION_CONTEXT.md`](../report/CONVERSATION_CONTEXT.md) (thesis writing), [`../research/CONVERSATION_CONTEXT.md`](../research/CONVERSATION_CONTEXT.md) (frozen 2026-05-04 literature arm + algorithm/systems), [`../training/CONVERSATION_CONTEXT.md`](../training/CONVERSATION_CONTEXT.md) (training pipeline).
 
-**Last updated**: 2026-05-16 (literature gap audit added; framing decisions from 2026-05-11 confirmed)
+**Last updated**: 2026-05-16 (Phase 1, 2, 3 artifacts frozen; supervisor brief + presentation outline authored; one user decision pending on pick #2)
 
 ---
 
@@ -53,6 +53,9 @@ Captured here as the starting point, not as a settled answer. All six rows survi
 | Don't anchor on NeurIPS main as the realistic target | 2026-05-11 | 5-10 % acceptance probability with current plan; Findings / Workshop / ICLR blogpost are honest targets |
 | Candidate C must engage with [arXiv:2602.19526](https://arxiv.org/html/2602.19526v1) before any GPU is rented | 2026-05-16 | Partial scoop of EM-vs-F1 ablation; rewrite as small-model / single-GPU / no-format-reward complementary point |
 | Candidate D rationale (if picked) must engage with [arXiv:2603.27226](https://arxiv.org/html/2603.27226) | 2026-05-16 | Negative-result paper on E2H for deductive reasoning; reframes E2H-for-RAG ablation as "testing whether the critique generalises" |
+| Pick #1 frozen: **Candidate C reward-shape ablation** at the M5.1 recipe | 2026-05-16 | Closes Phase-1 Finding 1's gap; both positive and negative outcomes publishable; rewritten post-audit as small-model / single-GPU / no-format-reward complementary point. See [`PICKED_PAIR.md`](PICKED_PAIR.md) |
+| Pick #2 default: **Candidate R 2-seed prompt-pair replication** (defensive); user opt-in for Candidate M (ambitious) | 2026-05-16 | C + R fits 14-21 d wall-clock and clears the 2026-06-10 cutoff with 3-6 d margin; C + M slips to cutoff. Targets: C + R = ICLR-blogpost / Workshop / Findings; C + M = ICLR / ACL main 15-25 % under positive outcome only |
+| Frame the paper as a **characterisation of the small-rollout regime for search-tool RL at sub-1B**, not as a recipe-stack | 2026-05-16 | Mechanism-named takeaway; turns method-transfer objection into a non-objection (the contribution is the regime, not a new algorithm) |
 
 ## 5. Compute and budget (M6-relevant)
 
@@ -78,10 +81,13 @@ M6 itself uses **no GPU compute**. The constraints on what M6's picked pair can 
 | [`PHASE_1_SALVAGE.md`](PHASE_1_SALVAGE.md) | Authored 2026-05-11; three Phase-1 findings as paper motivation, with file:line cites + limits |
 | [`DATA_AUDIT_PHASE_1.md`](DATA_AUDIT_PHASE_1.md) | Authored 2026-05-11; deep-dive on what is measured cleanly vs what is missing |
 | [`LITERATURE_GAP_AUDIT_2026-05-16.md`](LITERATURE_GAP_AUDIT_2026-05-16.md) | Authored 2026-05-16; 18 papers (2025-11 → 2026-05) missing from the frozen 2026-05-04 pass; 5 Tier-1 (must-engage), 4 Tier-2 (dense-credit cluster), 9 Tier-3 (additive) |
-| `LANDSCAPE_TABLE_2026-05.md` | Phase 1 output; pending — seed list now includes 18 entries from the 2026-05-16 audit |
-| `CANDIDATE_EXPERIMENTS.md` | Phase 2 output; pending — Candidate C rewrite required per 2026-05-16 audit |
-| `PICKED_PAIR.md` | Phase 3 output; pending |
-| `PUBLICATION_FRAMING.md` | Phase 3 output; pending |
+| [`LANDSCAPE_TABLE_2026-05.md`](LANDSCAPE_TABLE_2026-05.md) | **Frozen 2026-05-16**; 25 papers, 3-axis positioning analysis, 200-word related-work paragraph drafted |
+| [`CANDIDATE_EXPERIMENTS.md`](CANDIDATE_EXPERIMENTS.md) | **Frozen 2026-05-16**; five candidates filtered to two viable pairs (C + R defensive, C + M ambitious) |
+| [`PICKED_PAIR.md`](PICKED_PAIR.md) | **Frozen 2026-05-16 except pick #2**; C locked, R is default with user opt-in for M |
+| [`PUBLICATION_FRAMING.md`](PUBLICATION_FRAMING.md) | **Provisional 2026-05-16**; both pair variants drafted; freezes on user pick #2 |
+| [`PRESENTATION_OUTLINE.md`](PRESENTATION_OUTLINE.md) | Authored 2026-05-16; terse 17-slide outline for talk + thesis defense |
+| [`STORYLINE.md`](STORYLINE.md) | **Living** 2026-05-16; the running narrative, fact-checked, with the math example for the F1+0.1 floor + standardised step-1000 plots + critical NeurIPS assessment |
+| [`../report/SUPERVISOR_MEETING_2026-05-16_m0_to_6.md`](../report/SUPERVISOR_MEETING_2026-05-16_m0_to_6.md) | Authored 2026-05-16; M0-to-M6 narrative; successor to the 2026-05-07 brief |
 
 ## 9. Salvage summary (from 2026-05-11 deep dive)
 
