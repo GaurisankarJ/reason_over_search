@@ -1117,6 +1117,87 @@ The cadence-9 step 93 idx 10 Fox Island trace (reward 1.0 via silent flip USA �
 
 The cadence-11 audit (42.7 % flip rate on perfect rollouts) implies **~140 of the 327 planned-rollouts have detectable silent flips**. The Fox Island and World Cup traces in §9.5 are now joined by many similar cases per cadence; under M8.2 composed reward, those 140 rollouts would lose 0.1-0.3 reward each — exactly the within-group advantage gap GRPO needs to push the policy away from the Goodhart mode.
 
+### Cadence 12: steps 111-120 (through 2026-05-16 ~21:50 UTC, host 126 / dedicated $4.70/h)
+
+| Step | Wall (s) | M:S | rew mean | rew > 0 | tool_med | len_med | notes |
+|---:|---:|---:|---:|---:|---:|---:|---|
+| 111 | 452 | 7:32 | 0.255 | 33 % | 3 | 15.3 K | |
+| 112 | 510 | 8:30 | 0.227 | 33 % | 3 | 15.8 K | |
+| **113** | 574 | 9:34 | **0.181** | 29 % | 3 | 17.7 K | **Run-low single step since cadence 10**. Hard-batch draw (48 % flat-zero prompts). |
+| 114 | 526 | 8:46 | 0.251 | 39 % | 3 | 16.1 K | |
+| 115 | 609 | 10:09 | 0.216 | 33 % | **4** | 18.6 K | **First step with tool_med = 4 since cadence 4**. Policy returning to over-search mode. |
+| **116** | 608 | 10:08 | **0.337** | **45 %** | 4 | 18.4 K | Third-highest single-step rew_mean on the run (after step 105 = 0.355 and step 102 = 0.332). |
+| 117 | 646 | 10:46 | 0.221 | 33 % | 4 | 19.5 K | |
+| 118 | 650 | 10:50 | 0.271 | 40 % | 4 | 18.9 K | |
+| 119 | 678 | 11:18 | 0.272 | 36 % | 4 | 19.3 K | |
+| **120** | **803** | **13:23** | 0.241 | 34 % | 4 | **21.2 K** | **Twelfth checkpoint** uploaded to HF. **Slowest step of the entire run** (803 s; vs run median ~470 s). len_med at 21.2 K = ~5.3 K tokens, 65 % of the 8 K-token cap. |
+
+**Cadence 12 vs prior windows**:
+| Window | rew_mean | rew > 0 | step wall | tool_med | len_med | 4-hop+ wins | planned-3-5 | chain-flip rate |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| 81-90 (C9) | 0.228 | 34 % | 484 s | 3 | 14.8 K | 29 | 153 | 18.6 % |
+| 91-100 (C10) | 0.232 | 34 % | 555 s | 3 | 16.1 K | 27 | 249 | 26.1 % |
+| **101-110 (C11)** | **0.280** | **41 %** | 532 s | 3 | 15.8 K | 40 | 327 | 42.7 % |
+| **111-120 (C12)** | **0.247** | **36 %** | **606 s** | **4** (drift) | **18.3 K** | **35** | **344** | **47.4 %** (new run high) |
+| Δ vs 11 | **−12 %** | −5 pp | **+14 % wall** | **+1 call** | **+16 % len** | −13 % | +5 % | **+4.7 pp** |
+| Δ vs 10 | +6 % | +2 pp | +9 % wall | +1 call | +14 % len | +30 % | +38 % | +21.3 pp |
+
+**Trends after cadence 12 — the C11 peak was a noisy high; structural costs growing again**:
+- **Reward reverted to the C10-C11 ridge (0.232 / 0.280 / 0.247)**. The cadence-11 0.280 was partly real climbing (C12 still > C10's 0.232) and partly noise (C12 < C11). Two-cadence smoothed mean = 0.263. The "noisy slow climb" continues but C11's individual peak was over the trend line.
+- **Tool_med jumped 3 → 4 starting at step 115 and held there through step 120.** The policy is **going back to over-search mode** — adding a tool call per question. Cadence 7 had a 5 → 2 drop and reward dropped with it; this is the reverse direction (3 → 4 over-search), and reward is also dropping. The policy is **oscillating around the optimal tool-count plateau** (3) rather than locking on it.
+- **Step wall jumped to 606 s mean** (+14 % over C11). Step 120 = 803 s is the slowest step of the entire run. Combined with len_med 18.3 K (+16 % vs C11), this is **real exploration drift accelerating**, not the wobble it was in C10. If C13 stays at 600+ s, the 1-epoch projection slips from $197 → $230+.
+- **len_med 21.2 K at step 120 = ~5.3 K tokens** = **65 % of the 8 K-token cap**. The cap-binding scenario from cadence 10 is now within ~2 cadences. If len_med crosses 26 K (~6.5 K tokens) sustained, rollouts will start losing their `<answer>` blocks to truncation, and reward will *drop* for that subset rather than rise.
+- **Chain-flip rate 47.4 % — new run high**, up from C11's 42.7 % and C9's 18.6 %. Half the perfect rollouts in cadence 12 have silent entity flips.
+- **Planned-multi-hop count 344 — new run high** (vs C11's 327). The mode keeps consolidating; the over-search is happening on top of the planned shape, not replacing it.
+- **4-hop+ wins dropped to 35** (from C11's 40). Some hard-tail capability lost as the policy reverts to over-search.
+- HF: `step_120/` live at [the primary repo](https://huggingface.co/pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42/tree/main/step_120).
+- Cumulative cost (mixed Spot + Dedicated, ~22.5 h elapsed): ~$64.
+- **Wall-clock projection slipped**: at 606 s/step, ETA step 311 = 191 × 606 s + 22.5 h ≈ 54 h total = step 311 lands **~01:00 UTC May 18** (was ~21:00 UTC May 17 at C11 projection). **Total 1-epoch cost ~$214** (was $197 at C11; was $203 at C10).
+
+#### Mechanical examples (cadence 12)
+
+**BEST** — step 111, sample 21, **reward 1.000**, 5 tool calls, 14.4 K chars
+
+> **Q**: *"Where did the author of Memórias Póstumas die?"*  (Machado de Assis → Rio de Janeiro, 29 September 1908)
+> **Final answer**: `Rio de Janeiro` ✓
+>
+> *Commentary*: Clean 2-hop chain (book → author → death location). 5 calls is over the cadence median; the model spent extras on confirming the role/era ("first president of the Brazilian Academy of Letters... 1897 to 1908, when he died"). Verification mode rather than thrashing.
+
+**WORST** — step 111, sample 0, **reward 0.000**, 5 tool calls, 13.7 K chars
+
+> **Q**: *"What is the debt-to-GDP ratio in the country where Massimo Baistrocchi lived?"*  (Baistrocchi → Italy; gold likely a different year's figure or a different metric)
+> **Final answer**: `70.1%` ✗
+>
+> *Commentary*: Correct bridge (Italy), correct *type* of factual answer (debt-to-GDP ratio), but the F1 scorer didn't credit the specific number. Either the gold expects a different year, or the percentage form ("70 %" vs "70.1 %" vs "1.06 trillion / 1.5 trillion") wasn't tokenisation-matched. **Numeric-precision failure** rather than chain failure.
+
+**MEAN** — step 112, sample 4, **reward 0.250**, 8 tool calls, 32.2 K chars
+
+> **Q**: *"In which municipality of the province where Shelburne dike is located can Kinsac also be found?"*  (Shelburne dike → Nova Scotia; Kinsac → there's a Kinsac in Nova Scotia and the answer involves the Municipality of HRM)
+> **Final answer**: `Municipality of the District of Shelburne` ✗ (the model picked Shelburne instead of HRM despite having retrieval evidence Kinsac is elsewhere)
+> **Last `<think>`**: *"...The municipality in that province is 'Municipality of the District of Shelburne'. Kinsac... can be found in Saskatchewan... Is Saskatchewan in Nova Scotia? No. So there seems to be no overlap here. However, the question might be a trick asking for..."*
+>
+> *Commentary*: **The 32 K-char super-long rollout class**. 8 tool calls, extensive retrieval, model confused about whether Kinsac is in Nova Scotia vs Saskatchewan, eventually committed to Shelburne anyway. F1 0.25 from "Municipality" + "Shelburne" partial overlap with gold. **Confusion + commit + partial token overlap** = mid-band reward with no learning signal about the underlying chain failure.
+
+#### Claude hand-analyses (cadence 12)
+
+1. **The C11 peak was noisy; C12 settles closer to the C10 baseline.** Window means C10/C11/C12 = 0.232 / 0.280 / 0.247. Two-cadence smoothed mean = 0.263 (mid-band between the 0.232 floor and the 0.280 peak). The honest read is **the slow climb continues at +0.003 / cadence** (linear regression on cadences 5-12 = ~+0.005 / cadence with σ ≈ ±0.015), not the +0.022 / cadence the early cadences showed. **Plateau ceiling under F1-only reward looks like 0.25 ± 0.02**, with single-step peaks crossing 0.30 occasionally but not sustainably.
+2. **The tool_med 3 → 4 drift at step 115 is the structural issue this cadence.** Six consecutive steps (115-120) with tool_med = 4 — the longest tool-count drift since cadence 7's 2-call episode. Combined with len_med growing 38 % across the window (15.3 → 21.2 K chars) and step wall growing 34 % (452 → 803 s), the policy is **paying tokens and time without buying reward**. Cadence 11's 0.280 happened at tool_med 3 + len_med 15.8 K; cadence 12 at tool_med 4 + len_med 18.3 K returns 0.247. **The over-search is actively expensive**, and the 47.4 % chain-flip rate suggests the extra calls aren't being used for chain verification — they're producing more rollouts that hit gold tokens through wrong bridges. Worth watching whether C13 sees tool_med revert to 3 (policy correcting itself, same as the C7 → C8 transition) or stays at 4 (new local optimum).
+
+#### Hop-stratified BEST successes (cadence 12)
+
+| Hops | Step | Tools | Answer | Question |
+|---:|---:|---:|---|---|
+| 1 | 112 | 2 | `2.46` | What was the average household size in the city served by WMID? |
+| 2 | 116 | 2 | `Campbell Hill` | What is the highest point in the state where The Tree Bar is located? |
+| 3 | 116 | 2 | `Aaron Mike Oquaye` | Who is the speaker of parliament in the country where Birim South District is located? |
+| 4+ | 111 | 2 | `Italian Republic` | What is the official name of the country having President of the country containing the birth place of Silvio Ceccato? |
+
+**4-hop+ successes: 35** (vs C11's 40). The step-111 Italian Republic case (Silvio Ceccato → Italy → President of Italy → Italy → "Italian Republic") is a 4-hop self-loop resolved cleanly in 2 calls. The Birim South District case is **the fourth distinct Ghana / parliament chain example** (after Bibiani, Akosombo, Jirapa) — same template, different bridge entity. Pattern is durable.
+
+#### Planned-multi-hop reasoning (cadence 12)
+
+**344 rollouts** with explicit numbered plan + reward 1.0 — **new run high** (vs C11's 327, C10's 249). The policy is consolidating the planned shape even as the over-search drift is happening. **Planned mode now accounts for 11 % of every rollout in the cadence.** This is the structural success of M5.1 (the chain-of-thought decomposition pattern emerges and persists). The structural failure of M5.1 is captured by the 47.4 % chain-flip rate among those same 344 rollouts: **~163 of them are planned, reward-1.0, and chain-broken** — Goodhart at scale.
+
 ## 9. Cost / wall-clock estimate
 
 **Two tiers in play across this run**:
