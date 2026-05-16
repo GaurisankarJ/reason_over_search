@@ -491,6 +491,32 @@ Step wall-clock + reward signal (rollouts pulled from `train_data_step*.jsonl`):
 
 We cannot run the controlled comparison. The honest read: **our H200 mb=2 run shows multi-hop chain reasoning emerging by step 6-10** (cadence 1), and the count grows monotonically thereafter. The "by step 15" prior claim looks consistent rather than ahead, once we look at counts not single anecdotes.
 
+#### Planned-multi-hop reasoning (3-5 tool calls with explicit decomposition)
+
+The 1-tool-call multi-hop successes in the hop-stratified table above are mostly the **retrieval-does-the-work** pattern (a single well-aimed search returns chunks that connect the chain). By cadence 4 a second pattern emerges: **explicit-plan multi-tool reasoning**, matching the A100 a2 step-15 *Fantasy Land Tour 2004* example in [`RESULTS_m5.md` §4.2.3](RESULTS_m5.md). 74 such rollouts in steps 30-44.
+
+Worked example — **step 39, sample 158**, reward 1.0, 3 tool calls:
+
+**Q**: *"How many floors are in the Trump Tower in the city where the performer of Come 2 My House was born?"*  →  `<answer> 98 </answer>` ✓
+
+**First `<think>` (planning step, numbered explicitly):**
+> *"I need to first find out where 'Come 2 My House' was performed/born from, then find where Trump Tower is located, and finally determine how many floors Trump Tower has in that city. Let me break this down:*
+> *1. First search to find information about 'Come 2 My House' performer and where they were born*
+> *2. Then find the location of Trump Tower in that city*
+> *3. Finally, determine the number of floors in Trump Tower"*
+
+**Execution:**
+
+| Step | Search query | Returned | Model's reaction |
+|---:|---|---|---|
+| 1 | `Come 2 My House performer birthplace information` | "Come 2 My House is the ninth studio album by American R&B/funk singer **Chaka Khan**" (album info, no birthplace) | "Found Chaka Khan but no birthplace — I need to search more specifically" |
+| 2 | `Chaka Khan city of origin or birth place` | "Chaka Khan was born... in **Chicago, Illinois**" | "Locked Chicago — now I need Trump Tower there" |
+| 3 | `Trump Tower location Chicago Illinois` | "Trump International Hotel and Tower (Chicago)... **98-story structure**" + "Trump Tower [NY]... 58-story" | **Disambiguated**: "Since [Chaka Khan] was born in Chicago, I'll use the 98-story figure from the Chicago location" |
+
+**Why this matters**: this is genuinely the chain-of-search behavior the GRPO recipe is designed to teach — numbered plan → targeted query per hop → entity substitution between hops → ambiguity resolution using chain context → final answer. **The model did the work, then asked retrieval the right questions.** Distinct from the 1-tool-call shallow-retrieval pattern. Both are present in policy by cadence 4; the planned mode handles harder chains where entities aren't obviously co-mentioned (the Trump-Tower-NY vs Chicago disambiguation step is the key tell).
+
+**Significance for the convergence story**: GRPO's group-relative advantage estimator sees a strong signal when (planned, reward=1.0) sibling rollouts coexist with (single-search-failed, reward=0) on the same question, which is happening with increasing frequency. The next several cadences should show this pattern stabilising as the dominant mode for 3-4 hop questions.
+
 ## 9. Cost / wall-clock estimate
 
 **Confirmed rate: $1.95/h** (Spheron ES Spot, 1× H200 SXM5, US Central 1, instance ID `6a072a4e`). Validated 2026-05-15 ~22:30 UTC against dashboard: $12.25 total at 6.28 h elapsed = $1.951/h. (The $15.15/h figure in `HARDWARE_COMPARISON.md` is the 8× cluster tier; not what we're on.)
@@ -558,7 +584,60 @@ So realistic estimate for `max_num_steps: 622` revised down to **~2.6 days wall,
 
 **Cumulative loss across M5.1**: ~$108 + 196 MB + 1 trained checkpoint.
 
-## 11. Pointers
+## 11. How to use this repo (HF-side quickstart)
+
+This HF repo is a live training mirror; each `step_N/` folder is a complete safetensors checkpoint. Latest is the highest step number visible in the file tree.
+
+```python
+# Load a checkpoint for inference
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+REPO = "pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42"
+STEP = "step_40"  # or any step_N/ folder in this repo
+
+# Tokenizer is shared across all checkpoints; the base Qwen3.5-0.8B tokenizer works
+tok = AutoTokenizer.from_pretrained("Qwen/Qwen3.5-0.8B")
+model = AutoModelForCausalLM.from_pretrained(
+    f"{REPO}/{STEP}/policy/weights",  # NeMo-RL consolidates to safetensors here
+    torch_dtype="bfloat16",
+    device_map="auto",
+)
+```
+
+**For agentic evaluation** (replicating the MuSiQue training loop): use the prompt template + tool-call format described in §2 below. The model expects:
+- System prompt with the `search` tool registered (Qwen3.5 XML format: `<tool_call><function=search><parameter=query>...</parameter></function></tool_call>`)
+- User question wrapped: `Use the search tool to look up facts as needed. When you have the answer, write it inside <answer> and </answer>.`
+- A retriever HTTP endpoint that accepts `{query: ...}` and returns top-K Wikipedia chunks (we use Wiki-18 + E5-base-v2; see `local_retriever/README.md` in the source repo).
+
+**Training recipe — what produced these checkpoints**:
+
+| Field | Value |
+|---|---|
+| Base model | [`Qwen/Qwen3.5-0.8B`](https://huggingface.co/Qwen/Qwen3.5-0.8B) (hybrid GatedDeltaNet + attention, 248K vocab) |
+| Dataset | [MuSiQue](https://github.com/StonyBrookNLP/musique) train split, 19,938 multi-hop QA rows |
+| Algorithm | GRPO (Group Relative Policy Optimization) per ReSearch paper recipe |
+| Reward | **F1 score on `<answer>...</answer>` content only** — no format reward (paper's partial-credit floor dropped per Phase-1 finding #4) |
+| Hyperparams | lr=1e-6, kl=0.001, ratio_clip=0.2, max_turns=10 |
+| Batch | `num_prompts_per_step: 64 × num_generations_per_prompt: 5 = 320` rollouts/step |
+| Sequence | `max_total_sequence_length: 8192`, `max_new_tokens: 1024` per turn |
+| Memory | `train_micro_batch_size: 2`, `activation_checkpointing: true`, `gpu_memory_utilization: 0.5` |
+| Engine | vLLM 0.17 + FlashInfer 0.6.4 — **with a load-bearing patch** (next paragraph) |
+| Save freq | every 10 steps |
+
+**Required vLLM patch for Hopper (sm_90, including H200/H100)**: vLLM 0.17 hard-codes a FlashInfer-GDN prefill kernel at `qwen3_next.py:156` that deadlocks at prod batch sizes on Hopper. **Force the native Triton path** before training:
+
+```bash
+sed -i "s/if current_platform.is_cuda() and current_platform.is_device_capability(90):/if False:  # PATCHED/" \
+    $(python -c "import vllm.model_executor.models.qwen3_next as m; print(m.__file__)")
+```
+
+This is mandatory on H200; idempotent on A100/B200 (their compute capability never matched the branch). Full diagnosis in [`docs/spheron/SETUP_SPHERON.md` §9.1 + P12](https://github.com/GaurisankarJ/reason_over_search/blob/experiment_1_h200/docs/spheron/SETUP_SPHERON.md).
+
+**Hardware that produced these checkpoints**: 1× NVIDIA H200 SXM5 (141 GB VRAM, sm_90) on Spheron Spot tier ($1.95/h), Ubuntu 24.04, CUDA 13.0, virtiofs persistent volume (`miletone5`) so the run survives host preemption. The cost-per-step at current pace is ~$0.13. Full setup runbook: [`docs/spheron/SETUP_SPHERON.md`](https://github.com/GaurisankarJ/reason_over_search/blob/experiment_1_h200/docs/spheron/SETUP_SPHERON.md).
+
+**Result analysis**: see §§7.5, 8 (live trajectory + per-cadence BEST/WORST/MEAN + hop-stratified + planned-multi-hop), 9 (cost), 10 (prior-loss recap).
+
+## 12. Pointers
 
 - W&B project: [`reason_over_search_h200`](https://wandb.ai/gaurisankarj1996-leiden-university/reason_over_search_h200)
 - HF Hub: [`pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42`](https://huggingface.co/pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42) (backup repo removed 2026-05-15; volume handles redundancy)
