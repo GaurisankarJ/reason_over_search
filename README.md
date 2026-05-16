@@ -45,6 +45,7 @@ Decision table (refine with the actual answer):
 | GPU shape | Recommended config | Launch script | Setup path |
 |---|---|---|---|
 | 1× B300 SXM6 (275 GB) | M5.5 `m5_5_research_paper_b300.yaml` (micro=4, act-ckpt off) | [training_m5_5/scripts/start_b300.sh](training_m5_5/scripts/start_b300.sh) (or [run.sh --mode prod_b300](training_m5_5/scripts/run.sh)) | [SETUP_INSTANCE.md §10](docs/setup/SETUP_INSTANCE.md#10-variant-verda-b300-fresh-ubuntu-no-docker-image) (Verda bare Ubuntu) |
+| 2× B300 SXM6 (275 GB ×2) | M5.5 `m5_5_research_paper_b300_2xgpu.yaml` (TP=2, custom Qwen3.5 plan) | [start_b300.sh --mode prod_b300_2xgpu](training_m5_5/scripts/start_b300.sh) | same as 1× B300 — bootstrap is identical |
 | 1× B200 (192 GB) | M5.1 `m5_1_research_paper.yaml` (micro=2, act-ckpt on) | [training_m5_1/scripts/run.sh](training_m5_1/scripts/run.sh) | [SETUP_INSTANCE.md §1–§9](docs/setup/SETUP_INSTANCE.md) (RunPod with `/workspace`) |
 | 1× H200 (141 GB) | M5.1 `m5_1_research_paper.yaml` | [training_m5_1/scripts/run.sh](training_m5_1/scripts/run.sh) | [SETUP_INSTANCE.md §1–§9](docs/setup/SETUP_INSTANCE.md) |
 | 1× H100 / A100 (80 GB) | M5.1 `m5_1_research_paper.yaml` | [training_m5_1/scripts/run.sh](training_m5_1/scripts/run.sh) | [SETUP_INSTANCE.md §1–§9](docs/setup/SETUP_INSTANCE.md) |

@@ -576,18 +576,31 @@ Tighten with smoke first: `bash training_m5_5/scripts/run.sh --mode smoke` runs
 50 steps at the small shape (~20 traj/step) and confirms the loop end-to-end
 before committing the 4-day prod run.
 
-### 10h. 2× B300 — open question
+### 10h. 2× B300 (TP=2) — `prod_b300_2xgpu`
 
-The Verda box has two B300s but the `prod_b300` config is single-GPU
-(`cluster.gpus_per_node: 1`). To use both, you'd want either:
+For boxes with two B300s (the standard Verda B300 SKU), there's now a TP=2
+variant ([`m5_5_research_paper_b300_2xgpu.yaml`](../../training_m5_5/configs/m5_5_research_paper_b300_2xgpu.yaml))
+that uses both GPUs:
 
-- a `prod_b300_2xgpu` config with `tensor_parallel_size: 2` and the
-  `custom_parallel_plan` from `training_m5_5/src/parallel_plan_qwen35.py`
-  (mirror what `m5_5_research_paper_2xa100.yaml` does for 2× A100), or
-- run two independent seeds in parallel (one per GPU), which doubles statistical
-  power for the M5.5 ablation at the same wall-clock.
+```bash
+bash training_m5_5/scripts/start_b300.sh --mode prod_b300_2xgpu
+```
 
-Neither is shipped yet; pick one based on whether you want speed or seeds.
+The launcher refuses if only one GPU is visible, and warns (without
+blocking) if you launch the 1× config on a 2-GPU box. Differences from
+the 1× config: `cluster.gpus_per_node: 2`,
+`policy.dtensor_cfg.tensor_parallel_size: 2` with the
+`training_m5_5.src.parallel_plan_qwen35.custom_parallel_plan` (Qwen3.5
+vocab-parallel FSDP bug workaround, identical hook used by 2× A100), and
+`policy.generation.vllm_cfg.tensor_parallel_size: 2`.
+
+Expected speedup vs 1× B300: ~1.7× per step (TP=2 cuts training/logprobs
+phases ~1.7× and rollout ~1.8×, with ~15% all-reduce overhead). Full-run
+projection: ~52 h ≈ 2.2 d, vs ~3.8 d on 1× B300.
+
+Alternative use of the second GPU: run two independent seeds in parallel
+(one per GPU) — doubles statistical power for the M5.5 ablation at the
+same wall-clock. Pick based on whether you want speed or seeds.
 
 ---
 

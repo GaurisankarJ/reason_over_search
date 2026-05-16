@@ -3,17 +3,20 @@
 # (F1 + 0.1 partial-credit floor + format-gate reward — see
 #  training_m5_5/src/rewards/search_r1.py and docs/milestone_5/MILESTONE_5_5.md.)
 #
-# Five modes supported, selected via --mode:
-#   --mode smoke         → configs/m5_smoke.yaml             (20 traj/step × 50 steps;
-#                                                             validates loop end-to-end)
-#   --mode smoke_2xa100  → configs/m5_smoke_2xa100.yaml      (2x A100 smoke variant)
-#   --mode prod          → configs/m5_5_research_paper.yaml  (full ReSearch recipe
-#                                                             with M5.5 F1+format reward;
-#                                                             1× A100-80GB shape)
-#   --mode prod_2xa100   → configs/m5_5_research_paper_2xa100.yaml (2x A100 production)
-#   --mode prod_b300     → configs/m5_5_research_paper_b300.yaml   (1× B300 288GB:
-#                                                                   micro=4, gpu_mem=0.85,
-#                                                                   act-ckpt off)
+# Six modes supported, selected via --mode:
+#   --mode smoke           → configs/m5_smoke.yaml             (20 traj/step × 50 steps;
+#                                                               validates loop end-to-end)
+#   --mode smoke_2xa100    → configs/m5_smoke_2xa100.yaml      (2x A100 smoke variant)
+#   --mode prod            → configs/m5_5_research_paper.yaml  (full ReSearch recipe
+#                                                               with M5.5 F1+format reward;
+#                                                               1× A100-80GB shape)
+#   --mode prod_2xa100     → configs/m5_5_research_paper_2xa100.yaml (2x A100 production)
+#   --mode prod_b300       → configs/m5_5_research_paper_b300.yaml   (1× B300 288GB:
+#                                                                     micro=4, gpu_mem=0.85,
+#                                                                     act-ckpt off)
+#   --mode prod_b300_2xgpu → configs/m5_5_research_paper_b300_2xgpu.yaml
+#                                                                   (2× B300 TP=2 with
+#                                                                    Qwen3.5 custom plan)
 #
 # Common knobs:
 #   --seed N      → GRPO seed (RNG; defaults to 42)
@@ -52,13 +55,14 @@ while [[ $# -gt 0 ]]; do
 done
 
 case "$MODE" in
-    smoke)         CONFIG="training_m5_5/configs/m5_smoke.yaml" ;;
-    smoke_2xa100)  CONFIG="training_m5_5/configs/m5_smoke_2xa100.yaml" ;;
-    prod)          CONFIG="training_m5_5/configs/m5_5_research_paper.yaml" ;;
-    prod_2xa100)   CONFIG="training_m5_5/configs/m5_5_research_paper_2xa100.yaml" ;;
-    prod_b300)     CONFIG="training_m5_5/configs/m5_5_research_paper_b300.yaml" ;;
-    "")            echo "error: --mode is required (smoke|smoke_2xa100|prod|prod_2xa100|prod_b300)" >&2; exit 2 ;;
-    *)             echo "error: --mode must be smoke|smoke_2xa100|prod|prod_2xa100|prod_b300 (got: $MODE)" >&2; exit 2 ;;
+    smoke)            CONFIG="training_m5_5/configs/m5_smoke.yaml" ;;
+    smoke_2xa100)     CONFIG="training_m5_5/configs/m5_smoke_2xa100.yaml" ;;
+    prod)             CONFIG="training_m5_5/configs/m5_5_research_paper.yaml" ;;
+    prod_2xa100)      CONFIG="training_m5_5/configs/m5_5_research_paper_2xa100.yaml" ;;
+    prod_b300)        CONFIG="training_m5_5/configs/m5_5_research_paper_b300.yaml" ;;
+    prod_b300_2xgpu)  CONFIG="training_m5_5/configs/m5_5_research_paper_b300_2xgpu.yaml" ;;
+    "")               echo "error: --mode is required (smoke|smoke_2xa100|prod|prod_2xa100|prod_b300|prod_b300_2xgpu)" >&2; exit 2 ;;
+    *)                echo "error: --mode must be smoke|smoke_2xa100|prod|prod_2xa100|prod_b300|prod_b300_2xgpu (got: $MODE)" >&2; exit 2 ;;
 esac
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -67,9 +71,10 @@ cd "${REPO_ROOT}"
 
 if [[ ! -f "${CONFIG}" ]]; then
     echo "error: config not found at ${CONFIG}" >&2
-    if [[ "$MODE" == "prod" || "$MODE" == "prod_2xa100" || "$MODE" == "prod_b300" ]]; then
-        echo "       (m5_5_research_paper*.yaml; see docs/milestone_5/MILESTONE_5_5.md)" >&2
-    fi
+    case "$MODE" in
+        prod|prod_2xa100|prod_b300|prod_b300_2xgpu)
+            echo "       (m5_5_research_paper*.yaml; see docs/milestone_5/MILESTONE_5_5.md)" >&2 ;;
+    esac
     exit 1
 fi
 

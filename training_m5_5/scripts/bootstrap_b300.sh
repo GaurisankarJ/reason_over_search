@@ -20,6 +20,8 @@
 #   MAX_JOBS           parallel compile jobs. Default 32 (60 vCPU on Verda).
 #   SKIP_QWEN_CACHE    skip pre-downloading Qwen3.5-0.8B (default: no).
 #   HF_TOKEN           if set, used for HF downloads (faster, higher rate limit).
+#                      Auto-loaded from training_m5_5/.env if present. Used for
+#                      both step 7 (V2 venv tarball) and step 8 (Qwen weights).
 #
 # Idempotency: skips steps whose outcome already holds. Safe to re-run.
 
@@ -28,6 +30,16 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 cd "${REPO_ROOT}"
+
+# Load secrets early so HF_TOKEN is available to both step 7 (V2 venv tarball)
+# and step 8 (Qwen weight cache). training_m5_5/.env is gitignored.
+ENV_FILE="${REPO_ROOT}/training_m5_5/.env"
+if [[ -f "${ENV_FILE}" ]]; then
+    set -a
+    # shellcheck disable=SC1090
+    source "${ENV_FILE}"
+    set +a
+fi
 
 # -----------------------------------------------------------------------------
 NVTE_CUDA_ARCHS="${NVTE_CUDA_ARCHS:-90;120}"
@@ -197,13 +209,19 @@ elif [[ "${V2_BUILD_FROM_SOURCE:-0}" == "1" ]]; then
     build_from_source
 else
     info "attempting fast-path: tarball from HF ${V2_VENV_HF_REPO}:${V2_VENV_HF_FILE}"
+    if [[ -n "${HF_TOKEN:-}" ]]; then
+        info "  (authenticated via HF_TOKEN from .env)"
+    else
+        warn "  no HF_TOKEN in env — anonymous download (may rate-limit on large tarball)"
+    fi
     rm -rf "${V2_VENV}"
     mkdir -p "$(dirname "${V2_VENV}")"
     TARBALL_DIR="$(mktemp -d)"
     VENV_HF="${REPO_ROOT}/training_m5_5/nemo_rl/.venv/bin/hf"
     # Use parent venv's hf CLI if available, else fall back to uv tool's hf
     [[ -x "${VENV_HF}" ]] || VENV_HF="$(command -v hf)"
-    if HF_HUB_ENABLE_HF_TRANSFER=1 "${VENV_HF}" download "${V2_VENV_HF_REPO}" "${V2_VENV_HF_FILE}" \
+    if HF_HUB_ENABLE_HF_TRANSFER=1 HF_TOKEN="${HF_TOKEN:-}" \
+            "${VENV_HF}" download "${V2_VENV_HF_REPO}" "${V2_VENV_HF_FILE}" \
             --repo-type dataset --local-dir "${TARBALL_DIR}" 2>&1 | tail -3; then
         info "extracting (~2 min, ~5 GB → ~10 GB on disk)"
         tar -xzf "${TARBALL_DIR}/${V2_VENV_HF_FILE}" -C "$(dirname "${V2_VENV}")"
@@ -233,26 +251,30 @@ if [[ -z "${SKIP_QWEN_CACHE}" ]]; then
     if [[ -n "${QWEN_SAFETENSORS}" && -s "${QWEN_SAFETENSORS}" ]]; then
         ok "Qwen3.5-0.8B already cached at ${QWEN_SAFETENSORS}"
     else
-        info "downloading Qwen3.5-0.8B (default: anonymous HF Hub)"
+        if [[ -n "${HF_TOKEN:-}" ]]; then
+            info "downloading Qwen3.5-0.8B (authenticated via HF_TOKEN from .env)"
+        else
+            info "downloading Qwen3.5-0.8B (anonymous — may rate-limit)"
+        fi
         # Prefer the parent venv's hf CLI; install if missing
         VENV_PY="${REPO_ROOT}/training_m5_5/nemo_rl/.venv/bin/python"
         "${VENV_PY}" -m pip install -q --upgrade "huggingface_hub[hf_xet]" hf_transfer 2>/dev/null || true
         VENV_HF="${REPO_ROOT}/training_m5_5/nemo_rl/.venv/bin/hf"
 
         try_download() {
-            HF_HUB_ENABLE_HF_TRANSFER=1 \
+            HF_HUB_ENABLE_HF_TRANSFER=1 HF_TOKEN="${HF_TOKEN:-}" \
                 "${VENV_HF}" download Qwen/Qwen3.5-0.8B 2>&1 | tail -5
         }
 
         if ! try_download; then
-            warn "anonymous HF download failed (rate-limit or transient error)"
+            warn "HF download failed (rate-limit, expired token, or transient error)"
             if interactive; then
-                printf '\nPaste an HF_TOKEN to retry authenticated, or press Enter to abort: '
+                printf '\nPaste an HF_TOKEN to retry, or press Enter to abort: '
                 read -r USER_HF_TOKEN
                 if [[ -n "${USER_HF_TOKEN}" ]]; then
                     info "retrying with provided HF_TOKEN"
                     if HF_TOKEN="${USER_HF_TOKEN}" try_download; then
-                        # persist for future launches
+                        # persist for future launches if not already saved
                         if ! grep -q '^HF_TOKEN=' "${REPO_ROOT}/training_m5_5/.env" 2>/dev/null; then
                             echo "HF_TOKEN=${USER_HF_TOKEN}" >> "${REPO_ROOT}/training_m5_5/.env"
                             chmod 600 "${REPO_ROOT}/training_m5_5/.env"
@@ -262,10 +284,10 @@ if [[ -z "${SKIP_QWEN_CACHE}" ]]; then
                         fail "authenticated HF download also failed — check token / network"
                     fi
                 else
-                    fail "no token provided; aborting. Re-run with HF_TOKEN=<…> or SKIP_QWEN_CACHE=1."
+                    fail "no token provided; aborting. Re-run with HF_TOKEN=<…> in training_m5_5/.env, or SKIP_QWEN_CACHE=1."
                 fi
             else
-                fail "non-interactive shell and anonymous HF failed. Re-run with HF_TOKEN=<…> set, or SKIP_QWEN_CACHE=1 to defer (vLLM will retry at launch)."
+                fail "non-interactive shell and HF download failed. Set HF_TOKEN in training_m5_5/.env (re-run will source it) or SKIP_QWEN_CACHE=1 to defer to vLLM."
             fi
         fi
     fi

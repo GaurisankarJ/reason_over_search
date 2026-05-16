@@ -8,10 +8,11 @@
 # tmux so the SSH session can drop without killing it.
 #
 # Usage (from /root/reason_over_search):
-#   bash training_m5_5/scripts/start_b300.sh                  # seed 42
-#   bash training_m5_5/scripts/start_b300.sh --seed 7
-#   bash training_m5_5/scripts/start_b300.sh --dry-run        # check pre-flight only
-#   bash training_m5_5/scripts/start_b300.sh --mode smoke     # run the smoke config instead
+#   bash training_m5_5/scripts/start_b300.sh                       # 1× B300, seed 42
+#   bash training_m5_5/scripts/start_b300.sh --seed 7              # different seed
+#   bash training_m5_5/scripts/start_b300.sh --dry-run             # check pre-flight only
+#   bash training_m5_5/scripts/start_b300.sh --mode smoke          # smoke config
+#   bash training_m5_5/scripts/start_b300.sh --mode prod_b300_2xgpu  # 2× B300 TP=2
 #
 # What it does, in order:
 #   1. Pre-flight (fail loud if anything is missing):
@@ -148,10 +149,19 @@ if ! command -v nvidia-smi >/dev/null 2>&1; then
     fail "nvidia-smi not found. Are we on a GPU host?"
 fi
 GPU_LINE="$(nvidia-smi --query-gpu=name,memory.total --format=csv,noheader | head -1)"
+GPU_COUNT="$(nvidia-smi --query-gpu=name --format=csv,noheader | wc -l | tr -d ' ')"
 if [[ "${GPU_LINE}" != *B300* && "${GPU_LINE}" != *B200* ]]; then
     warn "GPU is not B300 (got: ${GPU_LINE}). Continuing anyway."
 else
-    ok   "gpu:            ${GPU_LINE}"
+    ok   "gpu:            ${GPU_COUNT}× ${GPU_LINE}"
+fi
+
+# Mode↔GPU-count sanity check
+if [[ "${MODE}" == "prod_b300_2xgpu" && "${GPU_COUNT}" -lt 2 ]]; then
+    fail "--mode prod_b300_2xgpu requires 2 GPUs but only ${GPU_COUNT} visible. Use --mode prod_b300 for 1 GPU, or check CUDA_VISIBLE_DEVICES."
+fi
+if [[ "${MODE}" == "prod_b300" && "${GPU_COUNT}" -ge 2 ]]; then
+    warn "${GPU_COUNT} GPUs visible but --mode prod_b300 only uses GPU 0. For both, re-run with --mode prod_b300_2xgpu (~1.7× speedup)."
 fi
 
 # tmux for backgrounding
