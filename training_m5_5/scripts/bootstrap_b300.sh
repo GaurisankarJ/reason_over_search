@@ -48,17 +48,29 @@ fi
 # Returns one of: 70 (V100), 75 (T4), 80 (A100), 86 (3090), 89 (4090/L40S),
 # 90 (H100/H200), 100 (B100/B200), 120 (B300/Blackwell-Ultra). Multi-GPU box:
 # uses GPU 0's arch.
-DETECTED_CC="$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -1 | tr -d '. ')"
+# Guard against pipefail if nvidia-smi is missing or errors:
+DETECTED_CC=""
+if command -v nvidia-smi >/dev/null 2>&1; then
+    DETECTED_CC="$(nvidia-smi --query-gpu=compute_cap --format=csv,noheader 2>/dev/null | head -1 | tr -d '. ' || true)"
+fi
 
-# Pick a sensible NVTE_CUDA_ARCHS default. TE's CMakeLists strips 100/110/120
-# into NVTE_SPECIFIC_ARCHS and leaves CMAKE_CUDA_ARCHITECTURES empty if that
-# was the only entry — so for B300 we must pair "120" with a "stable" arch.
-# For other GPUs the detected arch alone works.
+# Pick a sensible NVTE_CUDA_ARCHS default.
+#
+# TE's CMakeLists is family-aware: passing "100" makes it build for sm_100a +
+# sm_103a (Blackwell + Blackwell-Ultra) via NVTE_SPECIFIC_ARCHS. Passing
+# "103" directly fails because cutlass's static_assert refuses generic sm_103
+# without the arch-specific suffix — and CMAKE_CUDA_ARCHITECTURES can't
+# express "103a" anyway (only TE's internal NVTE_SPECIFIC_ARCHS does).
+#
+# So: for ANY Blackwell SM (100=B100/B200, 103=B300, 120=consumer Blackwell),
+# pass "100" to trigger TE's family expansion. Pair with a stable arch
+# (Hopper 90) because TE strips 100/120 from CMAKE_CUDA_ARCHITECTURES into
+# NVTE_SPECIFIC_ARCHS — leaving CMAKE_CUDA_ARCHITECTURES empty without a pair.
 if [[ -z "${NVTE_CUDA_ARCHS:-}" ]]; then
     case "${DETECTED_CC}" in
-        100|120)   NVTE_CUDA_ARCHS="90;${DETECTED_CC}" ;;   # B200/B300: pair with Hopper
+        100|103|120) NVTE_CUDA_ARCHS="90;100" ;;   # Blackwell family — TE adds 100a + 103a
         70|75|80|86|89|90) NVTE_CUDA_ARCHS="${DETECTED_CC}" ;;
-        "")        NVTE_CUDA_ARCHS="90;120" ;;  # no GPU detected; default to B300 expectation
+        "")        NVTE_CUDA_ARCHS="90;100" ;;  # no GPU detected; default to Blackwell
         *)         NVTE_CUDA_ARCHS="${DETECTED_CC}" ;;
     esac
 fi
@@ -137,9 +149,16 @@ ok "uv $(uv --version | awk '{print $2}') visible system-wide"
 # ============================================================
 info "step 5/9 — cmake 4.x (Ubuntu 24.04 ships 3.28; sm_120 needs 3.31+)"
 # ============================================================
-CMAKE_VER="$(cmake --version 2>/dev/null | head -1 | awk '{print $3}' | cut -d. -f1)"
-if [[ "${CMAKE_VER:-0}" -lt 4 ]]; then
-    info "installing cmake 4.x via uv tool"
+# Guard against pipefail: when cmake doesn't exist, `cmake --version 2>/dev/null`
+# exits 127 and with `set -o pipefail` the whole pipeline returns non-zero,
+# which `set -e` then treats as a fatal error. Branch on existence explicitly.
+if command -v cmake >/dev/null 2>&1; then
+    CMAKE_VER="$(cmake --version | head -1 | awk '{print $3}' | cut -d. -f1)"
+else
+    CMAKE_VER=0
+fi
+if [[ "${CMAKE_VER}" -lt 4 ]]; then
+    info "installing cmake 4.x via uv tool (current: ${CMAKE_VER})"
     # Don't redirect to /dev/null — errors here cause silent script death
     # (e.g. transient PyPI hiccup). Show last 5 lines on either path.
     if ! uv tool install --force cmake 2>&1 | tail -5; then
@@ -195,9 +214,11 @@ V2_VENV="${REPO_ROOT}/training/nemo_rl/venvs/nemo_rl.models.policy.workers.dtens
 # tarball, then to source compile.
 V2_VENV_HF_FILE="${V2_VENV_HF_FILE:-dtensor_policy_worker_v2_sm${DETECTED_CC}.tar.gz}"
 # Resolve USER_V2_VENV_HF_REPO from HF_TOKEN's whoami if not set explicitly.
+# Guard against pipefail: `hf auth whoami` may fail (no network / bad token),
+# and with `set -o pipefail` that would kill the script. `|| true` swallows it.
 if [[ -z "${USER_V2_VENV_HF_REPO:-}" && -n "${HF_TOKEN:-}" && -x training_m5_5/nemo_rl/.venv/bin/hf ]]; then
-    HF_USER="$(HF_TOKEN="${HF_TOKEN}" training_m5_5/nemo_rl/.venv/bin/hf auth whoami 2>/dev/null | head -1 | tr -d '[:space:]')"
-    [[ -n "${HF_USER}" ]] && USER_V2_VENV_HF_REPO="${HF_USER}/reason-over-search-venvs"
+    HF_USER="$( (HF_TOKEN="${HF_TOKEN}" training_m5_5/nemo_rl/.venv/bin/hf auth whoami 2>/dev/null || true) | head -1 | tr -d '[:space:]' || true )"
+    [[ -n "${HF_USER:-}" ]] && USER_V2_VENV_HF_REPO="${HF_USER}/reason-over-search-venvs"
 fi
 # Final repo to try. Override V2_VENV_HF_REPO to pin a specific repo and
 # skip the user-repo lookup entirely.
@@ -321,7 +342,7 @@ info "step 8/9 — Qwen3.5-0.8B weights in HF cache (avoid slow anonymous downlo
 # ============================================================
 if [[ -z "${SKIP_QWEN_CACHE}" ]]; then
     QWEN_CACHE="$HOME/.cache/huggingface/hub/models--Qwen--Qwen3.5-0.8B"
-    QWEN_SAFETENSORS="$(find "$QWEN_CACHE/snapshots" -name 'model.safetensors*' 2>/dev/null | head -1)"
+    QWEN_SAFETENSORS="$(find "$QWEN_CACHE/snapshots" -name 'model.safetensors*' 2>/dev/null | head -1 || true)"
     if [[ -n "${QWEN_SAFETENSORS}" && -s "${QWEN_SAFETENSORS}" ]]; then
         ok "Qwen3.5-0.8B already cached at ${QWEN_SAFETENSORS}"
     else
