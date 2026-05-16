@@ -156,9 +156,17 @@ The script auto-detects HF username via `hf auth whoami`, sanity-checks the venv
 
 ## §6. Verifying / watching the chain
 
+`start_b300.sh` auto-launches three background log streams. Tail them in three separate panes for a full picture during a multi-day run:
+
 ```bash
-# Live status
+# 1. Training stdout (W&B URL, step counters, errors)
 tail -f /root/logs/m5_5_chain_seed42_*.log
+
+# 2. Resource watcher (RAM/disk/GPU/retriever liveness every 30 s)
+tail -f /root/logs/m5_5_resources_seed42_*.log
+
+# 3. Trace digest (auto-runs every 10 steps — see §6.1 below)
+tail -f /root/logs/m5_5_traces_seed42_*.log
 
 # Interactive tmux
 tmux attach -t train      # Ctrl-b d to detach
@@ -169,6 +177,56 @@ tmux kill-session -t train
 
 # W&B URL surfaces in chain log after vLLM warmup (~2 min into prod phase)
 ```
+
+### §6.1 Trace digest — auto-check every 10 steps (REQUIRED for unattended runs)
+
+[`watch_resources.sh`](scripts/watch_resources.sh) auto-invokes [`check_trace.py`](scripts/check_trace.py) on every 10th step landed (10, 20, 30 …). It analyzes the most recent rollout JSONL and emits a ~20-line digest:
+
+```
+========================================================================
+  step 60  n=320  (train_data_step60.jsonl)
+========================================================================
+  reward         mean=0.2055  std=0.2135
+  distribution   broken=  0%  floor= 74%  partial= 22%  perfect=  4%
+  tool usage     ≥1_call=  0%  mean_calls/rollout=0.00
+  retriever      tool_responses=0  errors=0 (0%)
+  generation     mean_tokens=561  generic_country_answers=  3%
+
+  🚩 RED FLAGS:
+     • TOOL_COLLAPSE: only 0% of rollouts call search (threshold ≥50%) — model abandoning retrieval
+     • FLOOR_DOMINANCE: 74% of rollouts at exact 0.1 floor — GRPO advantage signal compressed
+```
+
+If any red flag fires, the watcher also emits a `WARN` line into the resource log so it's visible without scrolling through the trace log.
+
+**Why this is required**: the B300 run on 2026-05-16 silently trained for 107 steps with a dead retriever (`Errno 111 Connection refused` on every `<tool_response>`). The model learned a zero-tool policy and we only caught it in post-mortem ([RESULTS_M5_5_B300_seed42.md](../docs/report/RESULTS_M5_5_B300_seed42.md)). The auto-check would have raised `TOOL_COLLAPSE` + `RETRIEVER_BROKEN` flags by step 20, when intervention is still cheap.
+
+Red-flag thresholds in [`check_trace.py`](scripts/check_trace.py):
+
+| Flag | Threshold | What it means |
+|---|---|---|
+| `TOOL_COLLAPSE` | <50% rollouts call search | Model unlearned tool use. Most often a broken retriever, occasionally reward hacking. |
+| `RETRIEVER_BROKEN` | >10% tool_responses are connection errors | FAISS workers dead. Check `dmesg \| grep -i killed`, drop `num_retriever`. |
+| `FLOOR_DOMINANCE` | >90% rollouts at exact 0.1 | GRPO advantage compressed — group-baseline is the floor. Compare with M5.1. |
+| `GEN_DEGENERATE` | mean gen <100 tokens | Model outputting padding / collapsing. |
+| `GENERIC_ANSWERS` | >20% answers are "United States"-style country guesses | Reward-hacking by short-answer guessing. |
+
+### §6.2 Ad-hoc trace check
+
+You can also run the digest manually at any time:
+
+```bash
+# Latest step
+python training_m5_5/scripts/check_trace.py
+
+# Specific step
+python training_m5_5/scripts/check_trace.py --step 50
+
+# Just the digest (no rollout samples — useful for grep-able cron logs)
+python training_m5_5/scripts/check_trace.py --no-samples
+```
+
+Exit codes: `0` = healthy, `1` = ≥1 red flag, `2` = couldn't read rollouts.
 
 Expected timings on B300:
 - Bootstrap (cold): ~30-45 min

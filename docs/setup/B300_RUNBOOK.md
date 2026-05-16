@@ -353,6 +353,32 @@ The remaining slow tail is dominated by a handful of large TE kernels (`cast_tra
 - **Anonymous HF Hub during a long run** can hit rate limits if vLLM re-downloads metadata. Set `HF_TOKEN` in `.env` to avoid.
 - **Disk pressure during V2 build**: peak ~150 GB of 193 GB used. If you're squeezed, delete `/usr/local/cuda-13.0` (~5 GB freed) after the toolkit swap and prune `/root/.cache/uv` between attempts.
 
+## Check the rollouts every 10 steps (REQUIRED for unattended runs)
+
+The 2026-05-16 B300 run silently trained for 107 steps with a dead retriever: every `<tool_response>` was `Errno 111 Connection refused`, and the model learned a zero-tool policy. The launcher's `/health` probe didn't catch this because FastAPI stayed up while the FAISS workers were OOM-killed. We only discovered the failure in a post-mortem.
+
+The fix in [`watch_resources.sh`](../../training_m5_5/scripts/watch_resources.sh) auto-runs [`check_trace.py`](../../training_m5_5/scripts/check_trace.py) on every 10th rollout step landed. The digest catches:
+
+- **Tool-call collapse** — `<50%` of rollouts call search means the model is abandoning retrieval
+- **Retriever broken** — `>10%` of `<tool_response>` tags are connection errors
+- **Floor dominance** — `>90%` of rollouts at exact `reward=0.1` (signal-compression by the 3-tier shape)
+- **Degenerate generation** — mean gen tokens below 100 (model outputting padding)
+- **Generic-answer guessing** — `>20%` of answers are short country names (reward-hacking)
+
+Output lands in `/root/logs/m5_5_traces_seed*.log`; red flags also raise a `WARN` line in the resource log so they're visible without scrolling.
+
+Manual invocation any time:
+
+```bash
+python training_m5_5/scripts/check_trace.py            # latest step
+python training_m5_5/scripts/check_trace.py --step 50  # specific step
+python training_m5_5/scripts/check_trace.py --no-samples  # digest only
+```
+
+Exit `0` if healthy, `1` if any flag tripped, `2` if rollouts unreadable. Full doc + thresholds: [training_m5_5/README.md §6.1](../../training_m5_5/README.md).
+
+**Rule of thumb**: scan the trace log at least every 100 steps on a multi-day run, or every 10 steps if you've changed config / hardware. The 5-minute cost of a quick scan saves the multi-day cost of a poisoned policy.
+
 ## Build artifacts that should NOT be re-created on a re-launch
 
 These are cached on disk and reused unless explicitly cleaned. Don't `rm -rf` them just to "start fresh" — you'll pay the cost again.

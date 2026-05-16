@@ -37,18 +37,24 @@ RAM_CRIT_GB=10
 DISK_WARN_GB=15
 DISK_CRIT_GB=5
 RETRIEVER_URL="http://127.0.0.1:3005"
+TRACE_EVERY_N_STEPS=10           # auto-analyze rollouts every N steps
+ROLLOUT_DIR=""                   # auto-detect /root/reason_over_search/logs/exp_*
 TS="$(date -u +%Y%m%dT%H%MZ)"
 LOG="/root/logs/m5_5_resources_${TS}.log"
+TRACE_LOG="/root/logs/m5_5_traces_${TS}.log"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --log) LOG="$2"; shift 2 ;;
+        --trace-log) TRACE_LOG="$2"; shift 2 ;;
         --poll) POLL_S="$2"; shift 2 ;;
         --ram-warn) RAM_WARN_GB="$2"; shift 2 ;;
         --ram-crit) RAM_CRIT_GB="$2"; shift 2 ;;
         --disk-warn) DISK_WARN_GB="$2"; shift 2 ;;
         --disk-crit) DISK_CRIT_GB="$2"; shift 2 ;;
         --retriever-url) RETRIEVER_URL="$2"; shift 2 ;;
+        --trace-every) TRACE_EVERY_N_STEPS="$2"; shift 2 ;;
+        --rollout-dir) ROLLOUT_DIR="$2"; shift 2 ;;
         -h|--help) sed -n '2,30p' "$0"; exit 0 ;;
         *) echo "unknown arg: $1" >&2; exit 2 ;;
     esac
@@ -70,13 +76,57 @@ probe_retriever() {
     [[ "${resp}" == *'"contents"'* ]]
 }
 
-emit INFO "watcher start  poll=${POLL_S}s  thresholds: ram_warn=${RAM_WARN_GB}G ram_crit=${RAM_CRIT_GB}G disk_warn=${DISK_WARN_GB}G disk_crit=${DISK_CRIT_GB}G  retriever=${RETRIEVER_URL}"
+emit INFO "watcher start  poll=${POLL_S}s  thresholds: ram_warn=${RAM_WARN_GB}G ram_crit=${RAM_CRIT_GB}G disk_warn=${DISK_WARN_GB}G disk_crit=${DISK_CRIT_GB}G  retriever=${RETRIEVER_URL}  trace_every=${TRACE_EVERY_N_STEPS}_steps"
+emit INFO "  trace log: ${TRACE_LOG}"
 trap 'emit INFO "watcher stop (signal)"; exit 0' INT TERM
 
 LAST_RAM_LEVEL=""
 LAST_DISK_LEVEL=""
 LAST_RETRIEVER_LEVEL=""
+LAST_ANALYZED_STEP=0
 ITER=0
+
+# Locate check_trace.py + parent venv (it needs transformers for tokenizer)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CHECK_TRACE="${SCRIPT_DIR}/check_trace.py"
+TRACE_PY="${SCRIPT_DIR}/../nemo_rl/.venv/bin/python"
+[[ -x "${TRACE_PY}" ]] || TRACE_PY="$(command -v python3)"
+
+run_trace_check() {
+    local step="$1"
+    {
+        echo
+        echo "════════════════════════════════════════════════════════════════════════════"
+        echo "  $(date -u +%H:%M:%S)  triggered by watch_resources.sh @ step ${step}"
+        echo "════════════════════════════════════════════════════════════════════════════"
+        if [[ -n "${ROLLOUT_DIR}" ]]; then
+            "${TRACE_PY}" "${CHECK_TRACE}" --rollouts "${ROLLOUT_DIR}" --step "${step}" 2>&1
+        else
+            "${TRACE_PY}" "${CHECK_TRACE}" --step "${step}" 2>&1
+        fi
+    } >> "${TRACE_LOG}" 2>&1
+    # Surface the headline in the main resource log too
+    if grep -q "🚩 RED FLAGS" "${TRACE_LOG}" 2>/dev/null; then
+        local last_flags="$(grep -A 5 "step ${step} " "${TRACE_LOG}" 2>/dev/null | grep "🚩\|•" | head -5 | tr '\n' '|')"
+        emit WARN "trace check @ step ${step}: ${last_flags:-flags raised, see ${TRACE_LOG}}"
+    else
+        emit INFO "trace check @ step ${step}: all health signals OK"
+    fi
+}
+
+find_latest_rollout_step() {
+    # Look in the configured/detected rollout dir; if not set, auto-detect
+    # the most-recently-modified /root/reason_over_search/logs/exp_*/.
+    local dir="${ROLLOUT_DIR}"
+    if [[ -z "${dir}" || ! -d "${dir}" ]]; then
+        dir="$(ls -dt /root/reason_over_search/logs/exp_* 2>/dev/null | head -1)"
+    fi
+    if [[ -z "${dir}" || ! -d "${dir}" ]]; then
+        echo 0; return
+    fi
+    ls -t "${dir}"/train_data_step*.jsonl 2>/dev/null | head -1 | \
+        sed -E 's|.*train_data_step([0-9]+)\.jsonl|\1|' || echo 0
+}
 
 while true; do
     ITER=$((ITER + 1))
@@ -148,6 +198,21 @@ while true; do
         LAST_RETRIEVER_LEVEL="OK"
     elif [[ "${RETRIEVER_LEVEL}" == "OK" && -z "${LAST_RETRIEVER_LEVEL}" ]]; then
         LAST_RETRIEVER_LEVEL="OK"
+    fi
+
+    # ---- Periodic trace-check: every N steps, analyze the rollout for ----
+    # tool-collapse / retriever errors / floor dominance / generic answers.
+    # Only triggers when a NEW step lands AND step % N == 0 AND we haven't
+    # already analyzed it.
+    LATEST_STEP="$(find_latest_rollout_step)"
+    LATEST_STEP="${LATEST_STEP:-0}"
+    if [[ "${LATEST_STEP}" -gt "${LAST_ANALYZED_STEP}" \
+          && "${LATEST_STEP}" -gt 0 \
+          && $((LATEST_STEP % TRACE_EVERY_N_STEPS)) -eq 0 ]]; then
+        if [[ -x "${CHECK_TRACE}" || -f "${CHECK_TRACE}" ]]; then
+            run_trace_check "${LATEST_STEP}"
+            LAST_ANALYZED_STEP="${LATEST_STEP}"
+        fi
     fi
 
     sleep "${POLL_S}"

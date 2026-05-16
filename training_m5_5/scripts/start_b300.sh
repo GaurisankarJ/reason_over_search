@@ -262,14 +262,20 @@ if tmux has-session -t train 2>/dev/null; then
     fail "tmux session 'train' already exists. Inspect: tmux attach -t train. Kill it (tmux kill-session -t train) and re-run if you want a fresh launch."
 fi
 
-# ---- Resource watcher (RAM/disk/retriever liveness; alerts but does not kill) ----
-# Detached background process; survives SSH drops. Logs to its own file so
-# it doesn't compete with the chain/training log. Replaces any stale watcher.
+# ---- Resource + trace watcher (RAM/disk/retriever + step-10 trace digest) ----
+# Detached background process; survives SSH drops. Logs to two files so they
+# don't compete with the chain/training log. Replaces any stale watcher.
 RESOURCE_LOG="/root/logs/m5_5_resources_seed${SEED}_${TS}.log"
+TRACE_LOG="/root/logs/m5_5_traces_seed${SEED}_${TS}.log"
 pkill -f "watch_resources.sh" 2>/dev/null || true
-nohup bash "${SCRIPT_DIR}/watch_resources.sh" --log "${RESOURCE_LOG}" \
+nohup bash "${SCRIPT_DIR}/watch_resources.sh" \
+    --log "${RESOURCE_LOG}" \
+    --trace-log "${TRACE_LOG}" \
+    --trace-every 10 \
     > /dev/null 2>&1 & disown
-ok "resource watcher launched (pid $!; log: ${RESOURCE_LOG}). Tail it alongside training: tail -f ${RESOURCE_LOG}"
+ok "resource watcher launched (pid $!)"
+ok "  resource log: ${RESOURCE_LOG}    (RAM/disk/retriever every 30 s)"
+ok "  trace log:    ${TRACE_LOG}    (rollout digest every 10 steps)"
 
 if [[ "${SMOKE_FIRST}" -eq 1 ]]; then
     CHAIN_LOG="/root/logs/m5_5_chain_seed${SEED}_${TS}.log"
@@ -283,7 +289,9 @@ if [[ "${SMOKE_FIRST}" -eq 1 ]]; then
     echo "  if smoke fails:  prod does NOT launch; chain exits"
     echo
     echo "  tail chain:    tail -f ${CHAIN_LOG}"
-    echo "  tail watcher:  tail -f ${RESOURCE_LOG}"
+    echo "  tail watcher:  tail -f ${RESOURCE_LOG}     (heartbeats + alerts every 30 s)"
+    echo "  tail traces:   tail -f ${TRACE_LOG}       (rollout health digest every 10 steps)"
+    echo "  ad-hoc trace:  python training_m5_5/scripts/check_trace.py [--step N]"
     echo "  attach:        tmux attach -t train       (Ctrl-b d to detach)"
     echo "  stop:          tmux kill-session -t train"
     echo "  retriever:     tmux attach -t retriever"
@@ -295,7 +303,9 @@ else
     ok "training launched."
     echo
     echo "  tail log:      tail -f ${TRAIN_LOG}"
-    echo "  tail watcher:  tail -f ${RESOURCE_LOG}"
+    echo "  tail watcher:  tail -f ${RESOURCE_LOG}    (heartbeats + alerts every 30 s)"
+    echo "  tail traces:   tail -f ${TRACE_LOG}      (rollout health digest every 10 steps)"
+    echo "  ad-hoc trace:  python training_m5_5/scripts/check_trace.py [--step N]"
     echo "  attach:        tmux attach -t train       (Ctrl-b d to detach)"
     echo "  stop:          tmux kill-session -t train"
     echo "  retriever:     tmux attach -t retriever"
