@@ -1271,6 +1271,248 @@ The capability story has not regressed across the over-search arc: cadence-16's 
 - HF: `step_120/`, `step_130/`, `step_140/`, `step_150/`, `step_160/` all uploaded
 - The 1052 s peak step took ~17 min wall; if such peaks recur in cadence 17+ the projection will slip again
 
+### Cadence 13: steps 121-130 (the drift continues)
+
+| Step | Wall (s) | M:S | rew mean | rew > 0 | tool_med | len_med | notes |
+|---:|---:|---:|---:|---:|---:|---:|---|
+| 121 | 778 | 12:58 | 0.189 | 29 % | 4 | 21.3 K | First step of C13; over-search regime continues from C12 |
+| 122 | 678 | 11:18 | 0.277 | 39 % | 4 | 19.2 K | |
+| 123 | 658 | 10:58 | 0.249 | 35 % | 4 | 19.3 K | |
+| 124 | 678 | 11:18 | 0.204 | 33 % | 4 | 19.9 K | |
+| **125** | 654 | 10:54 | **0.178** | 29 % | 4 | 19.5 K | **Cadence low**; hard-batch + over-search |
+| 126 | 664 | 11:04 | 0.251 | 34 % | 4 | 19.3 K | |
+| 127 | 670 | 11:10 | 0.217 | 33 % | 4 | 20.3 K | |
+| 128 | 634 | 10:34 | 0.240 | 34 % | 4 | 18.9 K | |
+| 129 | 653 | 10:53 | 0.217 | 31 % | 4 | 19.2 K | |
+| **130** | 742 | 12:22 | 0.191 | 30 % | 4 | 20.9 K | **Thirteenth checkpoint** uploaded to HF |
+
+**Trends after C13**: window mean **0.221** (−11 % vs C12's 0.247) — the over-search regime is **expensive without payoff**. Tool_med held at 4 for the entire cadence, len_med plateaued at ~20 K (~5 K tokens), step wall mean **681 s** (+12 % vs C12). Chain-flip rate **44.3 %**. Planned-multi-hop count jumped to **370** rollouts — the policy is doing more planned reasoning but with the extra tool calls degrading the cost-adjusted reward.
+
+#### Mechanical examples (C13)
+
+**BEST** — step 121, sample 0, **reward 1.000**, 5 tool calls, 13.7 K chars
+
+> **Q**: *"When did the industrial revolution start in the country where Ernst Lubitsch was born?"*  (Lubitsch → Germany → industrial revolution start year for Germany = 1834, Zollverein customs union)
+> **Final answer**: `1834` ✓
+>
+> *Commentary*: Clean 2-hop chain (filmmaker → birthplace country → economic-history date). 5 calls is over the cadence-9 median of 3 but justified — the model spent extras on disambiguating the start year (Britain's earlier industrial revolution kept surfacing in retrieval, model committed to the Germany-specific date).
+
+**WORST** — step 121, sample 5, **reward 0.000**, 5 tool calls, 19.7 K chars
+
+> **Q**: *"Who played the former team of Tony Eusebio in the world series last year?"*  (Eusebio → Astros → 2017 World Series winner team = Astros itself, so "Astros's opponent")
+> **Final answer**: `Beijing` ✗  — total category error
+>
+> *Commentary*: **Total decode collapse**. Model evidently hit a confused state and emitted a placeholder city name. Failure class: rare but persistent token-glitch. The 5 tool calls + 19.7 K chars indicate retrieval ran fine; the failure is at the answer-emission stage, not the chain stage.
+
+**MEAN** — step 121, sample 162, **reward 0.222**, 5 tool calls, 13.7 K chars
+
+> **Q**: *"Where is the crying stone found in the country in which Raphael Tuju holds citizenship?"*  (Tuju → Kenya → Crying Stone of Ilesi in western Kenya)
+> **Final answer**: `Ilesi, along the Kakamega-Kisumu road`
+>
+> *Commentary*: Substantively correct (Crying Stone is in Ilesi, Kakamega County). F1 0.22 because the answer is verbose ("along the Kakamega-Kisumu road" expands token count, diluting F1 numerator). **Verbose-correct class.**
+
+#### Claude hand-analyses (C13)
+
+1. **The C12 → C13 drop (0.247 → 0.221, −0.026) at fixed tool_med 4 is the cost of over-search without payoff.** The cadence-11 0.280 happened at tool_med 3; cadence 13 holding tool_med 4 produced 0.221. **Each extra tool call is now costing −0.013 reward on average** — the GRPO advantage signal will start selecting against it. Expect the recovery to begin in C14 if this pattern holds.
+2. **Step time grew without rollout-length growth**. Len_med plateaued at ~20 K from C12's 18.3 K (+9 %), but step wall grew 606 → 681 s (+12 %). The extra time is not coming from longer rollouts; it's coming from the **policy_training phase** doing more compute on the extra-call data. Cap-binding distance (cadence-10 footnote): unchanged at ~5 K tokens median = 60 % of the 8 K cap.
+
+#### Hop-stratified BEST successes (C13)
+
+| Hops | Step | Tools | Answer | Question |
+|---:|---:|---:|---|---|
+| 1 | 121 | 2 | `Oceania` | On what continent can the country that contains Niuas be found? |
+| 2 | 123 | 2 | `Alberta Gay` | Who is the mother of the performer of Love Party? |
+| 3 | 123 | 2 | `Kapan` | What is the capital of the province where Halidzor is located? |
+| 4+ | 126 | 3 | `World War I` | In what conflict was the siege of the city where the King Fahd Complex for the Printing of the Holy Quran is headquartered? |
+
+**4-hop+ successes: 17** — lowest since C5's 26. Over-search regime is hurting hard-chain success rate.
+
+#### Planned-multi-hop reasoning (C13)
+
+**370 rollouts** with explicit numbered plan + reward 1.0 — **new run high vs C12's 344**. Top plan_score: step 130 sample 79 (plan_score 40, 5 calls). The plan structure is more frequent but the rate of "successful at scale" plans is matched by the rising flip rate (44 %).
+
+### Cadence 14: steps 131-140 (the over-search peak)
+
+| Step | Wall (s) | M:S | rew mean | rew > 0 | tool_med | len_med | notes |
+|---:|---:|---:|---:|---:|---:|---:|---|
+| 131 | 791 | 13:11 | 0.254 | 38 % | **5** | 22.5 K | Tool_med jumped from 4 to 5 |
+| 132 | 861 | 14:21 | 0.237 | 34 % | 5 | 23.5 K | |
+| 133 | 921 | 15:21 | 0.280 | 37 % | 5 | 24.6 K | |
+| **134** | **1045** | **17:25** | 0.209 | 28 % | **6** | **27.9 K** | **First step ever > 1000 s**; tool_med peak |
+| **135** | **1052** | **17:32** | 0.196 | 29 % | **6** | **28.8 K (88 % of cap)** | **Run-high len_med**; slowest step of run at this point |
+| 136 | 900 | 15:00 | 0.230 | 32 % | 5 | 25.0 K | |
+| 137 | 787 | 13:07 | 0.247 | 32 % | 5 | 22.5 K | |
+| **138** | 648 | 10:48 | **0.315** | **47 %** | 4 | 19.3 K | **C14 reward peak**; recovery starts |
+| 139 | 592 | 9:52 | 0.231 | 33 % | 4 | 18.7 K | |
+| **140** | 642 | 10:42 | 0.198 | 33 % | 4 | 19.2 K | **Fourteenth checkpoint** uploaded to HF |
+
+**Trends after C14**: window mean **0.240** (+9 % vs C13's 0.221) despite tool_med peaking at 6 and len_med peaking at 28.8 K (88 % of the 8K-token cap). Step wall mean **824 s** — slowest cadence on the run (steps 134-135 both over 1000 s; only steps on entire run > 17 min). **Chain-flip rate 58.0 % — run high**; the over-search regime maximises Goodhart density. Planned-multi-hop count **323** (down from C13's 370 because longer rollouts compete with parsing limits). The cadence ends with tool_med correcting back to 4 at step 138 onwards — **the policy starts self-correcting mid-cadence**.
+
+#### Mechanical examples (C14)
+
+**BEST** — step 131, sample 26, **reward 1.000**, 5 tool calls, 13.5 K chars
+
+> **Q**: *"When was the SNES released in the country with the first invented electric washing machine?"*  (electric washing machine → USA / Alva J. Fisher 1908; SNES US release = 1991)
+> **Final answer**: `1991` ✓
+>
+> *Commentary*: 2-hop chain through a tech-history bridge; cleanly resolved at 5 calls. The model spent extras on confirming "first invented" vs "first commercially available" disambiguation. Verification pattern, not thrashing.
+
+**WORST** — step 131, sample 0, **reward 0.000**, 7 tool calls, 24.2 K chars
+
+> **Q**: *"When was the country where Capira is located colonized by the country where a terrorist bombing Gaddafi's Libya was supposedly involved in occurred?"*  (Capira → Panama; Libya → Lockerbie/Pan Am 103 → UK; Panama colonized by Spain, not UK)
+> **Final answer**: `1492` ✗  (year of Spanish arrival in the Americas, not "by UK")
+>
+> *Commentary*: **Confused bridge composition**. The question's second clause was supposed to identify UK (Lockerbie bombing target), but the model defaulted to "Spain colonised Panama" via the New World association. 7 tool calls, 24.2 K chars — the policy spent heavy compute on a question whose bridge structure it never fully parsed. **Question-parse failure**, not chain-resolution failure.
+
+**MEAN** — step 132, sample 49, **reward 0.231**, 8 tool calls, 27.5 K chars
+
+> **Q**: *"What is the work of civil defence in the richest country in Africa?"*  (Nigeria → NSCDC)
+> **Final answer**: *"The Nigerian Security and Civil Defence Corps protects lives and properties, protects pipelines, and conducts crisis resolutions."*
+>
+> *Commentary*: This is the **exact same question** as cadence-11's MEAN (step 105 sample 277) but with a different wording ("richest country" vs "country with the largest economy"). Same answer structure, similar F1 score. **MuSiQue surfaces near-duplicate questions across batches** — the policy has effectively memorised the answer template for Nigeria-civil-defence questions.
+
+#### Claude hand-analyses (C14)
+
+1. **The over-search peak demonstrates the failure mode the recipe avoids by accident, not design.** Steps 134-135 spent ~17 min wall each producing rollouts that were 88 % of the token cap (28.8 K char median ≈ 7.2 K tokens). The reward on those two steps was 0.209 and 0.196 — *below* the cadence mean. **The policy was paying maximum cost for sub-mean reward** for ~35 minutes. GRPO would normally correct this within 2-3 update steps; the fact that it took 4-5 steps (134-138) reflects the inertia of policy distributions over 320 samples × 64 prompts. By step 138 the correction is visible (tool_med 4, reward 0.315 — the cadence peak).
+2. **C14's 58 % flip rate is the M8 case's strongest empirical demonstration.** When the policy is exploring most aggressively in tool count and length, **more than half of its perfect-reward rollouts have detectable silent entity flips**. Under F1-only reward, the gradient signal for "fewer chain flips" is invisible during this regime; under M8.1's chain-consistency penalty, those 301 flipped rollouts would each lose 0.1-0.3 reward, creating a sharp within-group advantage gap exactly when the policy most needs to be steered away from the over-search trap. **C14 is the canonical M8-target cadence.**
+
+#### Hop-stratified BEST successes (C14)
+
+| Hops | Step | Tools | Answer | Question |
+|---:|---:|---:|---|---|
+| 1 | 140 | 3 | `Audrey` | Who did the writer of Better Man for Little Big Town play in The Lorax? |
+| 2 | 136 | 3 | `808` | What is the area code for the state where Pearl Harbor is located? |
+| 3 | 138 | 3 | `Lake Geneva` | What is the largest lake in the country where the characters in Sound of Music escaped to? |
+| 4+ | 138 | 2 | `August 1, 1876` | When did the state where the highest peaks of the Rocky Mountains are found become part of the U.S.? |
+
+**4-hop+ successes: 61 — RUN HIGH** (vs C11's 40 and C13's 17). The over-search regime, while costly, *did* solve more hard-chain questions in this cadence than any prior. Trade-off: more compute → more hard wins, at the cost of more Goodhart in the simpler bands.
+
+#### Planned-multi-hop reasoning (C14)
+
+**323 rollouts** with explicit numbered plan + reward 1.0. Top plan_score: step 133 sample 41 (plan_score 44, 5 calls, 20.3 K chars). The mode is *less frequent* than C13 (323 vs 370) because the longer rollouts hit parsing-window limits — but the *deeper* planned rollouts (high plan_score) are more frequent.
+
+### Cadence 15: steps 141-150 (correction in progress)
+
+| Step | Wall (s) | M:S | rew mean | rew > 0 | tool_med | len_med | notes |
+|---:|---:|---:|---:|---:|---:|---:|---|
+| 141 | 630 | 10:30 | 0.248 | 34 % | 4 | 19.7 K | Step wall back below 700 s |
+| 142 | 595 | 9:55 | 0.228 | 37 % | 4 | 18.6 K | |
+| 143 | 603 | 10:03 | 0.249 | 37 % | 4 | 18.8 K | |
+| 144 | 569 | 9:29 | 0.232 | 39 % | 4 | 18.8 K | |
+| 145 | 547 | 9:07 | 0.228 | 34 % | 4 | 18.0 K | |
+| 146 | 535 | 8:55 | 0.249 | 33 % | 4 | 17.7 K | |
+| **147** | 514 | 8:34 | **0.277** | **41 %** | 4 | 17.4 K | Single-step climbing back |
+| 148 | 532 | 8:52 | 0.218 | 38 % | 4 | 18.1 K | |
+| **149** | 533 | 8:53 | **0.288** | 35 % | 4 | 17.5 K | **C15 reward peak** |
+| **150** | 529 | 8:49 | 0.207 | 30 % | **3** | 16.2 K | **Tool_med drops back to 3**; fifteenth checkpoint uploaded to HF |
+
+**Trends after C15**: window mean **0.242** (+0.8 % vs C14's 0.240) — essentially flat in reward but **structural costs collapsed**. Tool_med held at 4 for 9 of 10 steps then dropped to 3 at step 150; step wall mean **559 s** (−32 % vs C14's 824 s); len_med dropped 23.6 K → 18.0 K (−24 %). **Chain-flip rate 40.8 %** (vs C14's 58 %, −17 pp). Planned-multi-hop count **391 — new run high**. The correction is mid-flight: reward is flat, costs are falling, the policy is finding the lean shape that worked at C6.
+
+#### Mechanical examples (C15)
+
+**BEST** — step 141, sample 50, **reward 1.000**, 6 tool calls, 18.1 K chars
+
+> **Q**: *"What race is the majority of the population in the country where the FH-2000 howitzer was developed?"*  (FH-2000 → Singapore; majority Chinese)
+> **Final answer**: `Chinese` ✓
+>
+> *Commentary*: 2-hop chain through weapons-system bridge. 6 calls on a 2-hop question is over-search territory (cadence 4 baseline was 5); the model was thoroughly verifying that Singapore's majority ethnicity is Chinese before committing. Verification mode under the cadence-14 over-search regime carrying into C15.
+
+**WORST** — step 141, sample 0, **reward 0.000**, 6 tool calls, 21.5 K chars
+
+> **Q**: *"Who are the two leaders of the opposition in the province where Riverside was once found?"*  (Riverside → California; opposition leaders = state senate / assembly minority leaders)
+> **Final answer**: `Chairman Jim Brulte, President Bill Clinton` ✗  — Clinton is not a state opposition leader
+>
+> *Commentary*: **Mixed correct + wildly wrong**. Jim Brulte was Chair of CAGOP 2013-2019 so partially relevant; Bill Clinton is a category error. The model emitted a US president's name as "the second opposition leader" — same class as the C13 Beijing answer. Decode collapse on a confusable politics question.
+
+**MEAN** — step 143, sample 196, **reward 0.242**, 5 tool calls, 15.5 K chars
+
+> **Q**: *"How does one become a Justice of the Peace in the country that released the TV serial My School Daze?"*  (My School Daze → Singapore; JP appointment = president via Subordinate Courts Act)
+> **Final answer**: *"The president of Singapore appoints them through section 11(l) of the Subordinate Courts Act; they take the oath of office under section 17 of the Subordinate Courts Act and allegiance."*
+>
+> *Commentary*: Substantively correct, verbosely answered. Same dilution-by-verbosity F1 pattern as C13's Crying Stone MEAN. Singapore correctly resolved (matching the C15 BEST trace's same-country bridge), Subordinate Courts Act correctly cited.
+
+#### Claude hand-analyses (C15)
+
+1. **The cost recovery is happening before the reward recovery.** Step wall fell 32 % across the cadence but window-mean reward is flat (0.240 → 0.242). This is the **healthy pattern** of GRPO selecting against expensive low-reward modes: the policy is shedding the cost first, the reward will follow if the lean shape is also higher-reward. Cadence 16 will confirm.
+2. **391 planned-multi-hop rollouts is the new run high** — the planned mode is *not* the failure mode driving the C12-C14 cost peak. Planned mode increased through the over-search regime and through the correction; the failure mode was **tool-count drift** (3 → 4 → 6), not planning. The correct read of cadences 12-15 is that the policy was adding *both* planning *and* extra calls; the extra calls didn't pay off, but the planning did. Cadence 16 should keep the planning and drop the calls back to 3.
+
+#### Hop-stratified BEST successes (C15)
+
+| Hops | Step | Tools | Answer | Question |
+|---:|---:|---:|---|---|
+| 1 | 146 | 2 | `808` | What is the area code for the state the new Magnum PI filmed in? |
+| 2 | 146 | 3 | `Peter Phillips` | Who is the leader of opposition in the country Herb McKenley is from? |
+| 3 | 141 | 2 | `April 19, 2017` | When did the museum of the war where Boston was the location of many important events open? |
+| 4+ | 146 | 3 | `Seventh in the country` | In terms of wind energy production, where does the state where Isaac Glaspell House is located rank? |
+
+**4-hop+ successes: 27** (down from C14's 61). The drop is consistent with the correction — fewer calls = fewer rollouts that solve the hardest chains, but also fewer chain-broken-but-token-aligned rollouts.
+
+#### Planned-multi-hop reasoning (C15)
+
+**391 rollouts** — **new run high**. Top plan_score: step 149 sample 56 (plan_score 36, 4 calls, 19.8 K chars). The planned shape *persists across the correction* — the policy is keeping the chain-of-thought decomposition pattern while shedding the over-search.
+
+### Cadence 16: steps 151-160 (recovery to C6 baseline, new operating point)
+
+| Step | Wall (s) | M:S | rew mean | rew > 0 | tool_med | len_med | notes |
+|---:|---:|---:|---:|---:|---:|---:|---|
+| 151 | 450 | 7:30 | 0.245 | 37 % | 3 | 15.6 K | Tool_med locked back at 3 |
+| 152 | 460 | 7:40 | 0.217 | 31 % | 3 | 15.7 K | |
+| 153 | 451 | 7:31 | 0.239 | 37 % | 3 | 15.4 K | |
+| 154 | 427 | 7:07 | 0.256 | 38 % | 3 | 15.8 K | |
+| 155 | 390 | 6:30 | 0.245 | 37 % | 3 | 14.7 K | |
+| **156** | 386 | 6:26 | **0.294** | 40 % | 3 | 14.9 K | Single-step new run-high since C12 |
+| **157** | **347** | **5:47** | **0.278** | **42 %** | 3 | 14.4 K | **Fastest non-warmup step of entire run** |
+| **158** | 389 | 6:29 | **0.313** | 39 % | 3 | 14.9 K | **Run-high single-step at lean shape** |
+| 159 | 365 | 6:05 | 0.247 | 38 % | 3 | 14.4 K | |
+| **160** | 448 | 7:28 | 0.224 | 33 % | 3 | 15.2 K | **Sixteenth checkpoint** uploaded to HF; cadence ends |
+
+**Trends after C16**: window mean **0.256** (+6 % vs C15's 0.242) — **second-best cadence of the run** after C11's 0.280. Tool_med locked at 3 throughout; len_med settled at 15.0 K (back to C6's 13.9 K range); step wall mean **411 s** = exact match for C6 baseline of 412 s. **Step 157 at 347 s is the fastest non-warmup step on the run.** Chain-flip rate **39.6 %** (vs C15's 40.8 %, holding) — the lean shape didn't bring back the C9 18.6 % low, but it didn't regress further either. Planned-multi-hop count **251** (back to C10 level; the over-search-era boost has unwound).
+
+#### Mechanical examples (C16)
+
+**BEST** — step 151, sample 10, **reward 1.000**, 6 tool calls, 22.0 K chars
+
+> **Q**: *"What is the highest point where the Green-breasted pitta can be found, in the country that contains the presidential home of Rwakitura?"*  (Rwakitura → Uganda; Green-breasted pitta → Mt Elgon ~4000 m... gold accepts 1400 m for a specific Uganda location)
+> **Final answer**: `1,400 metres` ✓
+>
+> *Commentary*: 3-hop chain (presidential home → country → bird's range in that country). 6 calls is over the cadence median of 3 — this rollout pulled in extra retrieval before settling. **Interestingly, C16's BEST is one of the few high-call rollouts in the cadence** — the median dropped to 3 but the BEST cases still use 5-6 when the question genuinely requires it.
+
+**WORST** — step 151, sample 0, **reward 0.000**, 5 tool calls, 16.4 K chars
+
+> **Q**: *"When was Eritrea annexed by the country where, along with Kenya, Somalia, and the country that has the National Assembly, Somali people live?"*
+> **Final answer**: `1952` ✗  (Eritrea was federated with Ethiopia in 1952, formally annexed 1962; gold likely either year)
+>
+> *Commentary*: Close-but-no-cigar. 1952 is the date of the UN federation, the annexation proper was 1962. F1 0.0 because the gold token is the other year. **Year-disambiguation class** — same shape as the cadence-10 Dragsvik Norwegian-krone failure where the wrong precise year was emitted.
+
+**MEAN** — step 153, sample 42, **reward 0.250**, 5 tool calls, 14.5 K chars
+
+> **Q**: *"When were the olympic games held in the city where the author of Love and Death in Bali works?"*  (Love and Death in Bali → Vicki Baum / Tsutomu Hama → author/musician; bridges complicated)
+> **Final answer**: `2016 Olympics (Rio de Janeiro)`
+>
+> *Commentary*: The model retrieved that "Love and Death in Bali" relates to Rio de Janeiro (likely a wrong bridge) and gave the 2016 Rio Olympics as the answer. F1 0.25 from "Olympics" + "2016" + parenthetical token overlap. **Mid-band reward with bridge-resolution uncertainty** — the model committed to an answer despite ambiguity.
+
+#### Claude hand-analyses (C16)
+
+1. **The recovery overshot the prior baseline.** Step 157 = 347 s wall is **faster than any cadence-6 step** (C6 mean was 412 s, no step below 350 s). Combined with reward 0.278 at that step, the policy is at **higher reward per second of compute than ever before**. Cadence 16's composite metric (reward / step wall) = 0.256 / 411 s = **6.2 × 10⁻⁴** vs C6's 0.224 / 412 s = 5.4 × 10⁻⁴ vs C11 peak 0.280 / 532 s = 5.3 × 10⁻⁴. **C16 is the most efficient cadence of the run**.
+2. **The tool_med 3 + Goodhart 40 % combination is the M5.1 steady state.** Across cadences 6 (3, 28 %), 8 (3, 33 %), 9 (3, 19 %), 10 (3, 26 %), 11 (3, 43 %), and now 16 (3, 40 %), the flip rate at tool_med 3 has fluctuated 19-43 %. The C9 18.6 % low is now clearly a noise floor, not a stable property. **The Goodhart density at the recovered lean shape (40 %) is approximately double the run low** — the C12-C14 over-search excursion left a residue in the policy that the recovery didn't fully unwind. This is consistent with how training does not "undo" learned hacks; once the policy has high-reward weight on chain-broken paths, only an active counter-signal (M8 chain-consistency penalty) can move that mass.
+
+#### Hop-stratified BEST successes (C16)
+
+| Hops | Step | Tools | Answer | Question |
+|---:|---:|---:|---|---|
+| 1 | 159 | 1 | `September 25, 2015` | When did the iphone 6s plus owned by iWork come out? |
+| 2 | 156 | 1 | `Oceania` | On what continent can the country where Kolonga is located be found? |
+| 3 | 157 | 2 | `Allen County` | What county is Moran part of in the state Dorothy lived in the Wizard of Oz? |
+| 4+ | 157 | 3 | `Redwood Falls` | What is the capital of the county that includes the city of Walnut Grove in the state where Star Lite Motel is located? |
+
+**4-hop+ successes: 16** — lowest cadence on the run (vs C14's 61 peak). The recovery to lean shape costs hard-chain success rate. **The trade-off is now visible**: over-search regime has 4× more 4-hop+ wins than lean regime, at the cost of higher Goodhart and step wall. Choosing between them is a recipe-design call (M8 would let the policy keep both).
+
+#### Planned-multi-hop reasoning (C16)
+
+**251 rollouts** with explicit numbered plan + reward 1.0 — down from C15's 391 peak, back to C10's 249 level. Top plan_score: step 158 sample 241 (plan_score 39, 3 calls, 17.3 K chars). The planned shape is **persistent but proportional to total tool-call budget**: more tools → more planning detected; fewer tools → less planning detected. Going forward, planned counts at ~250-350 per cadence is the lean-regime equilibrium.
+
+**Cadence-16 summary**: best efficiency-and-reward composite on the run; tool_med locked at 3; recovery from C12-C14 over-search trap complete; Goodhart density (40 %) higher than C9 low (19 %) but not climbing further. The chapter-defensible operating point.
+
 ## 9. Cost / wall-clock estimate
 
 **Two tiers in play across this run**:
