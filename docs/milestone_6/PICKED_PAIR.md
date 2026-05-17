@@ -3,7 +3,7 @@ title: M6 Phase 3a: Picked pair
 tags: [milestone, m6, phase3, picked-pair, decision]
 source: internal
 created: 2026-05-16
-updated: 2026-05-16
+updated: 2026-05-17
 ---
 
 # Picked Pair
@@ -12,7 +12,7 @@ updated: 2026-05-16
 >
 > Input: [`CANDIDATE_EXPERIMENTS.md`](CANDIDATE_EXPERIMENTS.md) §"Pair construction" filtered the pair space down to two viable options: **C + R (defensive)** and **C + M (ambitious)**.
 
-**Status**: provisional 2026-05-16, pending one user decision (defensive vs ambitious; see §3 below). All other commitments frozen.
+**Status**: provisional 2026-05-16, pending one user decision (defensive vs ambitious; see §3 below). **Pre-flight unblocked 2026-05-17**: M5.1 landed at step_180; the F1-only checkpoint series is the picked-pair anchor (18 checkpoints on HF Hub at [`pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42-f1-only`](https://huggingface.co/pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42-f1-only)).
 
 ---
 
@@ -68,9 +68,9 @@ Reasoning:
 
 ## 4. Pre-flight requirements (regardless of pick #2)
 
-- **M5.1 must land** with reward floor ≥ 0.20 on MuSiQue training (otherwise the picked pair is a remediation experiment, not a follow-up: see [`CONVERSATION_CONTEXT.md` §6 threat #1](CONVERSATION_CONTEXT.md#6-threats-and-unknowns)).
-- **EM-only smoke** (50 steps, single seed, M5.1 prompt) before committing to the full EM-only run. Confirm reward signal is not too sparse to bootstrap at 0.8B. If the smoke fails, drop EM-only and run C as a 2-variant ablation (F1+0.1 vs F1-only) only.
-- **Rollout JSONL extraction pipeline** built before run #1 so that per-rollout reward histograms (currently a [`DATA_AUDIT_PHASE_1.md` §5 #2](DATA_AUDIT_PHASE_1.md#5-cross-cutting-gaps-that-affect-everything) gap) are produced as a side effect of the runs, not as a separate effort.
+- **M5.1 must land** with reward floor ≥ 0.20 on MuSiQue training (otherwise the picked pair is a remediation experiment, not a follow-up: see [`CONVERSATION_CONTEXT.md` §6 threat #1](CONVERSATION_CONTEXT.md#6-threats-and-unknowns)). **PASSED 2026-05-17**: M5.1 landed at step_180 with cadence-11 window-mean 0.280 and 130 steps in the 0.20-0.28 band. Threat #1 retired.
+- **EM-only smoke** (50 steps, single seed, M5.1 prompt) before committing to the full EM-only run. Confirm reward signal is not too sparse to bootstrap at 0.8B. If the smoke fails, drop EM-only and run C as a 2-variant ablation (F1+0.1 vs F1-only) only. **Still required pre-launch.**
+- **Rollout JSONL extraction pipeline** built before run #1 so that per-rollout reward histograms (currently a [`DATA_AUDIT_PHASE_1.md` §5 #2](DATA_AUDIT_PHASE_1.md#5-cross-cutting-gaps-that-affect-everything) gap) are produced as a side effect of the runs, not as a separate effort. **Partially done**: M5.1 has rollout JSONLs per cadence; the per-rollout chain-flip detector is already wired ([`RESULTS_M5_1_H200.md` §9.5](../report/RESULTS_M5_1_H200.md#measured-chain-flip-rate-across-cadences-added-2026-05-16-post-cadence-11)).
 - **2-seed protocol locked** if Option R is picked (single-seed of the same prompt is the wrong control; explicit seeds = {42, 1337} per Phase-1 convention).
 - **Pre-flight smoke for M5.1-at-G=2** if Option M is picked. 100 steps; reward must show a non-zero advantage signal by step 50.
 
@@ -78,7 +78,7 @@ Reasoning:
 
 | # | Threat | Mitigation |
 |---|---|---|
-| 1 | M5.1 final reward below 0.20 → pair becomes remediation | Wait for M5.1 to land before committing rented hours; if remediation needed, run pure-M5.1-debug then re-plan |
+| 1 | M5.1 final reward below 0.20 → pair becomes remediation | **RETIRED 2026-05-17**: M5.1 landed at step_180 with cadence-11 window-mean 0.280; 130 steps in the 0.20-0.28 band. Threat retired |
 | 2 | Single-seed of pick #1 (C) on the F1-only variant → variance unbounded | (a) Use Option R to get 2 seeds elsewhere in the chapter; (b) note as a limit in the threats section of the paper |
 | 3 | EM-only fails to bootstrap at 0.8B → C reduces to 2-variant | Pre-flight smoke (§4); document the drop honestly |
 | 4 | [arXiv:2602.19526](https://arxiv.org/html/2602.19526v1) gets cited by reviewer as full scoop | Reframing in [`PUBLICATION_FRAMING.md` §"Related work"](PUBLICATION_FRAMING.md) makes the differentiation explicit |

@@ -3,7 +3,7 @@ title: Conversation Context — Milestone 6 (literature review + experiment plan
 tags: [milestone, m6, conversation-context, snapshot]
 source: internal
 created: 2026-05-11
-updated: 2026-05-16
+updated: 2026-05-17
 ---
 
 # Conversation Context: Milestone 6
@@ -12,7 +12,7 @@ updated: 2026-05-16
 >
 > Sibling snapshots: [`../report/CONVERSATION_CONTEXT.md`](../report/CONVERSATION_CONTEXT.md) (thesis writing), [`../research/CONVERSATION_CONTEXT.md`](../research/CONVERSATION_CONTEXT.md) (frozen 2026-05-04 literature arm + algorithm/systems), [`../training/CONVERSATION_CONTEXT.md`](../training/CONVERSATION_CONTEXT.md) (training pipeline).
 
-**Last updated**: 2026-05-16 (Phase 1, 2, 3 artifacts frozen; supervisor brief + presentation outline authored; one user decision pending on pick #2)
+**Last updated**: 2026-05-17 (M5.1 landed at step_180; STORYLINE + PRESENTATION + PICKED_PAIR + PUBLICATION_FRAMING revised; 2026-05-17 successor supervisor brief authored; one user decision still pending on pick #2)
 
 ---
 
@@ -56,6 +56,9 @@ Captured here as the starting point, not as a settled answer. All six rows survi
 | Pick #1 frozen: **Candidate C reward-shape ablation** at the M5.1 recipe | 2026-05-16 | Closes Phase-1 Finding 1's gap; both positive and negative outcomes publishable; rewritten post-audit as small-model / single-GPU / no-format-reward complementary point. See [`PICKED_PAIR.md`](PICKED_PAIR.md) |
 | Pick #2 default: **Candidate R 2-seed prompt-pair replication** (defensive); user opt-in for Candidate M (ambitious) | 2026-05-16 | C + R fits 14-21 d wall-clock and clears the 2026-06-10 cutoff with 3-6 d margin; C + M slips to cutoff. Targets: C + R = ICLR-blogpost / Workshop / Findings; C + M = ICLR / ACL main 15-25 % under positive outcome only |
 | Frame the paper as a **characterisation of the small-rollout regime for search-tool RL at sub-1B**, not as a recipe-stack | 2026-05-16 | Mechanism-named takeaway; turns method-transfer objection into a non-objection (the contribution is the regime, not a new algorithm) |
+| **HOLD M5.1 at step_180** (58 % of one MuSiQue epoch); redirect remaining ~$60-80 budget to M8.2 | 2026-05-17 | F1-only ceiling structural at 0.22-0.28 cadence-mean; 130 steps in band, no monotone climb; remaining 131 steps would buy < 2 pp reward; that money buys ~12 h of M8.2 with predicted +0.04-0.08 lift |
+| **Add 4th contribution to the picked-pair paper**: lean-drift-lean cycling as a GRPO self-stabilisation finding (independent of the reward-shape ablation) | 2026-05-17 | Two complete cycles in 180 steps with cycle-2 damped on every metric; non-trivial training-dynamics characterisation that workshop / Findings reviewers value |
+| **Pre-flight unblocked**: F1-only HF checkpoint series published, picked-pair remaining runs (F1+0.1, EM-only) can launch | 2026-05-17 | M5.1 final at step_180 is the F1-only anchor; remaining picks need ~7-9 d each at same H200 substrate |
 
 ## 5. Compute and budget (M6-relevant)
 
@@ -83,11 +86,12 @@ M6 itself uses **no GPU compute**. The constraints on what M6's picked pair can 
 | [`LITERATURE_GAP_AUDIT_2026-05-16.md`](LITERATURE_GAP_AUDIT_2026-05-16.md) | Authored 2026-05-16; 18 papers (2025-11 → 2026-05) missing from the frozen 2026-05-04 pass; 5 Tier-1 (must-engage), 4 Tier-2 (dense-credit cluster), 9 Tier-3 (additive) |
 | [`LANDSCAPE_TABLE_2026-05.md`](LANDSCAPE_TABLE_2026-05.md) | **Frozen 2026-05-16**; 25 papers, 3-axis positioning analysis, 200-word related-work paragraph drafted |
 | [`CANDIDATE_EXPERIMENTS.md`](CANDIDATE_EXPERIMENTS.md) | **Frozen 2026-05-16**; five candidates filtered to two viable pairs (C + R defensive, C + M ambitious) |
-| [`PICKED_PAIR.md`](PICKED_PAIR.md) | **Frozen 2026-05-16 except pick #2**; C locked, R is default with user opt-in for M |
-| [`PUBLICATION_FRAMING.md`](PUBLICATION_FRAMING.md) | **Provisional 2026-05-16**; both pair variants drafted; freezes on user pick #2 |
-| [`PRESENTATION_OUTLINE.md`](PRESENTATION_OUTLINE.md) | Authored 2026-05-16; terse 17-slide outline for talk + thesis defense |
-| [`STORYLINE.md`](STORYLINE.md) | **Living** 2026-05-16; the running narrative, fact-checked, with the math example for the F1+0.1 floor + standardised step-1000 plots + critical NeurIPS assessment |
-| [`../report/SUPERVISOR_MEETING_2026-05-16_m0_to_6.md`](../report/SUPERVISOR_MEETING_2026-05-16_m0_to_6.md) | Authored 2026-05-16; M0-to-M6 narrative; successor to the 2026-05-07 brief |
+| [`PICKED_PAIR.md`](PICKED_PAIR.md) | **Frozen 2026-05-16 except pick #2** (revised 2026-05-17: pre-flight unblocked, threat #1 retired) |
+| [`PUBLICATION_FRAMING.md`](PUBLICATION_FRAMING.md) | Provisional 2026-05-16; venue ranges sharpened 2026-05-17 with M5.1-landed evidence |
+| [`PRESENTATION_OUTLINE.md`](PRESENTATION_OUTLINE.md) | Authored 2026-05-16; revised 2026-05-17 with M5.1-landed slide-5 / 6 / 10 numbers |
+| [`STORYLINE.md`](STORYLINE.md) | **Living**; major revision 2026-05-17 after M5.1 landed (cadences 10-18 + lean-drift-lean cycling + empirical chain-flip data + Goodhart traces) |
+| [`../report/SUPERVISOR_MEETING_2026-05-16_m0_to_6.md`](../report/SUPERVISOR_MEETING_2026-05-16_m0_to_6.md) | **SUPERSEDED 2026-05-17**; frozen as the M5.1-mid-flight snapshot |
+| [`../report/SUPERVISOR_MEETING_2026-05-17_m0_to_6.md`](../report/SUPERVISOR_MEETING_2026-05-17_m0_to_6.md) | Authored 2026-05-17; current supervisor brief with M5.1 landed at step_180 |
 
 ## 9. Salvage summary (from 2026-05-11 deep dive)
 

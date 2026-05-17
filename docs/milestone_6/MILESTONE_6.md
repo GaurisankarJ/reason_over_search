@@ -3,7 +3,7 @@ title: MILESTONE 6 — Literature review + experiment planning for publication
 tags: [milestone, literature-review, planning, publication, thesis]
 source: internal
 created: 2026-05-11
-updated: 2026-05-16 (Phase 1, 2, 3 artifacts frozen; supervisor brief + presentation outline authored)
+updated: 2026-05-17 (M5.1 landed at step_180; STORYLINE + PRESENTATION + PICKED_PAIR + PUBLICATION_FRAMING revised; 2026-05-17 supervisor brief authored)
 ---
 
 # Milestone 6: Literature review and experiment planning for publication
@@ -162,8 +162,9 @@ Estimated effort: 2-3 working days.
 | [`PICKED_PAIR.md`](PICKED_PAIR.md) | Phase 3a output: pick #1 = C frozen, pick #2 user choice pending | **Provisional 2026-05-16** |
 | [`PUBLICATION_FRAMING.md`](PUBLICATION_FRAMING.md) | Phase 3b output: venue probability + 200-word related-work + threats-to-validity (both pair variants drafted) | **Provisional 2026-05-16** (freezes on user pick #2) |
 | [`PRESENTATION_OUTLINE.md`](PRESENTATION_OUTLINE.md) | Terse 17-slide outline for talk + thesis defense | Authored 2026-05-16 |
-| [`STORYLINE.md`](STORYLINE.md) | Running document: the project narrative, fact-checked, with critical NeurIPS assessment + the math example for the F1+0.1 floor + standardised step-1000 plots | Living; authored 2026-05-16 |
-| [`../report/SUPERVISOR_MEETING_2026-05-16_m0_to_6.md`](../report/SUPERVISOR_MEETING_2026-05-16_m0_to_6.md) | M0-to-M6 narrative; successor to the 2026-05-07 brief | Authored 2026-05-16 |
+| [`STORYLINE.md`](STORYLINE.md) | Running document: the project narrative, fact-checked, with critical NeurIPS assessment + math example for F1+0.1 floor + step-1000 plots + (added 2026-05-17) M5.1-landed cadences 10-18, lean-drift-lean cycling, empirical chain-flip data, Goodhart traces | Living; authored 2026-05-16; major revision 2026-05-17 |
+| [`../report/SUPERVISOR_MEETING_2026-05-16_m0_to_6.md`](../report/SUPERVISOR_MEETING_2026-05-16_m0_to_6.md) | M0-to-M6 narrative (M5.1-mid-flight). **SUPERSEDED 2026-05-17**; frozen reference. | Frozen 2026-05-17 |
+| [`../report/SUPERVISOR_MEETING_2026-05-17_m0_to_6.md`](../report/SUPERVISOR_MEETING_2026-05-17_m0_to_6.md) | M0-to-M6 narrative with M5.1 landed at step_180; current supervisor brief | Authored 2026-05-17 |
 
 ### Pre-Phase-1 update (2026-05-11)
 

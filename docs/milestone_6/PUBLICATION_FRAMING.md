@@ -3,7 +3,7 @@ title: M6 Phase 3b: Publication framing brief
 tags: [milestone, m6, phase3, publication, venue]
 source: internal
 created: 2026-05-16
-updated: 2026-05-16
+updated: 2026-05-17
 ---
 
 # Publication Framing Brief
@@ -12,7 +12,7 @@ updated: 2026-05-16
 >
 > Conditional on the user's pick-#2 decision in [`PICKED_PAIR.md` §6](PICKED_PAIR.md#6-decision-needed-from-the-user). Both variants laid out below; merge to one once the pick is made.
 
-**Status**: provisional 2026-05-16. Freezes on user pick.
+**Status**: provisional 2026-05-16; venue ranges sharpened 2026-05-17 with M5.1-landed evidence (lean-drift-lean cycling + empirical chain-flip data add a fourth contribution). Freezes on user pick.
 
 ---
 
@@ -35,27 +35,27 @@ updated: 2026-05-16
 
 Anchored to the [`CONVERSATION_CONTEXT.md` §3 row 6](CONVERSATION_CONTEXT.md#3-working-assumption-from-2026-05-11-critical-review-confirmed-2026-05-16) honest ranges (NeurIPS main 5-10 %, ICLR / ACL / EMNLP main 15-25 %, Findings / Workshop 50 %+, ICLR blogpost very plausible if the message is "simple recipe + characterisation").
 
-### If C + R (defensive)
+### If C + R (defensive) (sharpened 2026-05-17)
 
 | Venue | Probability | Why |
 |---|---|---|
-| **ICLR blogpost** (like JustRL) | very plausible (~70-85 %) | Single mechanism-named takeaway + small-model characterisation + project's own measurements is exactly the JustRL template |
-| **Workshop** (NeurIPS SoLaR / NeurIPS R0-FoMo / ICLR Reasoning) | 50-65 % | Format and scale fit; reviewers will accept the small-scale scope as the contribution |
-| **Findings of ACL / EMNLP** | 30-45 % | Negative or null result on reward shape is harder to land at Findings than positive |
-| **ICLR / ACL / EMNLP main** | 10-20 % | The pair lacks an efficiency or algorithmic contribution to anchor the novelty claim |
-| **NeurIPS main** | < 5 % | The pair is too defensive for NeurIPS main |
+| **ICLR blogpost** (like JustRL) | very plausible (~85-92 %) | M5.1-landed evidence gives three blogpost-friendly figures (trajectory matrix, lean-drift-lean cycling, chain-flip-vs-reward scatter); JustRL template fit |
+| **Workshop** (NeurIPS SoLaR / NeurIPS R0-FoMo / ICLR Reasoning) | 70-82 % | Lean-drift-lean cycling is workshop-receptive training-dynamics content |
+| **Findings of ACL / EMNLP** | 50-65 % | Empirical chain-flip rate + trajectory matrix clear the Findings bar; lean-drift-lean cycling is a venue-positive secondary finding |
+| **ICLR / ACL / EMNLP main** | 22-32 % | Mechanism-named takeaway + concrete trajectory + self-stabilisation finding; still hampered by head-to-head and seed-variance gaps |
+| **NeurIPS main** | 10-18 % | The added self-stabilisation finding helps; head-to-head + scale + seed gaps still dominate. Do not optimise for NeurIPS main |
 
 **Recommended target**: **ICLR blogpost** first, with workshop as the fallback. Findings is a stretch but worth a Cycle 2 attempt if the blogpost rejection comes back with positive reviews.
 
-### If C + M (ambitious)
+### If C + M (ambitious) (sharpened 2026-05-17)
 
 | Venue | Probability | Why |
 |---|---|---|
-| **ICLR / ACL / EMNLP main** | 15-25 % (positive outcome only) | Mechanism-named takeaway + concrete efficiency claim + closes a real literature gap (MC-GRPO applied to search-tool) |
-| **NeurIPS main** | 5-10 % (positive outcome only) | Insufficient absolute compute / scale for NeurIPS main competitiveness even with positive outcome |
-| **Workshop** (NeurIPS R0-FoMo / Agentic-RL workshops) | 60-75 % | Positive outcome is clear novelty; negative outcome is still a useful narrowing finding |
-| **Findings of ACL / EMNLP** | 40-55 % | Either outcome fits Findings |
-| **ICLR blogpost** | 50-65 % | Less natural fit than C + R; blogposts favour single-takeaway not two-experiment ablations |
+| **ICLR / ACL / EMNLP main** | 22-32 % (positive M outcome) | Mechanism-named takeaway + concrete efficiency claim + closes the MC-GRPO-on-search literature gap + the M5.1 self-stabilisation finding strengthens the training-dynamics section |
+| **NeurIPS main** | 10-18 % (positive outcome only) | Compute / scale still insufficient for NeurIPS main competitiveness even with positive outcome |
+| **Workshop** (NeurIPS R0-FoMo / Agentic-RL workshops) | 65-78 % | Positive outcome is clear novelty; negative outcome is still useful narrowing |
+| **Findings of ACL / EMNLP** | 42-58 % | Either outcome fits Findings |
+| **ICLR blogpost** | 55-68 % | Less natural fit than C + R; blogposts favour single-takeaway. Still plausible after the M5.1 lean-drift-lean addition |
 
 **Recommended target**: **ICLR / ACL main** first (under positive M outcome) with **Workshop or Findings** as fallback. NeurIPS is dishonest as a primary target.
 

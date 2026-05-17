@@ -3,7 +3,7 @@ title: M6: terse presentation outline (talk + thesis defense)
 tags: [milestone, m6, presentation, talk, outline]
 source: internal
 created: 2026-05-16
-updated: 2026-05-16
+updated: 2026-05-17
 ---
 
 # Presentation Outline (terse)
@@ -53,17 +53,20 @@ updated: 2026-05-16
 **Two new milestones since the 2026-05-07 supervisor brief**:
 
 - **M4** (closed 2026-05-09): untrained Qwen3.5-0.8B baselines. Avg EM hybrid 0.057, base 0.034. The "untrained floor" any trained Qwen3.5 checkpoint must beat.
-- **M5.1** (live since 2026-05-11; on H200 dedicated tier since 2026-05-15): first GRPO-trained Qwen3.5-0.8B on the ReSearch-paper recipe in NeMo-RL.
-  - Through cadence 9 (step 93): reward 0.028 → 0.228 (~8× lift), tool calls 8.96 → 3.4 (~MuSiQue ground-truth hop count), token mean 7038 → 2200 (3.2× compression).
-  - Plateau structural (not capacity-bounded): F1-only cannot disambiguate chain-correct from token-aligned-by-luck.
+- **M5.1 LANDED 2026-05-17 ~08:18 UTC at step_180** (HOLD, not crash; 58 % of one MuSiQue epoch). First GRPO-trained Qwen3.5-0.8B on the ReSearch-paper recipe in NeMo-RL; 18 cadences × 10 steps.
+  - Peak window-mean **0.280 at cadence 11**. Run-high single step **0.394 at step 49**.
+  - Tool calls 8.96 → ~3.4 (matches MuSiQue ground-truth ~3-hop chain length); token mean 7038 → ~2200 (3.2× compression).
+  - **F1 ceiling structural**: 130 steps in 0.20-0.28 cadence band, no monotone climb.
 
-## Slide 6: The shrink-and-improve regime
+## Slide 6: The shrink-and-improve regime + lean-drift-lean cycling
 
-**Plot**: reward mean vs step (rising) and tok mean vs step (falling), cadences 1-9.
+**Plot 1**: reward window-mean vs step (climbs 0.028 → 0.280) overlaid with token mean (compresses 7038 → 2200).
+**Plot 2**: tool_median vs step showing two cycles (C12-C16: 3 → 6 → 3; C17-C18: 3 → 5 in flight) with chain-flip-rate overlay.
 
-- Inverts the long-CoT regime familiar from math reasoning RL.
-- DGPO ([arXiv:2508.20324](https://arxiv.org/abs/2508.20324) v4) gives mechanistic support: 0.5-1B agentic RAG fails under pure RL in their setup; ours succeeds with the right reward (no partial-credit floor).
-- This is the **regime claim** that earns small-scale as the paper's scope, not as an apology.
+- **Shrink-and-improve** inverts the long-CoT regime of math reasoning RL.
+- **Lean-drift-lean cycling** (NEW 2026-05-17): GRPO self-stabilises. Cycle 1 peaked at tool_med 6 + len_med 28.8 K + flip rate 58 %; cycle 2 peaked at tool_med 5 + len_med 23.7 K + flip rate 53 % (**damped** on every metric).
+- DGPO ([arXiv:2508.20324](https://arxiv.org/abs/2508.20324)): 0.5-1B agentic RAG fails under pure RL in their setup; ours succeeds with the right reward (no partial-credit floor).
+- This is the **regime claim**: small-scale is the paper's scope, not an apology.
 
 ## Slide 7: M6: the planning milestone
 
@@ -93,13 +96,13 @@ updated: 2026-05-16
 
 **Key result**: arXiv:2602.19526 partially scoops the reward-shape ablation. Rewrite as small-model / single-GPU / no-format-reward complementary point. **All six framing decisions from 2026-05-11 survive the audit unchanged.**
 
-## Slide 10: Picked pair (frozen)
+## Slide 10: Picked pair (pre-flight unblocked 2026-05-17)
 
-**Pick #1 (locked)**: **reward-shape ablation** at the M5.1 recipe (Qwen3.5-0.8B). Three runs × {F1+0.1, F1-only, EM-only}. ~\$110-160, ~9-13 d. Closes Phase-1 Finding 1's gap.
+**Pick #1 (locked + F1-only series already published)**: **reward-shape ablation** at the M5.1 recipe (Qwen3.5-0.8B). The F1-only run *is* M5.1; 18 checkpoints on HF Hub at [pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42-f1-only](https://huggingface.co/pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42-f1-only). Remaining: 2 more runs (F1+0.1, EM-only) at same recipe + same 180-step horizon. Total picked-pair eval matrix: **3 rewards × 18 ckpts × 7 benchmarks × 1-2 seeds = 378-756 data points**.
 
 **Pick #2 (one decision pending)**:
 - **Option A (defensive, default)**: 2-seed Qwen3.5-0.8B prompt-pair replication. Closes Finding 2 + the no-multi-seed gap. ~\$80-120, ~5-8 d. ICLR-blogpost / Workshop / Findings target.
-- **Option B (ambitious)**: MC-GRPO at G=2 on M5.1 recipe. Engages the literature gap on median-baseline-for-search-tool. ~\$150-220, ~10-14 d. ICLR / ACL main 15-25 % under positive outcome.
+- **Option B (ambitious)**: MC-GRPO at G=2 on M5.1 recipe. Engages the literature gap on median-baseline-for-search-tool. ~\$150-220, ~10-14 d. ICLR / ACL main 22-32 % under positive outcome.
 
 ## Slide 11: Takeaway sentences (per pair)
 

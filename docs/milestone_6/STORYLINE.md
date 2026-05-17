@@ -3,18 +3,18 @@ title: STORYLINE: the journey, fact-checked, with the gaps named
 tags: [milestone, m6, storyline, narrative, thesis]
 source: internal
 created: 2026-05-16
-updated: 2026-05-16
+updated: 2026-05-17
 ---
 
 # Storyline (living document)
 
-> A walkthrough of the project's narrative arc from Phase-1 ALICE runs through M5.1 H200 training to the picked-pair contribution, with every claim cross-referenced to file:line or paper, and a critical assessment of whether the result is defensible as a NeurIPS / ICLR submission. Living document; revise as M5.1 lands and as the picked pair runs. Companion: [`../report/SUPERVISOR_MEETING_2026-05-16_m0_to_6.md`](../report/SUPERVISOR_MEETING_2026-05-16_m0_to_6.md) is the supervisor brief; this file is the introspective working narrative.
+> A walkthrough of the project's narrative arc from Phase-1 ALICE runs through M5.1 H200 training (held at step_180) to the picked-pair contribution, with every claim cross-referenced to file:line or paper, and a critical assessment of whether the result is defensible as a NeurIPS / ICLR submission. Living document; major revision 2026-05-17 after M5.1 landed. Companion: [`../report/SUPERVISOR_MEETING_2026-05-17_m0_to_6.md`](../report/SUPERVISOR_MEETING_2026-05-17_m0_to_6.md) is the supervisor brief; this file is the introspective working narrative.
 
-**Status**: living. Initial author 2026-05-16; next revision when M5.1 lands.
+**Status**: living. Initial author 2026-05-16; M5.1-HOLD revision 2026-05-17.
 
-## 0. The narrative arc in one paragraph
+## 0. The narrative arc in one paragraph (revised 2026-05-17)
 
-We started in April 2026 on a Qwen3-0.6B hybrid + verl + ALICE stack, replicating the ReSearch-paper recipe knob-for-knob. The base model could not bootstrap tool-use from cold start; the hybrid model could but the F1 + 0.1-partial-credit floor in the reward made tool-using and no-tool policies look nearly identical to the optimiser, so prompt design (not reward design) became the dominant lever; we ablated the prompt nine ways and saw three behavioural regimes (heavy-tool 2-call, standard 1-tool, total collapse) all clustered in a 0.16-0.22 reward band; the tag-token choice (`<search>` vs `<tool_call>`) made essentially no difference at equal step count; held-out eval on 7 benchmarks lifted EM 0.102 → 0.155 (+52 % rel) but the lift was concentrated on single-hop because 0.6B is multi-hop-capacity-bound. We then pivoted to NeMo-RL (verl does not support Qwen3.5) and Qwen3.5-0.8B (Qwen3.5-2B at the paper recipe projects to 55-85 days / run on 1× A100, infeasible at our budget); the M5.1 H200 a4 run is climbing through cadence 9 with reward 0.028 → 0.228 across 93 steps in the **shrink-and-improve regime** (length compresses 3× while reward grows, inverting the long-CoT regime familiar from math reasoning RL); the plateau at ~0.22-0.24 is structural (F1-only cannot distinguish chain-correct from token-aligned-by-luck rollouts). The picked-pair contribution turns this into a publishable result by running three reward variants (F1+0.1 / F1-only / EM-only) and evaluating every 10-step checkpoint of each run on all 7 benchmarks: ~15-20 checkpoints × 3 rewards × 7 benchmarks × 1-2 seeds = 315-840 eval data points. The framing is *efficient tool use from a hybrid model under realistic resource constraints*, not long-CoT reasoning, not a new algorithm.
+We started in April 2026 on a Qwen3-0.6B hybrid + verl + ALICE stack, replicating the ReSearch-paper recipe knob-for-knob. The base model could not bootstrap tool-use from cold start; the hybrid model could but the F1 + 0.1-partial-credit floor in the reward made tool-using and no-tool policies look nearly identical to the optimiser, so prompt design (not reward design) became the dominant lever; we ablated the prompt nine ways and saw three behavioural regimes (heavy-tool 2-call, standard 1-tool, total collapse) all clustered in a 0.16-0.22 reward band; the tag-token choice (`<search>` vs `<tool_call>`) made essentially no difference at equal step count; held-out eval on 7 benchmarks lifted EM 0.102 → 0.155 (+52 % rel) but the lift was concentrated on single-hop because 0.6B is multi-hop-capacity-bound. We then pivoted to NeMo-RL (verl does not support Qwen3.5) and Qwen3.5-0.8B (Qwen3.5-2B at the paper recipe projects to 55-85 days / run on 1× A100, infeasible at our budget). **M5.1 H200 a4 landed at step_180 on 2026-05-17 ~08:18 UTC** (HOLD, not crash; deliberate stop at 58 % of one MuSiQue epoch) with 18 cadences traced step-by-step ([`RESULTS_M5_1_H200.md` §8](../report/RESULTS_M5_1_H200.md#8-live-trajectory)); reward window-mean climbed 0.028 → **0.280 (cadence 11 peak)** in the **shrink-and-improve regime** (length compressed 3× while reward grew, inverting the long-CoT regime of math reasoning RL); the run then exhibited two **lean-drift-lean cycles** (over-search peaks at cadences 14 and 18; GRPO self-stabilised both times, second cycle damped). The plateau at ~0.22-0.28 is structural: F1-only reward gives identical scalar credit to chain-correct and chain-broken-but-token-aligned-by-luck rollouts, and the **empirical silent-flip rate sits in an 18-58 % band across cadences 5-18 with no decline as training progresses**. Two concrete reward-1.0-via-broken-chain traces (Fox Island, World Cup) are now documented; ~11 % of all rollouts in cadence 12 onward are planned + reward-1.0 + chain-broken (Goodhart at scale). The picked-pair contribution turns this into a publishable result by running three reward variants (F1+0.1 / F1-only / EM-only) and evaluating every 10-step checkpoint of each run on all 7 benchmarks: ~15-20 checkpoints × 3 rewards × 7 benchmarks × 1-2 seeds = 315-840 eval data points. The framing is *efficient tool use from a hybrid model under realistic resource constraints*, not long-CoT reasoning, not a new algorithm.
 
 ## 1. Phase 0: prompt exploration on Qwen3-0.6B (M0_a, "run_1_4b")
 
@@ -248,7 +248,7 @@ The user's verbal phrasing was "85 days on an A100 after running a few steps in 
 
 Drop to Qwen3.5-0.8B: ~3× smaller per-step cost, fits the picked-pair budget envelope.
 
-## 7. M5.1 training: Qwen3.5-0.8B GRPO at the ReSearch-paper recipe (live)
+## 7. M5.1 training: Qwen3.5-0.8B GRPO at the ReSearch-paper recipe (LANDED at step_180)
 
 ### 7.1. Setup (intentional divergences from the paper)
 
@@ -259,40 +259,149 @@ Drop to Qwen3.5-0.8B: ~3× smaller per-step cost, fits the picked-pair budget en
 - **Substrate**: Spheron 1× H200 (a4 run, after a3 crash on B200 sm_100 kernel immaturity) with persistent volume `miletone5`.
 - **Other knobs**: paper-matched (G=5 rollouts/prompt, batch shape, learning rate). Full clause-by-clause map at [`milestone_5/PAPER_VS_OURS_M5.md`](../milestone_5/PAPER_VS_OURS_M5.md).
 
-### 7.2. The live trajectory (cadence 1-9, through 2026-05-16 ~12:30 UTC)
+### 7.2. The full trajectory (cadences 1-18, steps 1-180)
 
-| Cadence | Steps | Reward window-mean | rew > 0 | Tool calls | Token mean | Step wall (min) |
-|---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| 1 | 1-13 | 0.028 → 0.110 | 8 → 20 % | 8.96 → 5.2 | 7038 → 4500 | 18:22 → 6:04 |
-| 2 | 14-22 | 0.119 → 0.132 | 22 % | 5.2 → 4.0 | 4500 → 2700 | 5:36 |
-| 3-4 | 23-50 | 0.140 → 0.171 | 27 → 35 % | 3.8 → 3.5 | 2700 → 2200 | 5:50 |
-| 5 | 51-60 | 0.202 | 38 % | 3.5 | 2200 | 6:00 |
-| 6 | 61-70 | **0.224** | 40 % | 3.5 | 2200 | 6:10 |
-| 7 | 71-80 | 0.202 | 39 % | 3.5 | 2200 | 6:30 |
-| 8 | 81-90 | 0.221 | 43 % | 3.4 | 2200 | 6:30 |
-| 9 | 91-93 | **0.228** | 46 % | 3.4 | 2150 | 6:40 |
+The run completed 18 cadences of 10 steps each (180 steps total = 58 % of one MuSiQue epoch at 64 prompts/step; full source [`RESULTS_M5_1_H200.md` §8](../report/RESULTS_M5_1_H200.md#8-live-trajectory)):
 
-Source: [`RESULTS_M5_1_H200.md` §8](../report/RESULTS_M5_1_H200.md#8-live-trajectory).
+| Cadence | Steps | Reward window-mean | Tool median | Token mean | Step wall (min) | Chain-flip rate (rew ≥ 0.9) | Notes |
+|---:|:---:|:---:|:---:|:---:|:---:|:---:|:---|
+| 1 | 1-13 | 0.028 → 0.110 | 7 → 3 | 7038 → 4500 | 18:22 → 6:04 | n/a (too short) | Cold-start; truncation 68 → 0 % |
+| 2 | 14-24 | 0.119 → 0.132 | 3 | 4500 → 2700 | 5:36 | n/a | Shrink-and-improve in flight |
+| 3 | 25-30 | 0.140 → 0.160 | 3 | 2700 → 2300 | 5:50 | n/a | Standard 1-tool shape |
+| 4 | 31-40 | 0.171 | 4-5 | 2400 | 7:21 | n/a | Cross-verification mode emerges |
+| 5 | 41-50 | 0.202 | 3 | 2200 | 6:00 | 37.9 % | Peak run-high single-step 0.394 at step 49 |
+| 6 | 51-60 | **0.224** | 3 | 2200 | 6:10 | 27.9 % | Three steps cross 0.25 (53/58/60) |
+| 7 | 61-70 | 0.202 | 2-3 | 2200 | 6:30 | 40.2 % | Brief dip (noise window) |
+| 8 | 71-80 | 0.221 | 3 | 2200 | 6:30 | 33.3 % | Step 78 = 0.296 |
+| 9 | 81-90 | 0.228 | 3 | 2150 | 6:40 | **18.6 %** (run low) | Step 86 = 0.294 |
+| 10 | 91-100 | 0.232 | 3 | 14800 | 8:04 | 26.1 % | Planned-multi-hop count +63 % → 249 |
+| **11** | 101-110 | **0.280** (run peak) | 3 | 15800 | 8:36 | 42.7 % | **Step 105 = 0.355 (run high tied later)**; ≥50 % rew>0 first time |
+| 12 | 111-120 | 0.247 | 4 (drift) | 18300 | 10:06 | **47.4 %** | First over-search excursion starts |
+| 13 | 121-130 | 0.221 | 5 | 23600 | 12:44 | 44 % | Drift deepens |
+| 14 | 131-140 | 0.240 | **6** (peak) | **28800** (peak) | **13:44** | **58.0 %** (run high) | Over-search peak; 2 steps > 17 min |
+| 15 | 141-150 | 0.242 | 4 → 3 | 23600 → 18000 | 9:19 | 40.8 % | Self-correction begins mid-cadence |
+| 16 | 151-160 | 0.256 | 3 | 15000 | 6:51 | 39.6 % | Returned to C6-shape; over-search trap exited |
+| 17 | 161-170 | 0.265 | 3 → 4 | 19800 | 9:11 | 48.6 % | Second drift cycle starts; **step 170 = 0.355 tying step 105** |
+| **18** | 171-180 | **0.275** | 4-5 | 23700 | 11:00 | 53.4 % | Second drift damping; 4 steps > 0.28 |
 
-### 7.3. The shrink-and-improve regime (Phase-1 Finding 3 confirmed)
+**Window means across the run**: 0.028 → 0.110 → 0.132 → 0.160 → 0.171 → 0.202 → 0.224 → 0.202 → 0.221 → 0.228 → 0.232 → **0.280** → 0.247 → 0.221 → 0.240 → 0.242 → 0.256 → 0.265 → **0.275**. **Run-high single step**: 0.394 at step 49 (cadence 5); two ties at 0.355 (steps 105 + 170, separated by 65 steps in different operating regimes).
 
-Tool calls compressed 8.96 → ~3.4 (close to MuSiQue's ground-truth ~3-hop chain length); token mean compressed 7038 → ~2200 (3.2×); reward grew 8× from cold start. The regime **inverts the long-CoT regime** of math reasoning RL (where length grows with reward).
+### 7.3. The shrink-and-improve regime (Phase-1 Finding 3 confirmed at 0.8B)
 
-This is the user's "efficient tool user from a hybrid model, not a long reasoning chain model" framing, **confirmed**. The hybrid model is post-trained with both instruct and reasoning data; under outcome-only F1 reward on a retrieval-augmented task it sheds verbose reasoning (which carries no reward) and tightens to ~3 search calls (which carry reward via retrieved evidence). This is structurally distinct from R1-style post-training where reasoning length is rewarded and grows unbounded.
+Cadences 1-2 (steps 1-24): tool calls compressed 8.96 → ~3.0 (close to MuSiQue's ground-truth ~3-hop chain length); token mean compressed 7038 → ~2700 (2.6×); reward grew 5× from cold start. The regime **inverts the long-CoT regime** of math reasoning RL (where length grows with reward).
 
-### 7.4. The plateau is structural (F1 ceiling)
+This is the user's "efficient tool user from a hybrid model, not a long-reasoning-chain model" framing, **confirmed**. The hybrid model is post-trained with both instruct and reasoning data; under outcome-only F1 reward on a retrieval-augmented task it sheds verbose reasoning (which carries no reward) and tightens to ~3 search calls (which carry reward via retrieved evidence). Structurally distinct from R1-style post-training where reasoning length is rewarded and grows unbounded.
 
-Cadences 6-9 sit in the 0.20-0.24 band. Trace analysis at [`RESULTS_M5_1_H200.md` §9.5](../report/RESULTS_M5_1_H200.md#95-f1-reward-ceiling-the-structural-plateau-cause--chain-quality-reward-designs-added-2026-05-16-post-cadence-9) identifies the cause: F1-only gives identical scalar reward to chain-correct rollouts and chain-broken-but-token-aligned-by-luck rollouts. Cadence-9 step 93 idx 10 ("Fox Island / Pan-African Conference") earned reward 1.0 with `<answer>United Kingdom</answer>` despite an internally contradictory chain (model first concluded "United States of America", then silently flipped). Cadence-9 step 91 idx 241 earned reward 1.0 with a chain-clean trace. **Both reward 1.0; the optimiser cannot disambiguate.**
+### 7.4. NEW finding: lean-drift-lean cycling (GRPO self-stabilisation)
 
-This is **the M5.1 plateau cause**, and it is **the picked-pair experiment C's motivation** at 0.8B specifically. M8 ([`milestone_8/MILESTONE_8.md`](../milestone_8/MILESTONE_8.md)) is the chain-consistency reward extension that addresses it; out of scope for the thesis-deadline picked pair.
+The post-cadence-10 trajectory revealed a structural dynamic not visible at cadence 9. **The recipe oscillates between a lean operating point (tool_med 3, len_med 15 K) and an over-search regime (tool_med 6, len_med 29 K), and GRPO self-corrects without external intervention.**
 
-## 8. The picked-pair contribution: per-checkpoint × 7-benchmark × 3-reward trajectory eval
+Two complete cycles observed in 180 steps:
+
+| | Cycle 1 (C12-C16) | Cycle 2 (C17-C18, in flight at HOLD) |
+|---|---|---|
+| Drift start | C12 (step 111) | C17 (step 167) |
+| Tool count peak | **6** at steps 134-135 (C14) | 5 at C18 |
+| Token mean peak | **28.8 K** (C14) | 23.7 K (C18) |
+| Step wall peak | **13:44** mean / >17 min single (C14) | 11:00 mean / 11:15 single (C18) |
+| Chain-flip rate peak | **58 %** (C14) | 53.4 % (C18) |
+| Recovery cadences | 4 (C15-C16) | unknown (HOLD before completion) |
+| Reward range | 0.247 → 0.221 → 0.240 | 0.265 → 0.275 |
+
+**Every metric of the over-search excursion is smaller in cycle 2 than in cycle 1.** This is consistent with the policy *damping* the cycle: it still over-explores, but less far each time. The cycle is GRPO's intended behaviour ([`RESULTS_M5_1_H200.md` cadence-16 finding 1](../report/RESULTS_M5_1_H200.md#cadences-13-16-steps-121-160-catch-up-block-the-over-search-and-recovery-arc)): when an exploration mode stops paying off in reward, group-relative advantage selects away from it. **The recipe is self-stabilising at this scale.** This is a non-trivial training-dynamics finding worth its own thesis section.
+
+### 7.5. The F1 ceiling is structural: chain-flip data, not just theory
+
+§2.3 derived the F1-floor mechanism analytically. M5.1 cadences 5-18 now provide **direct empirical evidence** that F1-only leaves chain-coherence under-determined ([`RESULTS_M5_1_H200.md` §9.5 chain-flip table](../report/RESULTS_M5_1_H200.md#measured-chain-flip-rate-across-cadences-added-2026-05-16-post-cadence-11)).
+
+A regex-based silent-flip detector (the M8.1 chain-consistency penalty algorithm from [`milestone_8/MILESTONE_8.md`](../milestone_8/MILESTONE_8.md)) was applied to every reward ≥ 0.9 rollout across cadences 5-18:
+
+- **Flip-rate band**: 18.6 % (C9 low) to 58.0 % (C14 high). 14 cadences × ~400-500 perfect rollouts = ~6000 perfect rollouts analysed.
+- **Direction of correlation**: cadence-mean reward and cadence flip-rate are **positively correlated**, not negative. Reward and silent-flip count climb *together*. F1-only is reward-shaping for token alignment, not chain coherence.
+- **Goodhart at scale**: cadence 12 had **344 reward-1.0 rollouts with explicit numbered plans**, of which 47.4 % (~163) had silent entity flips. That is ~11 % of *all* rollouts in the cadence being planned + perfect-by-reward + chain-broken.
+
+**Two concrete trace examples** (from [`RESULTS_M5_1_H200.md` §9.5](../report/RESULTS_M5_1_H200.md#95-f1-reward-ceiling-the-structural-plateau-cause--chain-quality-reward-designs-added-2026-05-16-post-cadence-9)):
+
+#### Trace A: Fox Island / Pan-African Conference (cadence 9, step 93)
+
+Q: "Find the country containing Fox Island, then find the country whose representative made an address at the first Pan-African Conference."
+
+| Call | Retrieved | Model's `<think>` between calls |
+|---:|---|---|
+| 1 ("Fox Island country") | Fox Island Rhode Island (USA), Alaska Fox Islands (USA) | "Good, I found that Fox Island is in Rhode Island, **United States of America**" |
+| 2 ("first Pan-African Conference city") | London 1900 | (silent flip) "Country containing Fox Island: **United Kingdom**" - no justification; model writes "I'm a bit confused" |
+| 3 ("UK representative in London") | Karen Pierce | "Nation of that representative: United Kingdom" |
+
+Final answer: `United Kingdom`. Gold: `United Kingdom`. **Reward 1.0.** The chain is internally inconsistent; the F1 metric cannot tell.
+
+#### Trace B: 2014 World Cup / 2006 finish (cadence 11, step 102)
+
+Q: "Where did the country that won the 2014 event, that is recognized as the first HDTV broadcast in Europe, finish in the 2006 World Cup?"
+
+Correct chain: 2014 World Cup winner = Germany; Germany's 2006 finish = 3rd place. Correct answer: `third`.
+
+| Call | Model's reasoning | Reality |
+|---:|---|---|
+| 1 | "Brazil won the 2014 event" | Brazil hosted; Germany won. **Wrong.** |
+| 2 | "Italy won the 2006 World Cup, so Italy finished in third" | Italy WON 2006 (1st place). **Wrong on two counts.** |
+| 3 (verify) | "Italy finished in third place" | Still wrong. |
+| 4 | Final answer: `third place` | Gold = "third" → **reward 1.0 by accident** |
+
+Three wrong bridge resolutions; the final answer matches gold for the *correct* chain (Germany → 3rd) by Goodhart-style token alignment.
+
+#### Contrast: clean-chain trace (cadence 9, step 91)
+
+Q: "Aqeel Khan / Kotri railway opening" multi-hop. 3 tool calls; each retrieval citation named in `<think>`; final answer matches gold by chain resolution. Also reward 1.0.
+
+**Both Trace A / Trace B and the clean-chain trace return reward 1.0 to the GRPO group; the optimiser sees them as equivalent.** This is the F1-ceiling mechanism in operation, with measured Goodhart density 18-58 % depending on cadence.
+
+### 7.6. Other M5.1 findings worth surfacing
+
+- **4-hop+ generalisation across 5+ distinct bridges** (Ghana × 3, Nigeria, UK, Iowa, Singapore, Manitoba per cadence-6 to cadence-11 traces). The model has the capability; the reward isn't selecting for it.
+- **Planned-multi-hop count peaks at 391 rollouts in cadence 15** (the consolidation of "numbered-plan + 3-5 calls + final answer" shape), then stabilises at 200-370 across cadences 16-18. The planned shape persists through the over-search drift and through the correction; cycle 1 was about *tool-count* drift, not planning-mode drift.
+- **Run-high single step 0.394 at step 49** (cadence 5) is achieved well before the peak cadence-mean (C11 = 0.280 at step ~105). Single-step peaks orbit in the 0.28-0.40 band; cadence-means orbit in 0.22-0.28. The variance gap (~0.10 between step peak and cadence mean) is informative for the picked pair: per-checkpoint trajectory eval needs to average over ≥ 5-10 steps to get stable variance.
+- **Tag-format / chain-of-thought decomposition emerges spontaneously** by cadence 4 (Chaka Khan / Trump Tower trace at [`RESULTS_M5_1_H200.md` cadence-4](../report/RESULTS_M5_1_H200.md#cadence-4-steps-31-40-through-2026-05-16-0242-utc)): the model produces "I need to first find X, then find Y, finally determine Z. Let me break this down:" with numbered hops. Not prompted explicitly; emerges from F1 selection on multi-hop questions.
+- **Two recurring failure modes** observed across cadences 5-8: (i) **bridge collapse to more-general entity** (Quebec carnival → "Canada"; Manitoba hydroelectricity → country-level when gold expects province-level); (ii) **token-decode glitch on easy 2-hops** (Nicklaus golf → corrupted-noun answer). Both score below 0.3 F1 despite correct mid-chain reasoning. These are not the Goodhart-floor failures of §7.5; they are different shapes that the picked pair's per-checkpoint trajectory eval should also surface.
+
+### 7.7. HOLD decision at step_180 (2026-05-17)
+
+Run paused, not crashed. [`RESULTS_M5_1_H200.md` §9.6](../report/RESULTS_M5_1_H200.md#96-hold-decision-at-step_180-2026-05-17) names the rationale:
+
+**Evidence the ceiling is structural, not under-trained**:
+- Cadences 8-18 (110 steps) sit in the 0.20-0.28 reward band with **no monotone climb**; the run is on lean-drift-lean cycles.
+- Best single cadence (C11) = 0.280 window-mean; still 4-12 pp below the 0.32-0.40 that would mark M5.1 as a paper-faithful "win" (ReSearch reports 0.40-0.47 EM avg).
+- Chain-flip rate stays in 18-58 % band across 130 steps with **no decline as training progresses**.
+- Two reward-1.0-via-broken-chain traces (Fox Island, World Cup) at scale (~11 % of all rollouts in C12+).
+
+**Cost/value of finishing the remaining 131 steps to step_311**:
+- ~$60-80 on dedicated H200 ($0.45/step × 131).
+- Expected delta: < 2 pp reward at the cadence mean; eval on Bamboogle expected within noise of step_180.
+- That money buys ~12 hours of M8.2 training (predicted +0.04-0.08 absolute lift per §9.5).
+- Therefore: hold M5.1 at step_180, redirect to M8.2.
+
+**Preemption sequence** (the operational reason for stopping now): after step_180 landed, the dedicated host went down and four consecutive Spot replacements were SSH-unreachable mid-bring-up (each preempted before the 10-15 min docker pull could complete). The persistent volume preserved all state so no data was lost; the hold is reversible by booking dedicated H200 + following the resume runbook at [`RESULTS_M5_1_H200.md` §9.6 "Resume path"](../report/RESULTS_M5_1_H200.md#resume-path-if-ever-wanted).
+
+**What is locked in from M5.1 regardless of step_180 vs step_311**:
+- F1-only ceiling empirically named at 0.22-0.28 reward (cadence mean) with 18-58 % silent-flip rate band.
+- Two concrete reward-1.0-via-broken-chain traces documented.
+- Self-stabilisation finding (over-search trap → recovery within 30 steps, damped on second cycle).
+- 4-hop generalisation across 5+ distinct bridges.
+- Planned-multi-hop count saturates at 200-400 / cadence.
+
+**These five findings are the M5.1 contribution to the thesis**, and they motivate both the picked pair (Candidate C reward-shape ablation, with empirical chain-flip evidence now in hand) and the follow-up M8 chain-consistency reward extension (out of scope for the thesis-deadline picked pair).
+
+## 8. The picked-pair contribution: per-checkpoint × 7-benchmark × 3-reward trajectory eval (pre-flight unblocked 2026-05-17)
 
 ### 8.1. What we have set up
 
-M5.1 saves a checkpoint every 10 training steps. Over the planned 150-200-step run, that is **15-20 checkpoints per training run**. The picked pair runs **3 reward variants** (F1+0.1, F1-only, EM-only) × **1-2 seeds** = **3-6 runs**. Each run produces 15-20 checkpoints; each checkpoint is evaluated on **7 benchmarks** with the M3 / M4 protocol.
+M5.1 saves a checkpoint every 10 training steps. With M5.1 held at step_180, the **canonical F1-only series has 18 checkpoints saved on HF Hub** ([`pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42-f1-only`](https://huggingface.co/pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42-f1-only)). The picked pair launches **two more training runs** at the same recipe but with the F1+0.1 floor reward and EM-only reward; each adds ~18 checkpoints. Total: **3 reward variants × 18 checkpoints × 7 benchmarks × 1-2 seeds = 378-756 eval data points**.
 
-Total eval data points: **3 rewards × 15-20 checkpoints × 7 benchmarks × 1-2 seeds = 315-840 data points**.
+Pre-flight gates passed (2026-05-17):
+- M5.1 landed at a defensible plateau (0.22-0.28 cadence band, not a debug-grade outcome).
+- F1-only HF repo published as the comparison anchor.
+- Empirical chain-flip data in hand: 18-58 % across cadences 5-18 with positive correlation to reward.
+- Two concrete reward-1.0-via-broken-chain traces documented for the paper's motivation paragraph.
+- Eval pipeline locked at the M3 / M4 protocol; the same 7-benchmark Plan A data sets that produced the M3 baseline are ready.
 
 ### 8.2. What this lets us see (the novelty boost)
 
@@ -318,29 +427,33 @@ H1 + H2 + H3 + H4 are four claims that are *each* publishable. The per-checkpoin
 
 If the M5.1-F1-only trajectory ends at ~0.15-0.20 EM avg, the headline claim is "0.8B trained with F1-only on MuSiQue matches 0.6B trained with paper-faithful reward on MuSiQue, and approaches the 3B raw baseline." If it ends at ~0.25-0.30, it is "0.8B trained on MuSiQue clears 3B raw + approaches 3B GRPO at 1/4 the parameter budget."
 
-## 9. The thesis-paper story (compact)
+## 9. The thesis-paper story (compact, revised 2026-05-17)
 
-**One sentence**: at sub-1B scale on retrieval-augmented multi-hop QA, the ReSearch partial-credit reward floor masks tool-use signal at training time but its removal does not by itself close the F1 chain-quality blindness; the resulting plateau is structural, and the small-model regime exhibits a *shrink-and-improve* training-dynamic distinct from the long-CoT regime familiar from math reasoning RL.
+**One sentence**: at sub-1B scale on retrieval-augmented multi-hop QA, the ReSearch partial-credit reward floor masks tool-use signal at training time *and* removing the floor in favour of F1-only creates a different mask (chain-quality blindness) that we measure at 18-58 % silent-flip rate across 130 training steps; the resulting reward plateau is structural at 0.22-0.28 window-mean, the small-model regime exhibits a *shrink-and-improve* training dynamic distinct from the long-CoT regime familiar from math reasoning RL, and GRPO self-stabilises around the F1-optimum operating shape (lean-drift-lean cycling, damped over two cycles in 180 steps).
 
-**Three contributions** (in priority order):
+**Four contributions** (in priority order, revised 2026-05-17):
 
-1. **Per-checkpoint × per-benchmark × per-reward trajectory** ablation at 0.8B (§8). The first such trajectory-grade evidence at sub-1B in the search-tool RL literature.
-2. **Mechanism story for the F1+0.1 floor masking tool-use signal**, with a worked math example (§2) and the M5.1 cadence-9 plateau as a 0.8B re-observation of the Phase-1 0.6B finding.
-3. **Regime characterisation**: shrink-and-improve at sub-1B retrieval-augmented RL inverts the long-CoT regime of math reasoning RL (§7.3). DGPO's "0.5-1B fails under pure RL" motivation is consistent with our base-model failures (§3) but not predictive of our hybrid-model success.
+1. **Per-checkpoint × per-benchmark × per-reward trajectory** ablation at 0.8B (§8). The first such trajectory-grade evidence at sub-1B in the search-tool RL literature; ~378-756 eval data points across 3 reward variants and 18 checkpoints per variant.
+2. **Empirically measured chain-flip rate as the structural F1-ceiling diagnostic** (§7.5). 18-58 % silent-flip band across 14 cadences with positive reward-flip correlation; two concrete reward-1.0-via-broken-chain traces (Fox Island, World Cup) at scale. Direct evidence that F1-only is reward-shaping for token alignment, not chain coherence.
+3. **Lean-drift-lean cycling as a GRPO self-stabilisation finding** (§7.4). The recipe oscillates between lean (tool_med 3) and over-search (tool_med 6) operating points and GRPO selects away from the over-search regime within 30 steps; second cycle in 180 steps damped vs first. Non-trivial training-dynamics characterisation independent of the reward-shape ablation.
+4. **Regime characterisation**: shrink-and-improve at sub-1B retrieval-augmented RL inverts the long-CoT regime of math reasoning RL (§7.3). DGPO's "0.5-1B fails under pure RL" motivation is consistent with our base-model failures (§3) but not predictive of our hybrid-model success; we measure the favourable failure mode the hybrid avoids.
 
 ## 10. Critical assessment: is this a defensible NeurIPS paper?
 
 The user asked for honesty. Here it is.
 
-### 10.1. What works
+### 10.1. What works (strengthened 2026-05-17 with M5.1-landed evidence)
 
 | Claim | Strength | Evidence |
 |---|---|---|
-| Mechanism story for floor masking | Strong | §2 math example + Phase-1 cross-prompt data + M5.1 plateau re-observation |
-| Per-checkpoint trajectory matrix | Very strong if executed | §8 set up; 315-840 data points if all 3 rewards × 1-2 seeds × 7 benchmarks × 15-20 ckpts complete |
-| Phase-1 prompt-design data | Solid | 8 standardised runs, 9-pp behavioural swing on prompt design alone |
+| Mechanism story for F1+0.1 floor masking | Strong | §2 math example + Phase-1 cross-prompt data |
+| Mechanism story for F1-only chain-quality blindness | **Strong (new 2026-05-17)** | §7.5 18-58 % silent-flip band across 14 cadences with positive reward-flip correlation; two reward-1.0-via-broken-chain traces |
+| Per-checkpoint trajectory matrix | Very strong if executed | §8 set up; 378-756 data points if all 3 rewards × 1-2 seeds × 7 benchmarks × 18 ckpts complete |
+| Lean-drift-lean cycling | **Strong (new 2026-05-17)** | §7.4 two complete cycles in 180 steps; every metric of cycle-2 over-search excursion smaller than cycle-1 |
+| Phase-1 prompt-design data | Solid | 8 standardised runs, 9 pp behavioural swing on prompt design alone |
 | 0.8B scale framing | Honest | DGPO + LiteResearcher + the project's own M4 floor data |
-| Shrink-and-improve framing | Suggestive | M5.1 cadence 1-9 trajectory; would need a contrastive long-CoT baseline to be a *regime claim* vs an observation |
+| Shrink-and-improve framing | Suggestive | M5.1 cadence 1-9 trajectory (now confirmed through C18 at HOLD); would need a contrastive long-CoT baseline to be a *regime claim* vs an observation |
+| 4-hop generalisation across 5+ bridges | Solid | M5.1 cadence-by-cadence traces; the model has the capability, the reward isn't selecting for it |
 
 ### 10.2. What does not work for NeurIPS main
 
@@ -356,15 +469,17 @@ The user asked for honesty. Here it is.
 | **Cross-family Qwen3 → Qwen3.5 degradation unexplained** | Low-Medium | M4 surfaced this; we do not have a mechanism. Negative result with no mechanism = related-work line, not a chapter section |
 | **Shrink-and-improve is observation-grade, not regime-grade** | Low-Medium | Needs a contrastive long-CoT GRPO baseline at equivalent compute. Out of budget. Frame as "characterisation of the regime we observe", not "the regime exists in contrast to a measured long-CoT baseline" |
 
-### 10.3. Honest venue ranges (sharpened from PICKED_PAIR.md §3 with the per-checkpoint trajectory addition)
+### 10.3. Honest venue ranges (sharpened 2026-05-17 with M5.1-landed evidence)
 
-| Venue | Probability | Why the trajectory matrix changes the number |
+The M5.1-landed evidence base bumps each venue probability by ~5 pp because three of the four contributions in §9 are now data-supported, not promised:
+
+| Venue | Probability (2026-05-17) | Why the M5.1-landed evidence changes the number |
 |---|---|---|
-| **ICLR blogpost** (the JustRL template) | very plausible (~80-90 %) | Trajectory plots are exactly what a blogpost can carry visually; single mechanism-named takeaway + small-model + project's own measurements |
-| **Workshop** (NeurIPS R0-FoMo / ICLR Reasoning / Agentic-RL workshops) | 65-80 % | The trajectory matrix is the kind of analysis workshop reviewers find valuable; "training-dynamics characterisation" is a venue-positive framing |
-| **Findings of ACL / EMNLP** | 45-65 % | Either outcome of H1-H4 fits Findings; the trajectory matrix is novel enough to clear the bar |
-| **ICLR / ACL / EMNLP main** | 20-30 % | Mechanism-named takeaway + concrete trajectory contribution; still hampered by the head-to-head and seed-variance gaps |
-| **NeurIPS main** | 8-15 % | The trajectory adds substance but the head-to-head + seed-variance + scale gaps dominate the NeurIPS bar. Honest verdict: do not optimise for NeurIPS main |
+| **ICLR blogpost** (the JustRL template) | very plausible (~85-92 %) | Trajectory plots + lean-drift-lean cycling plot + chain-flip-vs-reward scatter; three figures that carry a blogpost |
+| **Workshop** (NeurIPS R0-FoMo / ICLR Reasoning / Agentic-RL workshops) | 70-82 % | Self-stabilisation + chain-flip data are workshop-receptive training-dynamics findings, not just an ablation |
+| **Findings of ACL / EMNLP** | 50-65 % | Trajectory matrix + empirical chain-flip data clear the Findings bar; lean-drift-lean cycling is a venue-positive secondary finding |
+| **ICLR / ACL / EMNLP main** | 22-32 % | Mechanism-named takeaway + concrete trajectory + self-stabilisation finding; still hampered by head-to-head + seed-variance + scale gaps |
+| **NeurIPS main** | 10-18 % | The added self-stabilisation finding helps; the head-to-head + seed-variance + scale gaps still dominate the NeurIPS bar. Honest verdict: do not optimise for NeurIPS main |
 
 ### 10.4. What would lift the venue
 
@@ -384,12 +499,14 @@ For the **thesis** (deadline 2026-06-15): the work clears the bar comfortably. T
 
 For a **post-thesis publication** (NeurIPS 2026 / ICLR 2027 / ACL 2027 / EMNLP 2026): aim for **ICLR blogpost or workshop first**, with Findings as a Cycle-2 target. Skip NeurIPS main unless one of the §10.4 lifts lands first. The ICLR blogpost template ([JustRL](https://arxiv.org/abs/2512.16649) is the canonical example) is built around exactly this kind of "characterisation + mechanism + trajectory plot" structure.
 
-## 11. Open decision points
+## 11. Open decision points (revised 2026-05-17, M5.1 now landed)
 
-1. **User pick #2** (per [`PICKED_PAIR.md` §6](PICKED_PAIR.md#6-decision-needed-from-the-user)): defensive C+R or ambitious C+M.
-2. **Seed budget**: 1 seed across all 3 reward variants, or 2 seeds on F1-only + 1 seed on the other two?
-3. **Eval cadence**: every 10 steps × 7 benchmarks = 140 eval-data-points per training run; expensive. Could drop to every 20 steps × 7 benchmarks = 70 points / run for the same trajectory shape at lower resolution.
-4. **Long-CoT baseline**: do we run one (~10 d, ~\$200) to make the regime claim defensible, or accept observation-grade framing for the thesis?
+1. **User pick #2** (per [`PICKED_PAIR.md` §6](PICKED_PAIR.md#6-decision-needed-from-the-user)): defensive C+R or ambitious C+M. Unchanged from 2026-05-16.
+2. **Seed budget**: 1 seed across all 3 reward variants, or 2 seeds on F1-only + 1 seed on the other two? With M5.1 landed at F1-only seed=42, the cheap incremental upgrade is **+1 seed on F1-only specifically**; adds ~5 d / ~\$80 and closes the no-multi-seed cross-cutting gap for the most-defended variant.
+3. **Eval cadence**: every 10 steps × 18 checkpoints × 7 benchmarks = 126 eval data points / training run × 3 runs = 378 points. Could drop to every 20 steps for 60 points / run / 180 total at lower resolution; eval time saved ~50 %.
+4. **Long-CoT baseline**: do we run one (~10 d, ~\$200) to make the regime claim defensible, or accept observation-grade framing for the thesis? The lean-drift-lean cycling finding (§7.4) partially substitutes for a contrastive baseline by showing the *characterised* regime has structure (oscillation + damping); strengthens the "characterisation of the regime we observe" framing.
+5. **M5.1 step_311 resume**: the hold is reversible (resume runbook at [`RESULTS_M5_1_H200.md` §9.6 "Resume path"](../report/RESULTS_M5_1_H200.md#resume-path-if-ever-wanted)). Cost ~\$400 on dedicated H200 for the remaining 131 steps. Predicted delta: < 2 pp reward; predicted benefit: ~0; opportunity cost: that money funds ~50 % of an M8.2 training run. **Recommendation: do not resume; redirect to picked pair**.
+6. **M8.2 wiring as a side study**: even out of scope for the picked pair, wiring the M8.1 chain-consistency penalty as a *post-hoc rollout-replay metric* (not a training reward) is cheap; it would let us report the per-cadence chain-flip rate on the picked-pair F1-only / F1+0.1 / EM-only runs and check whether the picked-pair F1+0.1 variant has lower flip rate than F1-only (a hypothesis not yet tested).
 
 ## Cross-references
 

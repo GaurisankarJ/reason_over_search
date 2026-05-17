@@ -8,6 +8,8 @@ updated: 2026-05-16
 
 # Supervisor Meeting (2026-05-16): story so far and where it goes
 
+> **SUPERSEDED 2026-05-17 by [`SUPERVISOR_MEETING_2026-05-17_m0_to_6.md`](SUPERVISOR_MEETING_2026-05-17_m0_to_6.md)** after M5.1 landed at step_180. This file is frozen as the historical M5.1-mid-flight snapshot (the brief was authored when M5.1 was at cadence 9; the successor adds cadences 10-18 + lean-drift-lean cycling + empirical chain-flip data). Do not edit; revise the 2026-05-17 successor instead.
+
 Consolidated brief covering M0 to M6. Successor to [`SUPERVISOR_MEETING_2026-05-07_m0_to_3.md`](SUPERVISOR_MEETING_2026-05-07_m0_to_3.md) (M0 to M3, frozen). M4 (untrained-baseline eval) closed; M5.1 (Qwen3.5-0.8B GRPO training, ReSearch-paper recipe) is live; M6 (literature + experiment-planning milestone) has frozen four artifacts on 2026-05-16 and decides the picked pair after one user-side choice.
 
 ## 0. TL;DR (six bullets)
