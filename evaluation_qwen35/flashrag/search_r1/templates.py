@@ -154,6 +154,24 @@ QWEN35_TEMPLATES["qwen35_searchr1"] = QWEN35_SEARCH_R1_LIKE_TEMPLATE  # alias
 # flagged in RESULTS_SMOKE_m4.md §6.5.
 QWEN35_TEMPLATES["qwen35_minimal_nothink"] = QWEN35_SEARCH_R1_LIKE_TEMPLATE
 
+
+# ─── M9 — exact mirror of M5.1 training prompt (training_m5_1/src/prompts/m5_qwen35_user.txt) ───
+# Two-line user-message prompt used during M5.1 GRPO training. Routes through
+# the same user-locus branch as qwen35_minimal (tools=[SEARCH_TOOL] auto-inject,
+# no system message, enable_thinking=True). The only diff vs qwen35_minimal is
+# the user-prompt content: training used this terse prompt, not the Search-R1
+# paper-style longer prompt qwen35_minimal carries. Used for M9 in-distribution
+# evaluation of M5.1 checkpoints — the policy was trained against this exact
+# user message, so M9 must match it byte-for-byte to avoid an OOD eval.
+M5_QWEN35_TRAIN_TEMPLATE = (
+    "Use the `search` tool to look up facts as needed. "
+    "When you have the answer, write it inside <answer> and </answer>. "
+    "For example, <answer> Beijing </answer>.\n"
+    "Question: {prompt}\n"
+)
+
+QWEN35_TEMPLATES["m5_qwen35_train"] = M5_QWEN35_TRAIN_TEMPLATE
+
 # ─── M4.3 — fully-minimal: no system message, no `tools=[]` auto-inject ──────
 # Strips the `tools=[QWEN35_SEARCH_TOOL]` auto-injected `# Tools` schema +
 # `<IMPORTANT>` reminder block (~220 words) by NOT passing tools= to

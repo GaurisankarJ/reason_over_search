@@ -44,6 +44,7 @@ def _is_qwen35(mode: str) -> bool:
 # tool_response wrap, and per-chunk cap; only the prompt-rendering layout differs.
 _QWEN35_USER_PROMPT_MODES = {
     'qwen35_minimal', 'qwen35_searchr1', 'qwen35_minimal_no_system',
+    'm5_qwen35_train',  # M9: byte-exact mirror of training prompt
     # M4.4 Phase 1b user-locus candidates (templates that format with {prompt}
     # and live in the user role; auto-inject via tools=[]). System-locus
     # candidates (qwen35_p3_decide_xml, qwen35_research_role) are intentionally
