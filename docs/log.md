@@ -3,7 +3,7 @@ title: Log
 tags: []
 source: internal
 created: 2026-05-06
-updated: 2026-05-16
+updated: 2026-05-17
 ---
 
 # Wiki log
@@ -28,6 +28,11 @@ Conventions:
 - Don't rewrite past entries; if a fact turns out wrong, add a correcting bullet on the day the correction was made.
 
 ---
+
+## 2026-05-17
+
+- Decision: **M5.1 paused at step_180** (58 % of MuSiQue epoch 1). Documented in [`report/RESULTS_M5_1_H200.md` §9.6](report/RESULTS_M5_1_H200.md) and [`milestone_5/CADENCE_HANDOFF.md`](milestone_5/CADENCE_HANDOFF.md). Reason: F1-only reward ceiling is empirically established at 0.20-0.28 cadence mean across C8-C18 (steps 71-180) with 18-58 % silent-flip rate; 100 more steps do not change the gradient direction (see §9.5). ~$60-80 saved redirected to M8.2. W&B run `fde3cib7` parked; resume via `WANDB_RUN_ID=fde3cib7 WANDB_RESUME=allow` against a Dedicated H200.
+- Event: **4 consecutive Spot preemptions** after the previous Dedicated host went down post-step_180 (`204.12.168.156` → `204.12.168.241` → `204.12.170.203` → `204.12.171.221`), each preempted mid-bring-up before the ~10-15 min docker pull could finish. Persistent volume `miletone5` preserved all state across every preemption (step_180 ckpt + corpus + indexes + models + repo + uploader state). Lesson: Spheron Spot churn interval is currently shorter than the docker pull window; resume must use Dedicated tier.
 
 ## 2026-05-16
 

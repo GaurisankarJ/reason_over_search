@@ -3,8 +3,8 @@ title: RESULTS — M5.1-prod-a4 (Qwen3.5-0.8B GRPO on MuSiQue, H200 Spheron + pe
 tags: [results, m5.1, h200, production, a4]
 source: internal
 created: 2026-05-15
-updated: 2026-05-15
-status: live — v11 running on patched native Triton GDN; step 2 landed
+updated: 2026-05-17
+status: HOLD at step_180 (58 % of epoch 1); F1-only ceiling structural per §9.5/§9.6; next experiment M8.2
 ---
 
 # M5.1-prod-a4 — Production training on Spheron H200 with persistent volume
@@ -1946,6 +1946,67 @@ The 0.22-0.24 plateau is **F1-only-reward-bound**. Under composed reward (A+B):
 - The 4-hop+ generalisation observed in cadence 9 (Nteje → Nigeria) suggests the model *has* the capability; the reward signal just isn't selecting for it strongly enough.
 
 Wiring this into a future seed run is **one ~30-line edit + a unit test + a 50-step smoke**. Both A and B require zero changes to the env, the retriever, or the dataset; only `training_m5_1/src/rewards/search_r1.py` changes. The natural next experiment after the M5.1 stable-ablation block.
+
+## 9.6. HOLD decision at step_180 (2026-05-17)
+
+**Run paused at step_180** (58 % of one MuSiQue epoch, 311 steps = 1 epoch at 64 prompts/step). Not crashed, not stopped for cost; **deliberately held** while the next experiment (M8.2 chain-quality reward) is scoped, because more steps under the same F1-only reward will not break the ceiling.
+
+### Evidence the ceiling is structural, not under-trained
+
+| Window | Steps | Reward mean | What changed |
+|---|---|---|---|
+| C8-C18 | 71-180 | 0.20-0.28 band | Drift cycles (over-search → recover → over-search) but **no monotone climb** |
+| Best single cadence | C8 (steps 71-80) | 0.298 | Still below the 0.32 we'd predict needed to call M5.1 a "win" |
+| Run-high single step | step 49 | 0.394 | Achieved early; later cadences orbit around 0.22-0.28 |
+| Empirical chain-flip rate (reward ≥ 0.9 rollouts) | C5-C18 | 18-58 % band | F1-only does not select for chain correctness; broken-chain reward-1.0 rollouts are systemic, not noise |
+
+The pattern is consistent with §9.5's structural diagnosis: F1-only on `<answer>` content + no chain visibility creates a token-alignment optimum that the policy reaches and orbits. 100 more steps of the same reward do not change the gradient direction.
+
+### Cost/value of finishing the remaining 131 steps
+
+- ~$60-80 on Dedicated H200 ($0.45/step × 131 steps).
+- Expected delta: <2 pp reward at the cadence mean; eval on Bamboogle expected within noise of step_180.
+- That money buys ~12 hours of M8.2 training, which has a predicted +0.04 to +0.08 absolute lift (0.22-0.28 → 0.27-0.32 per §9.5).
+- Therefore: hold M5.1 at step_180, redirect to M8.2.
+
+### Preemption sequence (why we're stopping now, not at step_311)
+
+After step_180 landed (2026-05-17 ~08:18 UTC) the previous Dedicated host went down. Four consecutive Spot replacements were SSH-unreachable mid-bring-up (each preempted before the ~10-15 min docker pull could complete):
+
+| # | Host | Volume mount | Docker pull | Outcome |
+|---|---|---|---|---|
+| 1 | `204.12.168.156` | ✓ | partial | SSH dropped before pull complete |
+| 2 | `204.12.168.241` | ✓ | partial | SSH dropped (~17 min in) |
+| 3 | `204.12.170.203` | ✓ + fstab fixed | partial | SSH dropped |
+| 4 | `204.12.171.221` | ✓ + fstab fixed | partial (~17 min in) | SSH dropped |
+
+The persistent volume preserved all state across every preemption (step_180 ckpt, corpus, indexes, models, `state/uploader_*.log` history, repo) so no data was lost. But the bring-up sequence (mount → pull → patch → retriever → train) is longer than the current Spot preemption interval, so resuming requires Dedicated tier (~$5/h × ~80h to step_311 = ~$400).
+
+### Resume path (if ever wanted)
+
+The hold is reversible. To resume:
+
+1. Provision **Dedicated** H200 on Spheron with `miletone5` volume attached.
+2. Mount: `sudo mkdir -p /mnt/miletone5 && sudo mount -t virtiofs miletone5 /mnt/miletone5` (and add to fstab).
+3. `sudo docker pull pantomiman/reason-over-search-v1:v2` (~15 min).
+4. Start container per [`CADENCE_HANDOFF.md`](../milestone_5/CADENCE_HANDOFF.md) (sed the FlashInfer GDN patch on both vLLM venvs).
+5. Bring up retriever (port 3005) + uploader.
+6. Launch: `WANDB_RUN_ID=fde3cib7 WANDB_RESUME=allow bash training_m5_1/scripts/run.sh`.
+7. Training resumes from step_180 against the same W&B run. Cadences continue from C19 (steps 181-190).
+
+### What's locked in from M5.1 even with the hold
+
+- F1-only ceiling is empirically named at 0.22-0.28 reward (cadence mean) with 18-58 % silent-flip rate.
+- Two concrete reward-1.0-via-broken-chain traces documented (§9.5: Fox Island, World Cup).
+- Self-stabilisation finding (over-search trap → recovery within 30 steps, damped on second cycle).
+- 4-hop generalisation across 5+ distinct bridges (Ghana, Nigeria, UK, Iowa, Singapore, ...) — the model has the capability; the reward isn't selecting for it.
+- Planned-multi-hop count peaks at 391/cadence (C15) then stabilises at 200-300, suggesting saturation of explicit-plan generation under this reward.
+
+These findings drive the M8.2 reward design and are the M5.1 contribution to the thesis regardless of step_180 vs step_311.
+
+### Next experiment
+
+[`MILESTONE_8.md`](../milestone_8/MILESTONE_8.md) — chain-consistency penalty (M8.1) + retrieval-grounded factor (M8.2). ~50 LoC reward change in a fresh `training_m8_2/` clone. Predicted lift: 0.22-0.28 → 0.27-0.32.
 
 ## 10. The four prior losses (recap)
 

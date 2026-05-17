@@ -4,11 +4,33 @@ tags: [m5_1, h200, ops, cadence, handoff]
 source: internal
 created: 2026-05-17
 updated: 2026-05-17
+status: PAUSED at step_180 (run held; resume path documented below)
 ---
 
 # Cadence Handoff
 
 End-to-end recipe for running one cadence-update cycle on the M5.1 H200 a4 training run. Hand this to another agent and they should be able to take over without context.
+
+## ⏸ STATUS: PAUSED at step_180 (2026-05-17)
+
+The cadence loop is **on hold** at step_180. Not crashed; deliberately held while M8.2 is scoped (decision rationale in [`../report/RESULTS_M5_1_H200.md` §9.6](../report/RESULTS_M5_1_H200.md)). Background:
+
+- step_180 ckpt landed 2026-05-17 ~08:18 UTC (last upload event in `state/uploader_prod.log`).
+- The previous Dedicated host went down shortly after.
+- Four consecutive Spot replacements (`204.12.168.156` → `204.12.168.241` → `204.12.170.203` → `204.12.171.221`) all dropped SSH mid-bring-up, each preempted before the ~10-15 min docker pull could finish. Pattern: Spot tier is currently churning faster than the bring-up sequence (mount → pull → patch → retriever → train).
+- Persistent volume `miletone5` preserved all state across every preemption. No data lost.
+
+**Don't re-run cadences without checking with the user first.** The next experiment is M8.2 (chain-quality reward, [`../milestone_8/MILESTONE_8.md`](../milestone_8/MILESTONE_8.md)), not "more M5.1 steps".
+
+### If user says "resume M5.1"
+
+1. **Use Dedicated tier** (`$4.70/h`), not Spot. Four preemptions in a row says Spot can't fit the ~25 min bring-up window today.
+2. Mount + fstab the volume (see "Mount + bring-up" below).
+3. `sudo docker pull pantomiman/reason-over-search-v1:v2` (~15 min).
+4. Start container per the original recipe (sed FlashInfer GDN patch on BOTH vLLM venvs — see Gotcha #6).
+5. Bring up retriever + uploader.
+6. Launch with W&B resume: `WANDB_RUN_ID=fde3cib7 WANDB_RESUME=allow bash training_m5_1/scripts/run.sh`. Same W&B run continues.
+7. First new step (181) lands → resume cadence loop at C19 (steps 181-190).
 
 ## Quick context
 
