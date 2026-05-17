@@ -14,7 +14,7 @@ End-to-end recipe for running one cadence-update cycle on the M5.1 H200 a4 train
 
 The training run is GRPO on Qwen3.5-0.8B / MuSiQue / F1-only reward, running on Spheron with a persistent volume `miletone5`. Every 10 GRPO steps a checkpoint lands. The uploader pushes everything to HF [`pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42`](https://huggingface.co/pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42). The cadence cycle = pull the new step's data, write an analysis block, commit to GH, sync to HF. Currently fires every ~50-90 min depending on step wall time.
 
-Main doc being updated: [`docs/report/RESULTS_M5_1_H200.md`](./RESULTS_M5_1_H200.md). HF README is maintained separately (cleaner / shorter).
+Main doc being updated: [`../report/RESULTS_M5_1_H200.md`](../report/RESULTS_M5_1_H200.md). HF README is maintained separately (cleaner / shorter).
 
 ## Connection setup (one-time per session)
 
@@ -275,8 +275,8 @@ Single-step run-high: step 105 (C11) = 0.355 and step 170 (C17) = 0.355 (tied).
 
 ## Pointers
 
-- Main results doc: [`docs/report/RESULTS_M5_1_H200.md`](./RESULTS_M5_1_H200.md)
-- Per-experiment folder convention: [`docs/milestone_5/MILESTONE_5.md`](../milestone_5/MILESTONE_5.md) §"Folder layout"
-- M8 reward-extension followup: [`docs/milestone_8/MILESTONE_8.md`](../milestone_8/MILESTONE_8.md)
-- Spheron H200 setup runbook: [`docs/spheron/SETUP_SPHERON.md`](../spheron/SETUP_SPHERON.md)
-- F1-reward ceiling diagnosis: [`docs/report/RESULTS_M5_1_H200.md` §9.5](./RESULTS_M5_1_H200.md)
+- Main results doc: [`../report/RESULTS_M5_1_H200.md`](../report/RESULTS_M5_1_H200.md)
+- Per-experiment folder convention: [`MILESTONE_5.md`](MILESTONE_5.md) §"Folder layout"
+- M8 reward-extension followup: [`../milestone_8/MILESTONE_8.md`](../milestone_8/MILESTONE_8.md)
+- Spheron H200 setup runbook: [`../spheron/SETUP_SPHERON.md`](../spheron/SETUP_SPHERON.md)
+- F1-reward ceiling diagnosis: [`../report/RESULTS_M5_1_H200.md §9.5`](../report/RESULTS_M5_1_H200.md)
