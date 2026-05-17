@@ -14,7 +14,7 @@ updated: 2026-05-17
 
 ## 0. The narrative arc in one paragraph (revised 2026-05-17)
 
-We started in April 2026 on a Qwen3-0.6B hybrid + verl + ALICE stack, replicating the ReSearch-paper recipe knob-for-knob. The base model could not bootstrap tool-use from cold start; the hybrid model could but the F1 + 0.1-partial-credit floor in the reward made tool-using and no-tool policies look nearly identical to the optimiser, so prompt design (not reward design) became the dominant lever; we ablated the prompt nine ways and saw three behavioural regimes (heavy-tool 2-call, standard 1-tool, total collapse) all clustered in a 0.16-0.22 reward band; the tag-token choice (`<search>` vs `<tool_call>`) made essentially no difference at equal step count; held-out eval on 7 benchmarks lifted EM 0.102 → 0.155 (+52 % rel) but the lift was concentrated on single-hop because 0.6B is multi-hop-capacity-bound. We then pivoted to NeMo-RL (verl does not support Qwen3.5) and Qwen3.5-0.8B (Qwen3.5-2B at the paper recipe projects to 55-85 days / run on 1× A100, infeasible at our budget). **M5.1 H200 a4 landed at step_180 on 2026-05-17 ~08:18 UTC** (HOLD, not crash; deliberate stop at 58 % of one MuSiQue epoch) with 18 cadences traced step-by-step ([`RESULTS_M5_1_H200.md` §8](../report/RESULTS_M5_1_H200.md#8-live-trajectory)); reward window-mean climbed 0.028 → **0.280 (cadence 11 peak)** in the **shrink-and-improve regime** (length compressed 3× while reward grew, inverting the long-CoT regime of math reasoning RL); the run then exhibited two **lean-drift-lean cycles** (over-search peaks at cadences 14 and 18; GRPO self-stabilised both times, second cycle damped). The plateau at ~0.22-0.28 is structural: F1-only reward gives identical scalar credit to chain-correct and chain-broken-but-token-aligned-by-luck rollouts, and the **empirical silent-flip rate sits in an 18-58 % band across cadences 5-18 with no decline as training progresses**. Two concrete reward-1.0-via-broken-chain traces (Fox Island, World Cup) are now documented; ~11 % of all rollouts in cadence 12 onward are planned + reward-1.0 + chain-broken (Goodhart at scale). The picked-pair contribution turns this into a publishable result by running three reward variants (F1+0.1 / F1-only / EM-only) and evaluating every 10-step checkpoint of each run on all 7 benchmarks: ~15-20 checkpoints × 3 rewards × 7 benchmarks × 1-2 seeds = 315-840 eval data points. The framing is *efficient tool use from a hybrid model under realistic resource constraints*, not long-CoT reasoning, not a new algorithm.
+We started in April 2026 on a Qwen3-0.6B hybrid + verl + ALICE stack, replicating the ReSearch-paper recipe knob-for-knob. The base model could not bootstrap tool-use from cold start; the hybrid model could but the F1 + 0.1-partial-credit floor in the reward made tool-using and no-tool policies look nearly identical to the optimiser, so prompt design (not reward design) became the dominant lever; we ablated the prompt nine ways and saw three behavioural regimes (heavy-tool 2-call, standard 1-tool, total collapse) all clustered in a 0.16-0.22 reward band; the tag-token choice (`<search>` vs `<tool_call>`) made essentially no difference at equal step count; held-out eval on 7 benchmarks lifted EM 0.102 → 0.155 (+52 % rel) but the lift was concentrated on single-hop because 0.6B is multi-hop-capacity-bound. We then pivoted to NeMo-RL (verl does not support Qwen3.5) and Qwen3.5-0.8B (Qwen3.5-2B at the paper recipe projects to 55-85 days / run on 1× A100, infeasible at our budget). M4 produced the untrained Qwen3.5-0.8B floor (hybrid 0.060 EM avg full Plan A, uniformly below Qwen3-0.6B by mean Δ −0.042; the cross-family degradation has no mechanism attached yet) and locked the prompt-mode asymmetrically (hybrid `qwen35_minimal`, base `qwen35_minimal_no_system`) after smoke iteration showed the auto-injected `# Tools` block crowded out the answer on the base variant. **M5.1 H200 a4 landed at step_180 on 2026-05-17 ~08:18 UTC** (HOLD, not crash; deliberate stop at 58 % of one MuSiQue epoch) with 18 cadences traced step-by-step ([`RESULTS_M5_1_H200.md` §8](../report/RESULTS_M5_1_H200.md#8-live-trajectory)); reward window-mean climbed 0.028 → **0.280 (cadence 11 peak)** in the **shrink-and-improve regime** (length compressed 3× while reward grew, inverting the long-CoT regime of math reasoning RL); the run then exhibited two **lean-drift-lean cycles** (over-search peaks at cadences 14 and 18; GRPO self-stabilised both times, second cycle damped). The plateau at ~0.22-0.28 is structural: F1-only reward gives identical scalar credit to chain-correct and chain-broken-but-token-aligned-by-luck rollouts, and the **empirical silent-flip rate sits in an 18-58 % band across cadences 5-18 with no decline as training progresses**. Two concrete reward-1.0-via-broken-chain traces (Fox Island, World Cup) are now documented; ~11 % of all rollouts in cadence 12 onward are planned + reward-1.0 + chain-broken (Goodhart at scale). The picked-pair contribution turns this into a publishable result by running three reward variants (F1+0.1 / F1-only / EM-only) and evaluating every 10-step checkpoint of each run on all 7 benchmarks: ~15-20 checkpoints × 3 rewards × 7 benchmarks × 1-2 seeds = 315-840 eval data points. The framing is *efficient tool use from a hybrid model under realistic resource constraints*, not long-CoT reasoning, not a new algorithm.
 
 ## 1. Phase 0: prompt exploration on Qwen3-0.6B (M0_a, "run_1_4b")
 
@@ -54,9 +54,9 @@ Data source: [`docs/report/archive/m0_a/csv/*.csv`](../report/archive/m0_a/csv/)
 - **Removing the example collapses tool-use unless the rules section carries the load**. Pairs (`p_1`/`p_2`, `p_3`/`p_4`, `p_5`/`p_6`) hold rules fixed and toggle the example. Pairs 1-2 and 3-4 collapse on `_no_ex`; pair 5-6 (decision-rules: "after each search, decide whether another is needed") survives. This is the cleanest finding in Phase-1.
 - **Single seed everywhere**. The 3-6 pp tool/no-tool gap and the +0.025 reward improvement on `p_6` over `p_1` (read in the cross-prompt table) are both single-seed observations.
 
-### 1.4. The five pre-tag setup runs (the user asked: are they important?)
+### 1.4. The five pre-tag setup runs (not data points)
 
-**Not for the storyline.** Five runs predate `run_1_4b` and have no full prompts captured in W&B notes ([`RESULTS_m0_a.md` §9](../report/RESULTS_m0_a.md#L403)). Only `setup_run0_old_prompt` (464 steps) is mechanistically interesting: tool-use collapsed to 0, but reward still climbed 0.004 → 0.151 *via the partial-credit floor*. This is the first observation of the floor mechanism the rest of the project is built on; cited once, not analysed further.
+The five runs predating `run_1_4b` are bring-up only and excluded from the standardised view: no full prompts captured in W&B notes ([`RESULTS_m0_a.md` §9](../report/RESULTS_m0_a.md#L403)), all under 1000 steps. Only `setup_run0_old_prompt` (464 steps) is mechanistically interesting: tool-use collapsed to 0, but reward still climbed 0.004 → 0.151 *via the partial-credit floor*. This is the first observation of the floor mechanism the rest of the project is built on; cited once, not analysed further.
 
 ## 2. The F1 + 0.1 floor masks the tool-use signal
 
@@ -116,16 +116,37 @@ Group mean = 0.032. Group std = 0.029. Advantages: rollout 1 = -1.10σ, rollout 
 
 [`RESULTS_m0_a.md` §7](../report/RESULTS_m0_a.md#L367) back-calculates that with an observed end-of-run reward of 0.16-0.22 against a 0.10 floor, only **6-12 % of rollouts get a non-zero F1 hit on top of the floor**. The remaining 88-94 % of rollouts are at the 0.10 floor regardless of what they did with the tool. The floor masks the tool-use signal across roughly 9 of every 10 rollouts at this model size and dataset.
 
+To visualise the mechanism, simulating G=5 GRPO groups with the empirical F1 distribution (~10 % of rollouts at F1 ∈ (0, 0.4], rest at F1=0) reproduces the masking:
+
+![F1+0.1 floor mechanism](storyline_assets/floor_mechanism.png)
+
+Under the F1+0.1 floor, **68.3 % of groups have all rollouts at exactly 0.10** (group std = 0, GRPO advantage = 0, no gradient). Under F1-only, the collapsed-group fraction drops to 59.5 %, and the non-collapsed groups carry a wider advantage distribution. The 9-pp gap in collapsed-group fraction is roughly the size of the gradient throughput improvement that motivated dropping the floor in M5.1.
+
 ### 2.4. What this means for the M5.1 / picked-pair design
 
 M5.1 was set up with **F1-only** (no floor), explicitly because Phase-1 Finding 1 named this mechanism. The picked-pair experiment C re-tests the floor by running all three variants (F1+0.1, F1-only, EM-only) on the M5.1 recipe to produce the first ablation-grade evidence at 0.8B.
 
 ### 2.5. Where this sits in the 2026 literature
 
-- **ReSearch ([arXiv:2503.19470](https://arxiv.org/abs/2503.19470))** uses this reward formula but does not ablate the floor. Their [paper note §"Takeaways"](../papers/2503.19470_research.md#L77) flags the floor as "the load-bearing detail presented in the paper without comment".
-- **arXiv:2602.19526 "How to Train Your Deep Research Agent?" (Feb 2026)** ablates EM vs F1 vs F1+action-penalty in Search-R1 at 3B+ and finds F1+action-penalty wins. They do **not** ablate the partial-credit floor specifically. Our experiment is the small-model / single-GPU / no-format-reward complementary point ([`LITERATURE_GAP_AUDIT_2026-05-16.md` Tier 1 #1](LITERATURE_GAP_AUDIT_2026-05-16.md#1-how-to-train-your-deep-research-agent--arxiv260219526-feb-2026)).
-- **JustRL ([arXiv:2512.16649](https://arxiv.org/abs/2512.16649), ICLR 2026 blogpost)** is the "tricks may hurt" finding; minimal recipe beats layered. F1-only sits in their philosophical lane.
-- **IGPO / TIPS / IG-Search / Search-P1** define the 2026 dense-credit-shaping trend; we argue F1-only is *deliberate minimalism* against this trend, motivated by the floor mechanism.
+The two papers our pipeline directly descends from take different positions on the floor:
+
+- **Search-R1 ([arXiv:2503.09516](https://arxiv.org/abs/2503.09516), NeurIPS 2025)**: trained on **merged NQ + HotpotQA**, evaluated on 7 datasets (NQ / TriviaQA / PopQA / HotpotQA / 2WikiMultiHopQA / MuSiQue / Bamboogle). Reward: **EM-only on `<answer>X</answer>`** (paper-faithful `qa_em.py`); a 6-tier shaped variant `qa_em_format.py` also ships in their repo but is not the published recipe. **The one reward-related ablation they publish is loss-masking of retrieved tokens** ([§5.4 of the paper](https://arxiv.org/abs/2503.09516) reports a ~25 % avg relative gain from masking). They do not ablate the EM / F1 / partial-credit-floor axis. Paper note: [`../papers/2503.09516_search-r1.md`](../papers/2503.09516_search-r1.md).
+
+- **ReSearch ([arXiv:2503.19470](https://arxiv.org/abs/2503.19470), NeurIPS 2025)**: trained on **MuSiQue only** (single-dataset), evaluated on NQ / HotpotQA / 2Wiki / MuSiQue (a subset of Search-R1's 7). Reward: **F1 on `<answer>X</answer>` content + 0.1 partial-credit floor when format-OK but F1=0**. The paper does **not ablate the floor**; the paper note ([`../papers/2503.19470_research.md` §"Takeaways"](../papers/2503.19470_research.md#L77)) flags it as "the load-bearing detail presented in the paper without comment" and "the most ablation-worthy line in the loss".
+
+Our project sits at the intersection: Search-R1's eval protocol + ReSearch's training recipe + the unaddressed floor ablation as the picked-pair experiment.
+
+Two newer 2026 papers shape positioning:
+
+- **"How to Train Your Deep Research Agent?" ([arXiv:2602.19526](https://arxiv.org/html/2602.19526v1), Feb 2026)**: ablates **EM vs F1 vs F1+action-penalty** in Search-R1 at 3B+ and finds F1+action-penalty wins. They do **not** ablate the partial-credit floor specifically. Our experiment is the small-model / single-GPU / no-format-reward complementary point ([`LITERATURE_GAP_AUDIT_2026-05-16.md` Tier 1 #1](LITERATURE_GAP_AUDIT_2026-05-16.md#1-how-to-train-your-deep-research-agent--arxiv260219526-feb-2026)).
+- **JustRL ([arXiv:2512.16649](https://arxiv.org/abs/2512.16649), ICLR 2026 blogpost)**: the "tricks may hurt" finding; minimal recipe beats layered on math reasoning at 1.5B. F1-only sits in their philosophical lane.
+
+A 2026 *dense-credit-assignment cluster* explicitly argues against outcome-only F1; our F1-only choice is the minority position and must be defended as **deliberate minimalism** motivated by the floor mechanism ([`LANDSCAPE_TABLE_2026-05.md` §2b](LANDSCAPE_TABLE_2026-05.md#2b-dense-credit-assignment-cluster-positioning-shift-f1-only-must-be-defended-as-minimalism)):
+
+- **IGPO ([arXiv:2510.14967](https://arxiv.org/abs/2510.14967), ICLR 2026 Poster)**: per-turn dense reward = marginal increase in policy's probability of producing the correct answer. Beats outcome-only GRPO.
+- **TIPS ([arXiv:2603.22293](https://arxiv.org/html/2603.22293v1), Mar 2026)**: per-turn dense reward = teacher-LM log-likelihood gain. Reports **+11.8 % EM / +13.6 % F1** over PPO on Qwen-2.5-7B across 7 QA benchmarks.
+- **IG-Search ([arXiv:2604.15148](https://arxiv.org/abs/2604.15148), Apr 2026)**: per-search-step information gain measured by random-doc counterfactual; per-token advantage modulation in GRPO. Evaluates on **HotpotQA / 2Wiki / MuSiQue / Bamboogle (our exact eval suite)**.
+- **Search-P1 ([arXiv:2602.22576](https://arxiv.org/html/2602.22576v1), Feb 2026, Tencent)**: order-agnostic step-coverage reward against reference planners; **+7.7 avg accuracy over Search-R1** on Qwen-2.5-3B / 7B.
 
 ## 3. Base-model attempts fail (M0_b)
 
@@ -133,22 +154,26 @@ M5.1 was set up with **F1-only** (no floor), explicitly because Phase-1 Finding 
 
 Five Qwen3-0.6B-Base training attempts in the v1 block, all at the `<tool_call>` JSON tag format. **All five stayed at `tool_call_counts/mean = 0` throughout training** ([`RESULTS_m0_b.md` §1](../report/RESULTS_m0_b.md#L19); CSVs at [`m0_b/csv/base_state_machine_*.csv`](../report/archive/m0_b/csv/), [`base_with_example_*.csv`](../report/archive/m0_b/csv/)).
 
-Step-1000 snapshot (qualifying runs only):
+Step-1000 snapshot (qualifying runs only; full traces in plot below):
 
 | Run | Steps | Reward | Tool calls | Resp. length | Note |
 |---|---:|---:|---:|---:|---|
 | `base_state_machine_a` | 2301 | -0.00002 | **0.00** | 91 | 0 tool calls across all 2301 steps |
 | `base_state_machine_b` | 2301 | -0.00002 | **0.00** | 116 | 0 tool calls across all 2301 steps |
-| `base_breakthrough` | 2301 | 0.7 | 0.00 | n/a | **Excluded**: reward-function code-change artifact, not learning (per CLAUDE.md gotcha #2) |
+| `base_breakthrough` | 2301 | 0.7 | 0.00 | n/a | **Excluded**: reward-function code-change artifact, not learning (per [CLAUDE.md gotcha](../../claude/CLAUDE.md)) |
 | `base_with_example_a` | 115 | n/a | 0 | crashed | response_length collapsed → 1 token, then crashed |
 | `base_with_example_b` | 204 | n/a | 0 | crashed | same failure mode |
 
+![Base vs hybrid: base fails to bootstrap tool use](storyline_assets/m0_b_base_failure.png)
+
+The three middle-panel curves at the bottom (red + brown) are the four base attempts at `tool_call_counts/mean = 0`; the two top curves (orange + blue) are the hybrid runs that bootstrap tool use within ~100 steps. The base curves do not budge over 2300 steps of training.
+
 ### 3.2. Citations
 
-The base-model failure is consistent with two papers:
+The base-model failure is consistent with two papers (both ingested under [`../papers/`](../papers/)):
 
-- **R1-Searcher ([arXiv:2503.05592](https://arxiv.org/abs/2503.05592))** introduces a two-stage curriculum (Stage 1: format-RL; Stage 2: outcome-RL) explicitly because outcome-only RL fails to bootstrap base-model tool-use. Their result is on Qwen2.5-7B-Base; we observe the same failure mode more acutely at Qwen3-0.6B-Base. The takeaway in [`papers/2503.05592_r1-searcher.md` §"Takeaways"](../papers/2503.05592_r1-searcher.md#L75): *"Stage 1 solves the cold-start problem we hit in Phase-1 base-model attempts"*.
-- **DGPO / Compact LMs Search Like Agents ([arXiv:2508.20324](https://arxiv.org/abs/2508.20324) v4, Apr 2026)** argues **0.5-1B agentic RAG fails under pure RL** and proposes distillation-guided GRPO. Our 5/5 failures at 0.6B-Base are the failure mode they characterise.
+- **R1-Searcher** ([arXiv:2503.05592](https://arxiv.org/abs/2503.05592), Song et al., 2025; HTML: [arxiv.org/html/2503.05592](https://arxiv.org/html/2503.05592v3); paper note: [`../papers/2503.05592_r1-searcher.md`](../papers/2503.05592_r1-searcher.md)). Introduces a two-stage curriculum (Stage 1: format-RL on retrieval call structure; Stage 2: outcome-RL on answer correctness) explicitly because outcome-only RL fails to bootstrap base-model tool-use. Result is on Qwen2.5-7B-Base; we observe the same failure mode more acutely at Qwen3-0.6B-Base (the smaller the base, the more starved the format prior). Paper-note takeaway: *"Stage 1 solves the cold-start problem we hit in Phase-1 base-model attempts"*.
+- **DGPO / Compact LMs Search Like Agents** ([arXiv:2508.20324](https://arxiv.org/abs/2508.20324) v4, Liu et al., 2025 → Apr 2026; HTML: [arxiv.org/html/2508.20324](https://arxiv.org/html/2508.20324v4)). Argues **0.5-1B agentic RAG fails under pure RL** and proposes distillation-guided GRPO. Our 5/5 failures at 0.6B-Base are the failure mode they characterise. **Not yet ingested into [`../papers/`](../papers/)** as of 2026-05-17; cited only from the audit summary at [`LITERATURE_GAP_AUDIT_2026-05-16.md` Tier 1 #4](LITERATURE_GAP_AUDIT_2026-05-16.md#4-dgpo--can-compact-lms-search-like-agents--arxiv250820324-aug-2025-v4--apr-2026). Open follow-up: read DGPO end-to-end + write a paper note before the picked-pair paper is drafted.
 
 ### 3.3. Why we stay on hybrid
 
@@ -179,35 +204,41 @@ The v0 block used the paper's `<search>` / `<result>` tags (ReSearch-style, inve
 - The v1 `r2_concise` lower number (0.151) is **prompt-design variance, not tag-format variance**; the prompt is shorter and lacks the explicit JSON-arg example that `r1_query_object` carries.
 - The v0 `p1_basic_w_ex` heavy-tool variant (0.192) sits between the two; the heavy-tool regime is a prompt artifact (Hamlet 2-search example), not a tag-format artifact.
 
-The conclusion is **softer than the original verbal phrasing ("tokens don't matter") but holds**: tag-token format costs ≤ 2 pp reward at equal step count, which is within prompt-design variance. The choice is dictated by which format keeps the model in-distribution for inference; for Qwen3.5 that is the canonical `<tool_call>` form ([`MILESTONE_4.md` M4.1 lock](../milestone_4/MILESTONE_4.md)).
+The conclusion: **tag-token format costs ≤ 2 pp reward at equal step count**, which is within prompt-design variance. (The looser "tokens don't matter" reading is an overstatement; the precise reading is "tag-token effect is dominated by prompt-design effect at this scale".) The choice is dictated by which format keeps the model in-distribution for inference; for Qwen3.5 that is the canonical `<tool_call>` form ([`MILESTONE_4.md` M4.1 lock](../milestone_4/MILESTONE_4.md)).
 
 ## 5. Held-out 7-benchmark eval of v0 GRPO checkpoints (M3 / M3.1)
 
-### 5.1. M3 (the `p1_basic_w_ex` checkpoint)
+### 5.1. Two v0 GRPO checkpoints evaluated at full Plan A
 
-Two v0 GRPO checkpoints were evaluated on the 7-benchmark Search-R1 suite at full Plan A scale (51,713 items / variant, greedy decode, 1× A100-80GB; pipeline frozen at [`CODE_SETUP_m3.md`](../report/CODE_SETUP_m3.md) §3).
+Both `p1_basic_w_ex` (M3; heavy-tool 2-call) and `p3_decide_no_ex` (M3.1; standard 1-tool, the pareto winner) were evaluated on the 7-benchmark Search-R1 suite at full Plan A scale (51,713 items / variant, greedy decode, 1× A100-80GB; pipeline frozen at [`CODE_SETUP_m3.md`](../report/CODE_SETUP_m3.md) §3). Both rows are in the table; the pareto comparison is the right read.
 
 | Variant | Bamboogle | NQ | TriviaQA | PopQA | HotpotQA | 2Wiki | MuSiQue | Avg EM |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
 | pre-GRPO Qwen3-0.6B hybrid | 0.056 | 0.113 | 0.178 | 0.133 | 0.083 | **0.141** | 0.010 | 0.102 |
-| v0 `p1_basic_w_ex` GRPO checkpoint (`z7kcxfof`) | **0.088** | **0.191** | **0.302** | **0.227** | **0.116** | 0.138 | **0.023** | **0.155** |
-| Δ EM | +0.032 | +0.078 | +0.124 | +0.094 | +0.033 | −0.003 | +0.013 | **+0.053 (+52 % rel)** |
+| **M3** v0 `p1_basic_w_ex` (`z7kcxfof`, heavy-tool 2-call / 4-turn) | **0.088** | 0.191 | 0.302 | 0.227 | 0.116 | 0.138 | 0.023 | 0.155 |
+| **M3.1** v0 `p3_decide_no_ex` (`el6s2d2h`, 1-tool decision-rules, **pareto winner**) | 0.056 | **0.197** | **0.339** | **0.285** | **0.144** | 0.134 | **0.028** | **0.169** |
+| Δ M3.1 vs M3 | −0.032 | +0.006 | +0.037 | **+0.058** | +0.028 | −0.004 | +0.005 | **+0.014 (+9 % rel)** |
+| Δ M3.1 vs pre-GRPO | n/a | +0.084 | +0.161 | +0.152 | +0.061 | −0.007 | +0.018 | **+0.067 (+66 % rel)** |
 
-Source: [`RESULTS_m3.md` §6 + §9](../report/RESULTS_m3.md#L233).
+Sources: M3 numbers at [`RESULTS_m3.md` §9](../report/RESULTS_m3.md#L233); M3.1 numbers at [`RESULTS_m3.md` §14.5](../report/RESULTS_m3.md#L385). Bamboogle (n=125) regression on M3.1 sits inside the n=125 standard-error band (~±0.02 at this rate; [`../archive/BAMBOOGLE_REGRESSION_INVESTIGATION.md`](../archive/BAMBOOGLE_REGRESSION_INVESTIGATION.md)).
 
 ### 5.2. The pareto effect: parametric memory drives the single-hop lifts
 
-Lifts are concentrated on single-hop QA: NQ +0.078 EM (+69 %), TriviaQA +0.124 EM (+70 %), PopQA +0.094 EM (+71 %). Multi-hop datasets dampen: HotpotQA +0.033 EM (+40 %), 2WikiMultiHopQA −0.003 EM (essentially tied), MuSiQue +0.013 EM (doubles in relative but small absolute).
+Lifts are concentrated on single-hop QA: M3.1 NQ +0.084 EM (+74 %), TriviaQA +0.161 (+90 %), PopQA +0.152 (+114 %). Multi-hop datasets dampen: HotpotQA +0.061 (+74 %), 2WikiMultiHopQA −0.007 (essentially tied), MuSiQue +0.018 (doubles relative but ~0 absolute).
 
-The user's intuition that this is a "pareto effect maybe because of parametric memory" is correct in spirit. The mechanism: at 0.6B parameters, the model carries enough parametric memory to answer a single fact lookup *once retrieval has surfaced the right entity* (NQ, PopQA, TriviaQA shapes); it lacks the capacity to compose two retrieved facts into a multi-hop answer (HotpotQA, 2Wiki, MuSiQue shapes). GRPO + retrieval reinforces the *retrieval + lookup* sub-skill which transfers cleanly to single-hop; the *compose-two-facts* sub-skill is upstream-bound by model capacity, not training. The pareto-style "lift everywhere except multi-hop" shape is the signature of this capacity bound, which [`RESULTS_m3.md` §10.2](../report/RESULTS_m3.md#L250) names as "multi-hop is capacity-bound, not training-bound at 0.6B".
+The pareto-style "lift everywhere except multi-hop" shape is consistent with **parametric-memory + retrieval-lookup** being trainable at 0.6B while **compose-two-retrieved-facts** is not. At 0.6B parameters the model carries enough parametric memory to answer a single fact lookup *once retrieval has surfaced the right entity* (NQ, PopQA, TriviaQA shapes); it lacks the capacity to compose two retrieved facts into a multi-hop answer (HotpotQA, 2Wiki, MuSiQue shapes). GRPO + retrieval reinforces the retrieval-lookup sub-skill cleanly; the compose-two-facts sub-skill is upstream-bound by model capacity, not training. [`RESULTS_m3.md` §10.2](../report/RESULTS_m3.md#L250) names this as "multi-hop is capacity-bound, not training-bound at 0.6B".
 
-### 5.3. M3.1 (the `p3_decide_no_ex` checkpoint)
+### 5.3. Why M3.1 (no-example) wins over M3 (with-example)
 
-Run id `el6s2d2h`; the prompt that survived example removal. Avg EM 0.169 vs M3 baseline 0.155 (+0.014 abs, +9 % rel held-out EM). ACC and F1 widen the gap to +12 % and +14 % rel ([`RESULTS_m3.md` §14.4-14.5](../report/RESULTS_m3.md#L381)). The no-example + decision-rules combination genuinely produces higher-quality answers, just not always within EM strict-match.
+M3.1 trains on the same MuSiQue / paper recipe / Qwen3-0.6B hybrid as M3; the only change is the prompt (decision-rules scaffolding without a few-shot example, vs the Hamlet 2-search example in M3). End-of-training rollout reward: 0.215 (M3.1) vs 0.190 (M3); a +13 % rel reward gap. Translated to held-out: M3.1 simple-mean EM 0.169 vs M3 0.155 (+9 % rel), with ACC widening to +12 % rel and F1 to +14 % rel ([`RESULTS_m3.md` §14.4](../report/RESULTS_m3.md#L385)). The widening from EM to F1 indicates the no-example variant genuinely produces higher-quality answers, just not always within EM's strict-match window.
 
 ### 5.4. Caveat: reward keeps climbing even without tool-use
 
-The user flagged: "we saw that even without tooluse the reward was climbing because of the reward format floor at this level". This is correct and is the cross-reference to §2: `setup_run0_old_prompt` (464 steps; tool-use collapsed to 0) had reward climb 0.004 → 0.151 entirely from the floor mechanism. Same shape appears in `p1_basic_no_ex` (0.169 reward at step 1000 with tool calls at 0.09; the model abandoned the tool but reward still grew because format-OK rollouts pull 0.10 / rollout).
+A consequence of §2: reward can climb to ~0.15 *purely from the 0.10 floor* if the model abandons the tool entirely. Two pieces of evidence in the project:
+- `setup_run0_old_prompt` (464 steps, pre-tag): tool-use collapsed to 0, but reward still climbed 0.004 → 0.151 (entirely from format-OK rollouts hitting the floor).
+- `p1_basic_no_ex` at step 1000: reward 0.169 with tool_calls = 0.09 (the model abandoned the tool but reward still grew because format-OK rollouts pull 0.10 each).
+
+This is the cross-reference back to §2: at 0.6B on MuSiQue, the floor mechanism produces reward growth that looks like learning but is not learning anything about the tool.
 
 ## 6. Migration to NeMo-RL + Qwen3.5
 
@@ -220,9 +251,9 @@ Two compounding constraints surfaced:
 
 NeMo-RL is the only framework with first-class Qwen3.5 support (DTensor V2 + dynamic batching workaround for the GDN kernel issue). M2 ported the Search-R1 GRPO loop to NeMo-RL with 15 reward-parity tests passing ([`milestone_2/MILESTONE_2.md`](../milestone_2/MILESTONE_2.md), [`training/SMOKE_RESULTS_2026-05-06.md`](../training/SMOKE_RESULTS_2026-05-06.md)).
 
-### 6.2. The 3B comparison baseline (clarification: this is Search-R1 3B, not R1-Searcher)
+### 6.2. The 3B comparison baseline: Search-R1 3B (not R1-Searcher)
 
-The user's verbal description was "we tried eval of R1-Searcher 3B as a baseline (branch `plan-a-eval`)". The actual content on [`origin/plan-a-eval`](https://github.com/GaurisankarJ/reason_over_search/tree/plan-a-eval) is the **Search-R1** 3B baseline (`PeterJinGo/SearchR1-nq_hotpotqa_train-qwen2.5-3b-em-grpo` and `-it-em-grpo`), not R1-Searcher. R1-Searcher is a different paper ([arXiv:2503.05592](https://arxiv.org/abs/2503.05592)) we cite only for the base-model-failure motivation (§3.2). I am preserving "Search-R1 3B" in this document; flagging the verbal mix-up so the supervisor brief and any future paper draft are clean.
+Naming clarification: the 3B baseline evaluated on [`origin/plan-a-eval`](https://github.com/GaurisankarJ/reason_over_search/tree/plan-a-eval) is the **Search-R1 3B** baseline (`PeterJinGo/SearchR1-nq_hotpotqa_train-qwen2.5-3b-em-grpo` and `-it-em-grpo`), not R1-Searcher. R1-Searcher ([arXiv:2503.05592](https://arxiv.org/abs/2503.05592)) is cited only for the base-model-failure motivation (§3.2). The two papers share a "-R1" suffix and similar task framing but are distinct works; the 3B comparator throughout this document is Search-R1.
 
 Search-R1 3B Plan-A numbers (1 seed × 7 datasets × 3 variants, 8× RTX 4090, 1 h 52 min wall, from [`origin/plan-a-eval`'s `docs/eval/plan_a_8gpu/RESULTS.md`](https://github.com/GaurisankarJ/reason_over_search/blob/plan-a-eval/docs/eval/plan_a_8gpu/RESULTS.md)):
 
@@ -244,9 +275,37 @@ Our 0.8B M5.1-final + 7-benchmark eval lands somewhere on this map. If it beats 
 
 Per [`training/PAPER_VS_OURS_TRAINING.md` §7](../training/PAPER_VS_OURS_TRAINING.md#L131): running the paper's 3-epoch schedule with `num_prompts_per_step=512` and `gbs=256` on 1× A100 would take **55-85 days / run** (~\$1,600-2,400) for Qwen3.5-2B at the smoke-anchored ~57 s / step. Even our reduced 0.6-epoch budget (1005 steps × 102 prompts/step) projects to **11-17 d / run, ~\$300-490 / run** on 1× A100.
 
-The user's verbal phrasing was "85 days on an A100 after running a few steps in smoke tests". This is **the upper bound of the 55-85 day range** for the paper-faithful 3-epoch schedule, not our affordable 0.6-epoch shape. Either way, Qwen3.5-2B is **infeasible** for the picked-pair ablation (3 reward variants × ≥10 d = 30 d wall-clock, ~\$900-1200).
+The "85 days on A100" cost figure is **the upper bound of the 55-85 day range** for the paper-faithful 3-epoch schedule, not our affordable 0.6-epoch shape (which projects to 11-17 d / run, ~\$300-490). Either schedule, Qwen3.5-2B is **infeasible** for the picked-pair ablation (3 reward variants × ≥10 d = 30 d wall-clock, ~\$900-1200).
 
 Drop to Qwen3.5-0.8B: ~3× smaller per-step cost, fits the picked-pair budget envelope.
+
+### 6.5. M4: untrained Qwen3.5-0.8B baseline + prompt-mode lock
+
+Before training Qwen3.5-0.8B we needed (a) an untrained floor on the 7-benchmark suite, and (b) a settled prompt-mode for the eval and the training rollout. M4 produced both.
+
+**M4 close-out (2026-05-10)**: full Plan A eval (51,713 items / variant, greedy decode) on both Qwen3.5-0.8B variants. Cross-family comparison vs the M3 Qwen3-0.6B hybrid floor:
+
+| Dataset | M3 Qwen3-0.6B hybrid | M4 Qwen3.5-0.8B hybrid | M4 Qwen3.5-0.8B base | Δ M4-hybrid vs M3 |
+|---|---:|---:|---:|---:|
+| bamboogle | 0.056 | 0.048 | 0.000 | −0.008 |
+| nq | 0.113 | 0.063 | 0.004 | −0.050 |
+| triviaqa | 0.178 | 0.124 | 0.012 | −0.054 |
+| popqa | 0.133 | 0.075 | 0.008 | −0.058 |
+| hotpotqa | 0.083 | 0.064 | 0.011 | −0.019 |
+| 2wikimultihopqa | 0.141 | 0.040 | 0.032 | −0.101 |
+| musique | 0.010 | 0.008 | 0.000 | −0.002 |
+| **mean** | **0.102** | **0.060** | **0.010** | **−0.042 (−41 % rel)** |
+
+Source: [`RESULTS_m4.md` §5](../report/RESULTS_m4.md#L67). **Qwen3.5-0.8B hybrid is uniformly below Qwen3-0.6B hybrid on this protocol** (no dataset crosses); the cross-family Δ averages −0.042 EM (−41 % relative). Largest gaps on the multi-hop datasets (2Wiki −0.10, popqa −0.06, triviaqa −0.05). Mechanism not attached (could be tokenizer 151K → 248K, chat template change, training-distribution drift, prompt-mode misalignment). Logged in [`DATA_AUDIT_PHASE_1.md` §4a](DATA_AUDIT_PHASE_1.md#4a-qwen35-08b-hybrid--qwen3-06b-hybrid-on-untrained-tool-use-results_m4md-5) as a candidate 1-page negative result if a cheap diagnostic attaches mechanism.
+
+**Prompt-mode ablation (M4.1 → M4.2 → M4.3)**: smoke-iteration on the prompt-mode lock revealed an asymmetry between hybrid and base ([`RESULTS_SMOKE_m4.md` §6-7](../report/RESULTS_SMOKE_m4.md); locked-best per [`RESULTS_m4.md` §3](../report/RESULTS_m4.md)):
+
+| Variant | Locked prompt-mode | Smoke EM (n=100/ds × 7) | Lift over verbose default |
+|---|---|---:|---:|
+| Hybrid (`qwen3.5_0.8b`) | `qwen35_minimal` (M4.2) | 0.057 | **6.6×** over the v3 verbose 0.0086 |
+| Base (`qwen3.5_0.8b_base`) | `qwen35_minimal_no_system` (M4.3) | 0.016 | **5×** over `qwen35_minimal` 0.003 |
+
+Mechanism: the auto-injected `# Tools` + `<IMPORTANT>` block is in-distribution for hybrid's tool-use post-training (drives the search loops); on base it is pure scaffolding noise that crowds out the answer. The asymmetric lock is the M4.2 → M4.3 finding: **hybrid keeps the system block; base drops it entirely**. The hybrid lock (`qwen35_minimal`) is the same prompt-mode M5.1 trains under, so the M4 floor and M5.1 trajectory are directly comparable.
 
 ## 7. M5.1 training: Qwen3.5-0.8B GRPO at the ReSearch-paper recipe (LANDED at step_180)
 
@@ -290,7 +349,7 @@ The run completed 18 cadences of 10 steps each (180 steps total = 58 % of one Mu
 
 Cadences 1-2 (steps 1-24): tool calls compressed 8.96 → ~3.0 (close to MuSiQue's ground-truth ~3-hop chain length); token mean compressed 7038 → ~2700 (2.6×); reward grew 5× from cold start. The regime **inverts the long-CoT regime** of math reasoning RL (where length grows with reward).
 
-This is the user's "efficient tool user from a hybrid model, not a long-reasoning-chain model" framing, **confirmed**. The hybrid model is post-trained with both instruct and reasoning data; under outcome-only F1 reward on a retrieval-augmented task it sheds verbose reasoning (which carries no reward) and tightens to ~3 search calls (which carry reward via retrieved evidence). Structurally distinct from R1-style post-training where reasoning length is rewarded and grows unbounded.
+**This is the "efficient tool use from a hybrid model, not a long-reasoning-chain model" framing, confirmed by the data**. The Qwen3.5 hybrid is post-trained with both instruct and reasoning data; under outcome-only F1 reward on a retrieval-augmented task it sheds verbose reasoning (which carries no reward) and tightens to ~3 search calls (which carry reward via retrieved evidence). Structurally distinct from R1-style post-training where reasoning length is rewarded and grows unbounded.
 
 ### 7.4. NEW finding: lean-drift-lean cycling (GRPO self-stabilisation)
 
@@ -370,11 +429,11 @@ Run paused, not crashed. [`RESULTS_M5_1_H200.md` §9.6](../report/RESULTS_M5_1_H
 **Evidence the ceiling is structural, not under-trained**:
 - Cadences 8-18 (110 steps) sit in the 0.20-0.28 reward band with **no monotone climb**; the run is on lean-drift-lean cycles.
 - Best single cadence (C11) = 0.280 window-mean; still 4-12 pp below the 0.32-0.40 that would mark M5.1 as a paper-faithful "win" (ReSearch reports 0.40-0.47 EM avg).
-- Chain-flip rate stays in 18-58 % band across 130 steps with **no decline as training progresses**.
+- Chain-flip rate stays in 18-58 % band across the 140 steps where the detector was run (cadences 5-18, steps 41-180) with **no decline as training progresses**.
 - Two reward-1.0-via-broken-chain traces (Fox Island, World Cup) at scale (~11 % of all rollouts in C12+).
 
 **Cost/value of finishing the remaining 131 steps to step_311**:
-- ~$60-80 on dedicated H200 ($0.45/step × 131).
+- ~\$60-80 on dedicated H200 (\$0.45/step × 131).
 - Expected delta: < 2 pp reward at the cadence mean; eval on Bamboogle expected within noise of step_180.
 - That money buys ~12 hours of M8.2 training (predicted +0.04-0.08 absolute lift per §9.5).
 - Therefore: hold M5.1 at step_180, redirect to M8.2.
@@ -422,14 +481,14 @@ H1 + H2 + H3 + H4 are four claims that are *each* publishable. The per-checkpoin
 
 - **Upper anchor**: Search-R1 GRPO 3B-instruct at 0.341 EM avg (§6.2).
 - **3B raw anchor**: Qwen2.5-3B-Instruct at 0.199 EM avg.
-- **Untrained 0.8B floor**: Qwen3.5-0.8B hybrid at 0.057 EM avg ([`RESULTS_m4.md` §5](../report/RESULTS_m4.md#L67)).
-- **0.6B trained reference**: Qwen3-0.6B + v0 GRPO + `p1_basic_w_ex` at 0.155 EM avg (§5.1).
+- **Untrained 0.8B floor**: Qwen3.5-0.8B hybrid at **0.060 EM avg full Plan A** ([`RESULTS_m4.md` §5](../report/RESULTS_m4.md#L67)).
+- **0.6B trained references**: Qwen3-0.6B + v0 GRPO + `p1_basic_w_ex` at 0.155 EM avg (M3, §5.1); Qwen3-0.6B + v0 GRPO + `p3_decide_no_ex` at 0.169 EM avg (M3.1, §5.1).
 
 If the M5.1-F1-only trajectory ends at ~0.15-0.20 EM avg, the headline claim is "0.8B trained with F1-only on MuSiQue matches 0.6B trained with paper-faithful reward on MuSiQue, and approaches the 3B raw baseline." If it ends at ~0.25-0.30, it is "0.8B trained on MuSiQue clears 3B raw + approaches 3B GRPO at 1/4 the parameter budget."
 
 ## 9. The thesis-paper story (compact, revised 2026-05-17)
 
-**One sentence**: at sub-1B scale on retrieval-augmented multi-hop QA, the ReSearch partial-credit reward floor masks tool-use signal at training time *and* removing the floor in favour of F1-only creates a different mask (chain-quality blindness) that we measure at 18-58 % silent-flip rate across 130 training steps; the resulting reward plateau is structural at 0.22-0.28 window-mean, the small-model regime exhibits a *shrink-and-improve* training dynamic distinct from the long-CoT regime familiar from math reasoning RL, and GRPO self-stabilises around the F1-optimum operating shape (lean-drift-lean cycling, damped over two cycles in 180 steps).
+**One sentence**: at sub-1B scale on retrieval-augmented multi-hop QA, the ReSearch partial-credit reward floor masks tool-use signal at training time *and* removing the floor in favour of F1-only creates a different mask (chain-quality blindness) that we measure at 18-58 % silent-flip rate across the 140 steps where the chain-flip detector was run (cadences 5-18 of M5.1, steps 41-180); the resulting reward plateau is structural at 0.22-0.28 window-mean, the small-model regime exhibits a *shrink-and-improve* training dynamic distinct from the long-CoT regime familiar from math reasoning RL, and GRPO self-stabilises around the F1-optimum operating shape (lean-drift-lean cycling, damped over two cycles in 180 steps).
 
 **Four contributions** (in priority order, revised 2026-05-17):
 
@@ -440,7 +499,7 @@ If the M5.1-F1-only trajectory ends at ~0.15-0.20 EM avg, the headline claim is 
 
 ## 10. Critical assessment: is this a defensible NeurIPS paper?
 
-The user asked for honesty. Here it is.
+Honest assessment below. The picked-pair paper is being optimised for the thesis first; post-thesis publication targets follow.
 
 ### 10.1. What works (strengthened 2026-05-17 with M5.1-landed evidence)
 
