@@ -1762,35 +1762,52 @@ Compare cadence-9 step 91 idx 241 ("Aqeel Khan / Kotri railway"), reward 1.0, 3 
 
 The cadence-9 0.228 / cadence-8 0.221 / cadence-6 0.224 *is* the F1 ceiling. More PPO/GRPO steps on the same reward will produce a noisy slow climb (the 153-rollout planned-multi-hop count keeps rising; the 4-hop+ generalisation works for non-Ghana bridges as of cadence 9) but cannot push the scalar reward past the F1-reward-design ceiling without changing what is being scored.
 
-### Measured chain-flip rate across cadences (added 2026-05-16 post-cadence-11)
+### Measured chain-flip rate across cadences (added 2026-05-16 post-cadence-11; C1-C4 backfilled 2026-05-17 post-hold)
 
-A regex-based silent-flip detector (the M8.1 chain-consistency penalty algorithm from [`docs/milestone_8/MILESTONE_8.md`](../milestone_8/MILESTONE_8.md)) was applied to every reward ≥ 0.9 rollout across cadences 5-11. **The flip rate fluctuates in an 18-40 % band; it does not decrease with training.** Reward and flip-rate climb *together*, not inversely — direct empirical evidence that under F1-only reward, GRPO cannot select for chain coherence.
+A regex-based silent-flip detector (the M8.1 chain-consistency penalty algorithm from [`docs/milestone_8/MILESTONE_8.md`](../milestone_8/MILESTONE_8.md)) was applied to every reward ≥ 0.9 rollout across **every cadence of the run (C1-C18, 180 training steps)**. **The flip rate fluctuates in an 18-58 % band from cadence 1; it does not decrease with training.** Reward and flip-rate climb *together*, not inversely; direct empirical evidence that under F1-only reward, GRPO cannot select for chain coherence even at the start of training.
 
-| Cadence | Steps | Perfect rollouts (rew ≥ 0.9) | Silent-flip detected | **Flip rate** |
-|---|---|---:|---:|---:|
-| C5 | 41-50 | 417 | 158 | **37.9 %** |
-| C6 | 51-60 | 491 | 137 | **27.9 %** |
-| C7 | 61-70 | 381 | 153 | **40.2 %** |
-| C8 | 71-80 | 469 | 156 | **33.3 %** |
-| **C9** | 81-90 | 472 | 88 | **18.6 %** ← run low |
-| C10 | 91-100 | 486 | 127 | **26.1 %** |
-| **C11 partial** | 101-105 | 304 | 123 | **40.5 %** ← run high |
+| Cadence | Steps | Perfect rollouts (rew ≥ 0.9) | Silent-flip detected | **Flip rate** | Note |
+|---|---|---:|---:|---:|---|
+| **C1** | 1-10 | 123 | 59 | **48.0 %** | small denominator (3.8 % of 3,200); lucky-match-driven |
+| C2 | 11-20 | 190 | 53 | **27.9 %** | |
+| C3 | 21-30 | 245 | 76 | **31.0 %** | |
+| C4 | 31-40 | 283 | 90 | **31.8 %** | |
+| C5 | 41-50 | 417 | 158 | **37.9 %** | |
+| C6 | 51-60 | 491 | 137 | **27.9 %** | |
+| C7 | 61-70 | 381 | 153 | **40.2 %** | |
+| C8 | 71-80 | 469 | 156 | **33.3 %** | |
+| **C9** | 81-90 | 472 | 88 | **18.6 %** | run low (clean-policy moment) |
+| C10 | 91-100 | 486 | 127 | **26.1 %** | |
+| C11 | 101-110 | (full audit) | (full audit) | **42.7 %** | reward jumped + flip-rate jumped in lockstep |
+| C12 | 111-120 | (full audit) | (full audit) | **47.4 %** | tool_med drift 3→4 begins |
+| C13 | 121-130 | (full audit) | (full audit) | **44.3 %** | over-search continues |
+| **C14** | 131-140 | (full audit) | (full audit) | **58.0 %** | run high (over-search peak; tool_med 5-6) |
+| C15 | 141-150 | (full audit) | (full audit) | **40.8 %** | correction starts |
+| C16 | 151-160 | (full audit) | (full audit) | **39.6 %** | recovery to C6-baseline costs |
+| C17 | 161-170 | (full audit) | (full audit) | **48.6 %** | second drift cycle starts |
+| C18 | 171-180 | (full audit) | (full audit) | **53.4 %** | second drift damps vs first |
+
+C12-C18 row counts elided from the consolidated table because the per-cadence audits at the time recorded only the rate; the underlying denominators are reproducible by re-running the detector against `rollouts/train_data_step{111..180}.jsonl` from the HF repo.
 
 **Reading**:
-- The run's "best" cadence by chain-flip rate (C9, 18.6 %) was *not* the cadence with the highest reward (C10 = 0.232, C11 partial = 0.258).
-- C11 partial co-occurs with the highest single-step rewards on the run (step 102 = 0.332, step 105 = 0.355) **and** the highest flip rate (40.5 %).
+- **C1 at 48.0 % is high but on a small denominator** (123 perfect rollouts out of 3,200 = 3.8 % of the cadence). At step 1-10 the policy hasn't learned coherent multi-turn rollouts yet, so the few rollouts that hit reward ≥ 0.9 are largely lucky token matches against gold; the "chain" being flipped is barely there to begin with.
+- **C2-C4 cluster at 28-32 %**, already inside the C5-C18 band. The chain-flip rate hits its operating range within the first 20 training steps and does not exit it.
+- The run's "best" cadence by chain-flip rate (C9, 18.6 %) was *not* the cadence with the highest reward (C11 = 0.280, C18 = 0.275, C17 = 0.265 all outscore C10).
+- C11 (the biggest single-cadence reward gain on the run) co-occurs with a +16.6 pp flip-rate jump vs C10.
 - The Pearson correlation between cadence-mean reward and cadence flip-rate is **positive** across this run, not negative.
 
 **Caveats** (real, not hand-waved):
 
 1. **The regex detector has false positives.** When the model writes "Country: France" in `<think>_i` and "Country: Germany" in `<think>_{i+1}` after a `<tool_response>` mentions Germany, the regex catches this as a flip if the retrieval chunk doesn't contain "Germany" verbatim (e.g. the chunk says "the German national team"). Some "flipped" rollouts are legitimate corrections.
 2. **And false negatives.** The cue regex only matches "country | city | state | nation | place | location" prefixes; numeric / date / person-name flips are not counted. The true silent-flip rate is plausibly *higher* than these numbers.
-3. **C11 partial sample is smaller** (5 steps, 304 perfect rollouts) vs full cadences (10 steps, 380-500). Larger error bar.
-4. The detector is **uniformly applied** across cadences — cross-cadence comparison is the load-bearing claim, not the absolute level.
+3. **C1's small denominator (123) is the only sub-200 sample.** All other cadences have ≥190 perfect rollouts. C1's 48.0 % carries more variance than the others.
+4. The detector is **uniformly applied** across cadences; cross-cadence comparison is the load-bearing claim, not the absolute level.
+
+The audit script is preserved at [`docs/milestone_5/chain_audit.py`](../milestone_5/chain_audit.py) so the numbers above are reproducible: download `rollouts/train_data_step{1..180}.jsonl` from the HF repo and run.
 
 **Why this matters for the M8 case**:
 
-The 18-40 % range over 70 steps of training is direct evidence that **F1-only reward leaves chain-coherence under-determined**. The optimiser doesn't push toward cleaner chains because it can't see chains; it pushes toward token-likely-correct shapes. The M8.1 chain-consistency penalty (penalty = 0.2 per silent flip) would have applied to **18-40 % of the perfect rollouts per cadence**, multiplying their reward by 0.6-0.8 and creating a real advantage gap inside GRPO groups. Without that, the policy will continue to mix chain-correct and chain-hacked rollouts in roughly the proportion the question distribution allows.
+The 18-58 % range over 180 steps of training is direct evidence that **F1-only reward leaves chain-coherence under-determined from the start**. The optimiser doesn't push toward cleaner chains because it can't see chains; it pushes toward token-likely-correct shapes. The M8.1 chain-consistency penalty (penalty = 0.2 per silent flip) would have applied to **18-58 % of the perfect rollouts per cadence**, multiplying their reward by 0.6-0.8 and creating a real advantage gap inside GRPO groups. Without that, the policy continues to mix chain-correct and chain-hacked rollouts in roughly the proportion the question distribution allows.
 
 #### Second supporting trace (cadence 11, step 102 idx 240)
 
@@ -1958,7 +1975,7 @@ Wiring this into a future seed run is **one ~30-line edit + a unit test + a 50-s
 | C8-C18 | 71-180 | 0.20-0.28 band | Drift cycles (over-search → recover → over-search) but **no monotone climb** |
 | Best single cadence | C8 (steps 71-80) | 0.298 | Still below the 0.32 we'd predict needed to call M5.1 a "win" |
 | Run-high single step | step 49 | 0.394 | Achieved early; later cadences orbit around 0.22-0.28 |
-| Empirical chain-flip rate (reward ≥ 0.9 rollouts) | C5-C18 | 18-58 % band | F1-only does not select for chain correctness; broken-chain reward-1.0 rollouts are systemic, not noise |
+| Empirical chain-flip rate (reward ≥ 0.9 rollouts) | C1-C18 | 18-58 % band (held from step 1) | F1-only does not select for chain correctness; broken-chain reward-1.0 rollouts are systemic from the start of training, not noise |
 
 The pattern is consistent with §9.5's structural diagnosis: F1-only on `<answer>` content + no chain visibility creates a token-alignment optimum that the policy reaches and orbits. 100 more steps of the same reward do not change the gradient direction.
 
