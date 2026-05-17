@@ -14,11 +14,11 @@
 #   - save_note = m9_step<N>_seed1
 
 #SBATCH --job-name=m9_eval
-#SBATCH --partition=gpu-short
+#SBATCH --partition=gpu-a100-80g
 #SBATCH --gres=gpu:a100:1
 #SBATCH --cpus-per-task=40
 #SBATCH --mem=160g
-#SBATCH --time=04:00:00
+#SBATCH --time=08:00:00
 #SBATCH --output=logs/m9_%j_%x.out
 #SBATCH --error=logs/m9_%j_%x.err
 
@@ -60,15 +60,15 @@ export OMP_NUM_THREADS=4
 echo "Using IVF-SQ8 index (× 8 workers): $IVF_INDEX"
 /home/s4374886/.conda/envs/retriever/bin/python -u local_retriever/retriever_serving.py \
   --config local_retriever/retriever_config.yaml \
-  --num_retriever 8 \
+  --num_retriever 2 \
   --index "$IVF_INDEX" \
   --port 3005 > "$RETRIEVER_LOG" 2>&1 &
 RETRIEVER_PID=$!
 echo "Retriever PID: $RETRIEVER_PID  log: $RETRIEVER_LOG"
 
-# 1200 s wait — same budget as sbatch_m4.sh
-echo "Waiting for retriever to load index (up to 1200 s) ..."
-for i in $(seq 1 240); do
+# 2400 s wait — ALICE retriever IVF-SQ8 cold-boot is 30-40 min (memory note)
+echo "Waiting for retriever to load index (up to 2400 s) ..."
+for i in $(seq 1 480); do
   sleep 5
   if curl -sf http://127.0.0.1:3005/health > /dev/null 2>&1; then
     echo "Retriever healthy after $((i*5)) s"
@@ -81,7 +81,7 @@ for i in $(seq 1 240); do
   fi
 done
 if ! curl -sf http://127.0.0.1:3005/health > /dev/null 2>&1; then
-  echo "ERROR: retriever still not healthy after 1200 s — last log lines:" >&2
+  echo "ERROR: retriever still not healthy after 2400 s — last log lines:" >&2
   tail -30 "$RETRIEVER_LOG" >&2
   kill "$RETRIEVER_PID" 2>/dev/null || true
   exit 1
