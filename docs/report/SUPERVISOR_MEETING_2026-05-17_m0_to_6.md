@@ -18,7 +18,7 @@ Consolidated brief covering M0 to M6 with **M5.1 finished and held at step_180**
 
 3. **NEW finding: lean-drift-lean cycling, GRPO self-stabilising.** The policy oscillates between a lean operating point (tool_med 3, len_med 15 K, step wall 411 s) and an over-search regime (tool_med 6, len_med 28.8 K, step wall 824 s). Two complete cycles in 180 steps; every metric of the cycle-2 excursion is smaller than cycle-1 (tool peak 5 vs 6, len peak 23.7 K vs 28.8 K, wall peak 11 min vs 17 min, flip rate peak 56 % vs 58 %). The recipe self-stabilises; over-search-as-divergence is wrong, it is over-search-as-exploration-that-pays-off-in-flip-rate-not-reward.
 
-4. **NEW finding: empirically measured chain-flip rate.** A regex-based silent-flip detector (the M8.1 chain-consistency penalty algorithm) applied to every reward ≥ 0.9 rollout across cadences 5-18: **18.6 % (cadence 9 low) to 58.0 % (cadence 14 high) band, with positive correlation between cadence-mean reward and cadence flip-rate**. Reward and silent-flip count climb *together*, not inversely. Direct evidence that F1-only is reward-shaping for token alignment, not chain coherence. Two concrete reward-1.0-via-broken-chain traces documented (Fox Island, World Cup); ~11 % of all rollouts in cadence 12 onward are planned + reward-1.0 + chain-broken (Goodhart at scale).
+4. **NEW finding: empirically measured chain-flip rate.** A regex-based silent-flip detector (the M8.1 chain-consistency penalty algorithm) applied to every reward ≥ 0.9 rollout across **all 18 cadences (180 training steps; C1-C4 backfilled 2026-05-17 post-hold)**: **18.6 % (cadence 9 low) to 58.0 % (cadence 14 high) band, with positive correlation between cadence-mean reward and cadence flip-rate**. C2-C4 cluster at 28-32 %, so **the operating band is reached within the first 20 training steps and does not exit it**: the flip rate does not start low and rise with training; it starts in-band and stays in-band. Reward and silent-flip count climb *together*, not inversely. Direct evidence that F1-only is reward-shaping for token alignment, not chain coherence even from step 1. Two concrete reward-1.0-via-broken-chain traces documented (Fox Island, World Cup); ~11 % of all rollouts in cadence 12 onward are planned + reward-1.0 + chain-broken (Goodhart at scale).
 
 5. **The picked pair pre-flight is unblocked.** Pick #1 (reward-shape ablation) was always the load-bearing experiment; M5.1 now provides the F1-only anchor checkpoint series ([`pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42-f1-only`](https://huggingface.co/pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42-f1-only); 18 checkpoints). The remaining two runs (F1+0.1 and EM-only) launch at the same recipe + same H200 substrate + same 180-step horizon; each adds 18 checkpoints. Total picked-pair trajectory matrix: **3 rewards × 18 checkpoints × 7 benchmarks × 1-2 seeds = 378-756 eval data points**.
 
@@ -45,10 +45,10 @@ The complete run, replacing the 2026-05-16 brief's cadence 1-9 partial table:
 
 | Cadence | Steps | Reward window-mean | Tool median | Token mean | Step wall (min) | Chain-flip rate | Key event |
 |---:|:---:|:---:|:---:|:---:|:---:|:---:|:---|
-| 1 | 1-13 | 0.028 → 0.110 | 7 → 3 | 7038 → 4500 | 18:22 → 6:04 | n/a | Cold-start; truncation 68 → 0 % |
-| 2 | 14-24 | 0.119 → 0.132 | 3 | 4500 → 2700 | 5:36 | n/a | Shrink-and-improve in flight |
-| 3 | 25-30 | 0.140 → 0.160 | 3 | 2700 → 2300 | 5:50 | n/a | Standard 1-tool shape |
-| 4 | 31-40 | 0.171 | 4-5 | 2400 | 7:21 | n/a | Cross-verification mode emerges |
+| 1 | 1-13 | 0.028 → 0.110 | 7 → 3 | 7038 → 4500 | 18:22 → 6:04 | **48.0 %** (n=123, small denom) | Cold-start; truncation 68 → 0 % |
+| 2 | 14-24 | 0.119 → 0.132 | 3 | 4500 → 2700 | 5:36 | **27.9 %** (in-band by step 11-20) | Shrink-and-improve in flight |
+| 3 | 25-30 | 0.140 → 0.160 | 3 | 2700 → 2300 | 5:50 | **31.0 %** | Standard 1-tool shape |
+| 4 | 31-40 | 0.171 | 4-5 | 2400 | 7:21 | **31.8 %** | Cross-verification mode emerges |
 | 5 | 41-50 | 0.202 | 3 | 2200 | 6:00 | 37.9 % | **Step 49 = 0.394 (run-high single)** |
 | 6 | 51-60 | 0.224 | 3 | 2200 | 6:10 | 27.9 % | Three steps cross 0.25 |
 | 7 | 61-70 | 0.202 | 2-3 | 2200 | 6:30 | 40.2 % | Brief noise dip |
@@ -79,7 +79,7 @@ These five findings are the M5.1 contribution to the thesis regardless of whethe
 
 ### 4.2. Empirical chain-flip rate band 18-58 % with positive reward correlation
 
-A regex-based silent-flip detector applied to ~6000 perfect rollouts across cadences 5-18: chain-flip rate is **18.6 % (C9 low) to 58.0 % (C14 high)** and is **positively correlated with cadence-mean reward**. F1-only does not push toward cleaner chains; it pushes toward token-likely-correct shapes. The M8.1 chain-consistency penalty would have applied to 18-58 % of perfect rollouts, creating a within-group advantage gap that GRPO can act on.
+A regex-based silent-flip detector applied to ~6800 perfect rollouts across **all 18 cadences (180 training steps)** (C1-C4 backfilled 2026-05-17 post-hold; C5-C11 added post-hoc at C11 then backfilled to C5-C10; C12-C18 live with the run): chain-flip rate is **18.6 % (C9 low) to 58.0 % (C14 high)** and is **positively correlated with cadence-mean reward**. **The 28-32 % operating band is reached by C2 (steps 11-20)**; the flip rate does not start low and rise, it starts in-band and stays in-band (C1 = 48.0 % is on n=123, the only sub-200-sample row, and is lucky-match-driven). F1-only does not push toward cleaner chains *from step 1*; it pushes toward token-likely-correct shapes. The M8.1 chain-consistency penalty would have applied to 18-58 % of perfect rollouts at every cadence, creating a within-group advantage gap that GRPO can act on.
 
 ### 4.3. Lean-drift-lean cycling: GRPO self-stabilisation
 
@@ -115,12 +115,12 @@ Pick #2 (defensive R vs ambitious M) still awaiting user decision (per [`../mile
 
 ## 6. The thesis-paper story (compact, revised)
 
-**One sentence**: at sub-1B scale on retrieval-augmented multi-hop QA, the ReSearch partial-credit reward floor masks tool-use signal at training time *and* removing the floor in favour of F1-only creates a different mask (chain-quality blindness) that we measure at 18-58 % silent-flip rate across 130 training steps; the resulting reward plateau is structural at 0.22-0.28 window-mean, the small-model regime exhibits a *shrink-and-improve* training dynamic distinct from the long-CoT regime familiar from math reasoning RL, and GRPO self-stabilises around the F1-optimum operating shape (lean-drift-lean cycling, damped over two cycles in 180 steps).
+**One sentence**: at sub-1B scale on retrieval-augmented multi-hop QA, the ReSearch partial-credit reward floor masks tool-use signal at training time *and* removing the floor in favour of F1-only creates a different mask (chain-quality blindness) that we measure at 18-58 % silent-flip rate across **all 180 training steps of M5.1 (in-band by C2)**; the resulting reward plateau is structural at 0.22-0.28 window-mean, the small-model regime exhibits a *shrink-and-improve* training dynamic distinct from the long-CoT regime familiar from math reasoning RL, and GRPO self-stabilises around the F1-optimum operating shape (lean-drift-lean cycling, damped over two cycles in 180 steps).
 
 **Four contributions** (in priority order):
 
 1. **Per-checkpoint × per-benchmark × per-reward trajectory** ablation at 0.8B (3 rewards × 18 checkpoints × 7 benchmarks × 1-2 seeds = 378-756 eval data points). The first such trajectory-grade evidence at sub-1B in the search-tool RL literature.
-2. **Empirically measured chain-flip rate as the structural F1-ceiling diagnostic** (18-58 % silent-flip band; positive reward-flip correlation; two concrete traces). Direct evidence that F1-only is reward-shaping for token alignment, not chain coherence.
+2. **Empirically measured chain-flip rate as the structural F1-ceiling diagnostic** (18-58 % silent-flip band across all 18 cadences; in-band by C2; positive reward-flip correlation; two concrete traces). Direct evidence that F1-only is reward-shaping for token alignment, not chain coherence, from step 1 of training.
 3. **Lean-drift-lean cycling as a GRPO self-stabilisation finding** (two complete cycles in 180 steps; second cycle damped). Non-trivial training-dynamics characterisation independent of the reward ablation.
 4. **Regime characterisation**: shrink-and-improve at sub-1B retrieval-augmented RL inverts the long-CoT regime of math reasoning RL.
 
@@ -129,7 +129,7 @@ Pick #2 (defensive R vs ambitious M) still awaiting user decision (per [`../mile
 ### 7.1. Strengths added by M5.1 landing
 
 - F1-only ceiling is now an *empirically measured* claim (130 steps in 0.22-0.28 band), not a theoretical one.
-- Chain-flip rate is *measured* (18-58 % band, 6000 rollouts analysed), not derived.
+- Chain-flip rate is *measured* across all 180 training steps (18-58 % band, ~6800 rollouts analysed, in-band from C2 onward), not derived.
 - Lean-drift-lean cycling is a *new* finding (not in the 2026-05-16 brief) that adds a fourth contribution.
 - Two concrete reward-1.0-via-broken-chain traces are paper-quality motivation material.
 
