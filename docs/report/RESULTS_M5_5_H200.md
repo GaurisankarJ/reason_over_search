@@ -78,26 +78,30 @@ All other paper-faithful hyperparameters (lr=1e-6, kl_penalty=0.001, ratio_clip=
 | `sync_to_volume.sh` | Mirrors `/root/logs/` and `/root/reason_over_search/logs/` → `/mnt/milestone55/logs/` every 5 min (ckpts already direct-write to volume) | Live in tmux session `sync_to_volume` |
 | HF uploader (single public repo) | Uploads each `step_N/` + per-step rollouts + logs to one public repo, mirroring M5.1's structure — see [§5](#5-hf-repo-public-single-repo-mirror) | Re-launched 2026-05-17 08:17 UTC (an earlier per-step-private-repo experiment was deleted in favour of this layout) |
 
-## 5. HF repo (public, single-repo mirror)
+## 5. HF repo (public, pantomiman layout)
 
-[`cobaltbluefire/qwen3.5-0.8b-grpo-musique-m5_5-h200-seed42`](https://huggingface.co/cobaltbluefire/qwen3.5-0.8b-grpo-musique-m5_5-h200-seed42) — public, mirrors the M5.1-H200 layout:
+**Canonical repo**: [`cobaltbluefire/qwen3.5-0.8b-grpo-musique-h200-m5_5-seed42-f1-floor-fmt`](https://huggingface.co/cobaltbluefire/qwen3.5-0.8b-grpo-musique-h200-m5_5-seed42-f1-floor-fmt) — public, layout matches [`pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42-f1-only`](https://huggingface.co/pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42-f1-only) (M5.1 sibling, different reward).
 
 ```
-step_10/                       # Atomic checkpoint folder
-  policy/weights/              # consolidated safetensors (HF-format)
-  policy/tokenizer/            # Qwen3.5 tokenizer
-  training_info.json
-step_20/  step_30/  …          # every 10 steps
-logs/
-  train_data/step_N.jsonl      # All 320 rollouts per step (audit trail)
-  prod.log                     # full training stdout
-  retriever.log                # FAISS retriever stdout
-  resource.log                 # resource watcher heartbeat
-  traces.log                   # rollout health digest
-README.md
+.
+├── README.md
+├── .uploader_canary.txt
+├── config_snapshot.yaml            # the m5_5_research_paper_h200.yaml at training start
+├── logs/
+│   └── prod.log                    # full training stdout
+├── rollouts/
+│   └── train_data_stepN.jsonl      # all 320 rollouts per step
+└── step_N/                         # atomic checkpoint folder
+    ├── policy/weights/             # consolidated safetensors
+    ├── policy/tokenizer/           # Qwen3.5 tokenizer
+    ├── config.yaml                 # snapshot of training config at this step
+    ├── train_dataloader.pt         # dataloader state for exact-resume
+    └── training_info.json
 ```
 
-**Triple-backup invariant**: every checkpoint lands in (1) volume `/mnt/milestone55/...`, (2) HF Hub (single public repo, subdirs), (3) local disk via symlink (auto-prune keeps last 5). Either of (1) or (2) alone is sufficient for full recovery.
+**Triple-backup invariant**: every checkpoint lands in (1) volume `/mnt/milestone55/...`, (2) HF Hub (single public repo), (3) local disk via symlink. Either of (1) or (2) alone is sufficient for full recovery.
+
+**Historical repo (preserved, not maintained)**: [`cobaltbluefire/qwen3.5-0.8b-grpo-musique-m5_5-h200-seed42`](https://huggingface.co/cobaltbluefire/qwen3.5-0.8b-grpo-musique-m5_5-h200-seed42) — the first M5.5 H200 repo, used a different layout (`logs/train_data/step_N.jsonl` instead of `rollouts/train_data_stepN.jsonl`). Pinned at step_140; new ckpts go to the canonical repo above. Kept for history.
 
 ## 6. Reward design (the ablation knob)
 
