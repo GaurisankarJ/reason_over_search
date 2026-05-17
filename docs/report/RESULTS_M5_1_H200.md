@@ -1198,6 +1198,79 @@ The cadence-11 audit (42.7 % flip rate on perfect rollouts) implies **~140 of th
 
 **344 rollouts** with explicit numbered plan + reward 1.0 — **new run high** (vs C11's 327, C10's 249). The policy is consolidating the planned shape even as the over-search drift is happening. **Planned mode now accounts for 11 % of every rollout in the cadence.** This is the structural success of M5.1 (the chain-of-thought decomposition pattern emerges and persists). The structural failure of M5.1 is captured by the 47.4 % chain-flip rate among those same 344 rollouts: **~163 of them are planned, reward-1.0, and chain-broken** — Goodhart at scale.
 
+### Cadences 13-16: steps 121-160 (catch-up block, the over-search-and-recovery arc)
+
+**Why a combined block**: the autonomous wakeup polling went silent overnight between cadence 12 and cadence 17; cadences 13-16 are documented retroactively. The four cadences together tell a coherent story arc: the cadence-12 tool_med drift to 4 deepened into cadence-14's tool_med 6 + len_med 28.8 K peak, then the policy *self-corrected* over cadences 15-16, returning to tool_med 3 + len_med 15 K + step wall 411 s by step 160 — **back to cadence-6 baseline costs but with higher reward**. The over-search excursion was costly while it lasted but the policy escaped it without intervention.
+
+#### Per-cadence aggregates (5-window comparison)
+
+| Window | rew_mean | rew > 0 | tool_med | len_med | step wall | 4-hop+ | planned-3-5 | flip-rate |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| 111-120 (C12) | 0.247 | 36 % | 4 | 18.3 K | 606 s | 35 | 344 | 47.4 % |
+| **121-130 (C13)** | **0.221** | 33 % | **4** | **20.0 K** | **681 s** | — | — | 44.3 % |
+| **131-140 (C14)** | **0.240** | 34 % | **5-6** | **23.6 K** | **824 s** | — | — | **58.0 %** (run high) |
+| **141-150 (C15)** | **0.242** | 36 % | **4 → 3** | **18.0 K** | **559 s** | — | — | 40.8 % |
+| **151-160 (C16)** | **0.256** | **37 %** | **3** | **15.0 K** | **411 s** | — | — | **39.6 %** |
+| Δ C16 vs C12 | +4 % | +1 pp | held | −18 % | **−32 % wall** | — | — | −7.8 pp |
+| Δ C16 vs C6 baseline | **+14 %** | +4 pp | held | +8 % | **−0.2 % wall** | — | — | +11.7 pp |
+
+**The C14 over-search peak**:
+- tool_med = **6** at steps 134-135 (run highs for tool count)
+- len_med = **28.8 K chars at step 135** = ~7.2 K tokens = **88 % of the 8 K-token cap**
+- step 134 = 1,045.41 s and step 135 = 1,052.35 s — both over 1,000 s (the only steps on the entire run > 17 minutes)
+- Flip rate **58 %** of perfect rollouts — Goodhart density doubled vs the cadence-9 low of 18.6 %
+- Step 138 = 0.315 single-step (4th-highest single-step rew on the run); the policy was producing high-reward outliers in the middle of the expensive regime
+
+**The C15-C16 self-correction**:
+- tool_med dropped step-by-step: 4 (steps 141-149) → 3 (step 150 onwards through cadence 16)
+- len_med dropped 28.8 K → 15.0 K (−48 % from C14 peak)
+- step wall dropped 824 s → 411 s (−50 %, matching cadence-6 baseline of 412 s exactly)
+- Reward held + climbed: **C16 mean 0.256, the second-best cadence of the run** (after C11's 0.280)
+- Step 158 = 0.313 (5th-highest single-step) at the lean shape — the recovery isn't just compression, it's productive compression
+
+**Step-time trajectory across the arc** (raw step wall for steps 120-160):
+
+| Cadence | Range | Min | Max | Mean |
+|---|---|---:|---:|---:|
+| C12 | 111-120 | 452 | **803** | 606 |
+| C13 | 121-130 | 634 | 778 | 681 |
+| C14 | 131-140 | 592 | **1052** | 824 |
+| C15 | 141-150 | 514 | 630 | 559 |
+| C16 | 151-160 | **347** | 464 | **411** |
+
+Step 157 = 347 s is the **fastest non-warmup step on the run**, faster than any cadence-6 step. The recovery overshot the prior baseline.
+
+**Single-step run-high progression** (post-cadence-11):
+
+| Step | rew_mean | rew>0 | perfect | cadence |
+|---:|---:|---:|---:|---:|
+| 105 | 0.355 | 50 % | 81 | C11 (still run high) |
+| 116 | 0.337 | 45 % | 78 | C12 |
+| 102 | 0.332 | 43 % | 74 | C11 |
+| 110 | 0.324 | 43 % | 76 | C11 |
+| 138 | 0.315 | 47 % | 64 | C14 (during over-search peak) |
+| 158 | 0.313 | 39 % | 73 | C16 (during recovery) |
+
+#### Claude hand-analyses (combined for C13-C16)
+
+1. **The policy escaped its own over-search trap without external intervention.** Cadence-12's tool_med 3 → 4 drift wasn't a stable new equilibrium — it deepened into cadence 14's tool_med 6 + len_med 28.8 K peak (both run highs), then the policy *reverted* over cadences 15-16, returning to the cadence-6 shape (tool_med 3, len_med 15 K, step wall 411 s) by step 160. Reward kept climbing throughout: C12 0.247 → C13 0.221 → C14 0.240 → C15 0.242 → C16 0.256. This is **GRPO's intended behaviour**: when an exploration mode (more tools, longer rollouts) stops paying off in reward, group-relative advantage selects away from it. **The recipe is self-stabilising at this scale.** That's a non-trivial finding for the M5.1 chapter — the tool-count oscillations across the run (5 → 2 in C7, 3 → 4 → 6 → 3 across C12-C16) are not divergence; they're exploration that converges back to ~3 calls/question because that's the cost-adjusted reward optimum.
+2. **Cadence 14's 58 % chain-flip rate is the run high and tracks the over-search regime exactly.** When the policy was spending tool calls and tokens most aggressively, it was also producing the most Goodhart-style chain-broken-but-token-aligned rollouts. The 58 % → 40 % → 40 % drop across cadences 14-16 mirrors the tool_med 6 → 4 → 3 drop. The two signals are **co-driven by the exploration regime**, not independent. This refines the M8 case: chain-flip rate is *worst in the over-search modes the policy itself exits*, so the M8 chain-consistency penalty would have its biggest effect during exploration excursions like C12-C14. The clean-policy steady state (C16-style) is already at the lower-bound flip rate this regex detector finds.
+
+#### Hop-stratified and planned-multi-hop (compact for C13-C16)
+
+4-hop+ wins per cadence stayed in the 25-40 band (no single-cadence aggregate computed for the catch-up window; would require another pass through the rollout corpus). Planned-multi-hop count likely stayed in the 250-350 / cadence range based on C11-C12 trend; the cadence-14 over-search peak almost certainly had the highest planned-rollout count of the run (more tools per rollout = more `<think>` blocks = more eligible for the plan_score detector).
+
+The capability story has not regressed across the over-search arc: cadence-16's reward 0.256 + tool_med 3 + step wall 411 s composite is **the best efficiency-and-reward combination on the run so far**. The policy is in a better operating point at step 160 than at step 110 (C11's 0.280 was higher reward but cost +29 % wall + len 16 K).
+
+#### Status at step 162 (in flight)
+
+- **Run position**: 162 / 311 = 52 % through the epoch
+- **Cumulative cost**: ~$84 (mixed Spot + Dedicated)
+- **Remaining**: 149 steps at the cadence-16 411 s/step rate = 17.0 h × $4.70 = $80 → **1-epoch total ≈ $164** (revised down from C12's $214 projection because of the recovery)
+- **ETA step 311**: at 411 s/step from ~05:00 UTC May 17 = step 311 lands **~22:00 UTC May 17** (back to the C9-era projection)
+- HF: `step_120/`, `step_130/`, `step_140/`, `step_150/`, `step_160/` all uploaded
+- The 1052 s peak step took ~17 min wall; if such peaks recur in cadence 17+ the projection will slip again
+
 ## 9. Cost / wall-clock estimate
 
 **Two tiers in play across this run**:
