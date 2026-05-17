@@ -79,7 +79,7 @@ The run moved between three substrates after two incidents:
 
 1. **a1 on Vast 1× A100** (launched 2026-05-11). Smoke OK; full-run plateaued in compute-cost terms.
 2. **a3 on B200** (launched 2026-05-14): crashed at step 56 / 9.29 h after Blackwell sm_100 BF16-dense kernel immaturity surfaced in NeMo-RL/vLLM 0.17 ([`log.md` 2026-05-15](../log.md#2026-05-15)). 1× B200 measured at 2.66× over A100, not the 11× projected by HARDWARE_COMPARISON v2.
-3. **a4 on Spheron 1× H200 with persistent volume `miletone5`** (launched 2026-05-15). Runbook frozen at [`spheron/SETUP_SPHERON.md`](../spheron/SETUP_SPHERON.md) with 11 named pitfalls (P1-P11); checkpoint upload watcher → HF Hub `pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42`; v3-v11 prod incident chain (vLLM 0.17 FlashInfer GDN prefill kernel deadlocks on H200 sm_90 under sync engine at prod-batch sizes; fixed by patching `qwen3_next.py:156` from `is_device_capability(90)` to `False`).
+3. **a4 on Spheron 1× H200 with persistent volume `miletone5`** (launched 2026-05-15). Runbook frozen at [`spheron/SETUP_SPHERON.md`](../spheron/SETUP_SPHERON.md) with 11 named pitfalls (P1-P11); checkpoint upload watcher → HF Hub `pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42-f1-only`; v3-v11 prod incident chain (vLLM 0.17 FlashInfer GDN prefill kernel deadlocks on H200 sm_90 under sync engine at prod-batch sizes; fixed by patching `qwen3_next.py:156` from `is_device_capability(90)` to `False`).
 
 H200 ETA at step 311 (50 % of paper schedule): **~17:00 UTC 2026-05-17** (~28.6 h remaining at 2026-05-16 cadence-9 pace).
 

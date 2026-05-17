@@ -29,7 +29,7 @@ The 50 GB VRAM gap between B200 and H200 is the single biggest reason why a yaml
 1. Spheron account with active compute deployment for 1× H200 + persistent volume named `miletone5` (600 GB) attached.
 2. SSH access to the deployment's IP (key set up in Spheron console).
 3. HF model repo provisioned and empty (only README + config_snapshot + .gitattributes):
-   - `pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42` (primary; the only one we upload to now)
+   - `pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42-f1-only` (primary; the only one we upload to now)
 
    The earlier setup also wrote to a second `*-backup` repo for redundancy against host preemption. Removed and deleted 2026-05-15: the Spheron persistent volume (`miletone5`) already preserves all checkpoints + rollouts across host preemption, so the backup repo was duplicating durability we now get for free. The HF backup repo has been deleted; do not reinstate.
 4. HF dataset `pantomiman/reason-over-search-v1-venvs` has `dtensor_policy_worker_v2.tar.gz` (6.5 GB pre-built DTensor V2 venv) accessible with your HF token.
@@ -281,7 +281,7 @@ set -a; . /workspace/reason_over_search/training_m5_1/.env; set +a
 import os
 from huggingface_hub import HfApi
 api = HfApi(token=os.environ["HF_TOKEN"])
-repo = "pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42"
+repo = "pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42-f1-only"
 info = api.repo_info(repo, repo_type="model")
 files = api.list_repo_files(repo, repo_type="model")
 print(f"OK {repo}")
@@ -326,7 +326,7 @@ For smoke, point at the smoke ckpt dir and use the smoke state file:
 sudo docker exec -d h200-a4 bash -c '
 set -a; . /workspace/reason_over_search/training_m5_1/.env; set +a
 /venv/main/bin/python /workspace/reason_over_search/training_m5_1/scripts/upload_a4_to_hf.py \
-  --repo-id pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42 \
+  --repo-id pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42-f1-only \
   --checkpoint-dir /workspace/reason_over_search/results/grpo/m5_smoke/seed42 \
   --rollout-dir /workspace/reason_over_search/logs \
   --prod-log /workspace/smoke.log \
@@ -390,7 +390,7 @@ set -a; . /workspace/reason_over_search/training_m5_1/.env; set +a
 import os
 from huggingface_hub import HfApi
 api = HfApi(token=os.environ["HF_TOKEN"])
-repo = "pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42"
+repo = "pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42-f1-only"
 files = api.list_repo_files(repo, repo_type="model")
 print(f"{repo}:")
 for f in files:
@@ -430,7 +430,7 @@ import os
 from huggingface_hub import HfApi, CommitOperationDelete
 api = HfApi(token=os.environ["HF_TOKEN"])
 KEEP = {".gitattributes", "README.md", "config_snapshot.yaml"}
-repo = "pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42"
+repo = "pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42-f1-only"
 files = api.list_repo_files(repo, repo_type="model")
 to_del = [f for f in files if f not in KEEP]
 if to_del:
@@ -480,7 +480,7 @@ done
 sudo docker exec -d h200-a4 bash -c '
 set -a; . /workspace/reason_over_search/training_m5_1/.env; set +a
 /venv/main/bin/python /workspace/reason_over_search/training_m5_1/scripts/upload_a4_to_hf.py \
-  --repo-id pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42 \
+  --repo-id pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42-f1-only \
   --checkpoint-dir /workspace/reason_over_search/results/grpo/m5_prod/seed42 \
   --rollout-dir /workspace/reason_over_search/logs \
   --prod-log /workspace/prod.log \
@@ -751,7 +751,7 @@ Thread X (active): "MainThread"
 
 ### P13: Live uploader pre-flight cleanup can look like a deletion
 
-The Python uploader ([`upload_a4_to_hf.py`](../../training_m5_1/scripts/upload_a4_to_hf.py)) does an automatic pre-flight HF wipe when transitioning from smoke to prod (Stage 8.2). The wipe lands on the HF Hub as a commit titled `cleanup: drop smoke artifacts; prep for prod a4 run`, which removes the smoke `step_2/` + `step_4/` directories from `pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42` and leaves only `README.md`, `config_snapshot.yaml`, `.gitattributes`, `.uploader_canary.txt`, and the log mirror behind.
+The Python uploader ([`upload_a4_to_hf.py`](../../training_m5_1/scripts/upload_a4_to_hf.py)) does an automatic pre-flight HF wipe when transitioning from smoke to prod (Stage 8.2). The wipe lands on the HF Hub as a commit titled `cleanup: drop smoke artifacts; prep for prod a4 run`, which removes the smoke `step_2/` + `step_4/` directories from `pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42-f1-only` and leaves only `README.md`, `config_snapshot.yaml`, `.gitattributes`, `.uploader_canary.txt`, and the log mirror behind.
 
 **Why this looks alarming**: a `repo_info(files_metadata=True)` call right after the wipe shows the repo at ~0 GB. If you don't know the pre-flight ran, this looks like the repo was emptied by an external action (e.g. an unauthorized delete during HF cleanup). Confirmed false alarm on 2026-05-15 PM during the HF smoke-cleanup session: the uploader's normal cleanup commit at 14:57 UTC fired ~2 min before the (unrelated) 13-repo smoke deletion. Diagnostic was done via the `*-backup` repo's commit history, which existed at the time (since deleted 2026-05-15 PM along with the move to single-repo durability via the persistent volume).
 
@@ -760,7 +760,7 @@ The Python uploader ([`upload_a4_to_hf.py`](../../training_m5_1/scripts/upload_a
 ```bash
 python -c "
 from huggingface_hub import HfApi; api = HfApi()
-for c in list(api.list_repo_commits('pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42'))[:5]:
+for c in list(api.list_repo_commits('pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42-f1-only'))[:5]:
     print(c.created_at, c.commit_id[:10], c.title)
 "
 ```

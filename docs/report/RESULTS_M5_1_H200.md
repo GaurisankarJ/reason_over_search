@@ -26,7 +26,7 @@ status: HOLD at step_180 (58 % of epoch 1); F1-only ceiling structural per §9.5
 |---|---|
 | Run name | `qwen3.5-0.8b-musique-h200-a4-seed42` |
 | W&B project | `reason_over_search_h200` |
-| HF Hub repo | [`pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42`](https://huggingface.co/pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42) (single; persistent volume makes redundancy unnecessary) |
+| HF Hub repo | [`pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42-f1-only`](https://huggingface.co/pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42-f1-only) (single; persistent volume makes redundancy unnecessary) |
 | Git branch | `experiment_1_h200` (forked from `experiment_1_b200` at commit `178d5db`) |
 | Started commit | `48d9a64` (h200 yaml updates) |
 | Launch time (UTC) | 2026-05-15 19:24 (v11, after 8 prior prod-launch iterations; see §7.5) |
@@ -222,7 +222,7 @@ Step wall-clock + reward signal (rollouts pulled from `train_data_step*.jsonl`):
 - Step wall: 1101 → 364 s (−67 %) over 12 steps. Multi-turn rollout depth dropped sharply.
 - Reward mean: 0.028 → 0.110 (~4 ×).
 - Frac rew > 0: 8 % → 20 %.
-- HF Hub: `step_10/` (6.4 GB) live at [the primary repo](https://huggingface.co/pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42/tree/main/step_10).
+- HF Hub: `step_10/` (6.4 GB) live at [the primary repo](https://huggingface.co/pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42-f1-only/tree/main/step_10).
 - Cumulative wall: ~3.5 h since launch. Cost: ~$7. 0 OOMs, 0 uploader errors, 0 stalls (GDN patch holds).
 
 **Untrained-model rollout cost dropping faster than predicted**: §9 cold-50 estimate had step time at ~18 min through step 50; we're at 6 min by step 12. Updating projection below.
@@ -296,7 +296,7 @@ Step wall-clock + reward signal (rollouts pulled from `train_data_step*.jsonl`):
 - Step time **plateaued ~245 s (4 min)**. The cold→stable transition is over; we're in stable-regime now.
 - Reward keeps climbing — peak at step 21 (0.164) is **5.9× step 1 (0.028)**.
 - Frac rew > 0: best step (21) reached 30 %, 3× the cold-start 10 % rate.
-- HF: `step_20/` live at [the primary repo](https://huggingface.co/pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42/tree/main/step_20). Both checkpoints durable.
+- HF: `step_20/` live at [the primary repo](https://huggingface.co/pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42-f1-only/tree/main/step_20). Both checkpoints durable.
 - Cumulative cost since launch: ~$14. Still ~30× under budget.
 - B200 a3 reference (steps 11-20 cadence): rew_mean ~0.115 — H200 at 0.106 is **within 8 % of B200**, same recipe + same hardware-class except for the GDN patch. The patch's compute overhead does not visibly hurt learning.
 
@@ -364,7 +364,7 @@ Step wall-clock + reward signal (rollouts pulled from `train_data_step*.jsonl`):
 **Trends after cadence 3**:
 - Reward climbing again after a brief plateau (steps 17-22 around 0.10-0.16; steps 28-30 mean 0.156). Step 30 hit 0.173 — **6.3× cold-start**.
 - Re-exploration phase has started: step time rose from ~245 s to ~315 s (+25 %). Tool count stays at 4 median, but search queries are getting longer (more careful retrieval). Same pattern B200 a3 showed at steps 25+.
-- HF: `step_30/` live at [the primary repo](https://huggingface.co/pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42/tree/main/step_30).
+- HF: `step_30/` live at [the primary repo](https://huggingface.co/pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42-f1-only/tree/main/step_30).
 - Cumulative cost: ~$18. Steps 1-30 wall: ~9 h.
 - B200 a3 cadence-3 same range: rew_mean 0.143 — H200 at 0.131 is **within 9 % of B200** (still tracking).
 
@@ -436,7 +436,7 @@ Step wall-clock + reward signal (rollouts pulled from `train_data_step*.jsonl`):
 - **Reward broke through the A100 ceiling** of 0.1997 (A100 49-step max at step 37). H200 at step 37 = 0.209 — same step number, +5 % reward. Entering territory the A100 reference cannot speak to.
 - **Re-exploration regime is paying off**: model added one tool call (median 4 → 5), bought +17 % wall, returned +30 % reward. Worth the trade.
 - **Step time rose to ~370 s (6 min)**, with step 40 at 441 s (outlier). If step 41-50 hold at 370 s, ETA step 311 = 273 × 370 s + ~9 h elapsed ≈ 37 h total wall = step 311 lands ~08:00 UTC May 17.
-- HF: `step_40/` live at [the primary repo](https://huggingface.co/pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42/tree/main/step_40).
+- HF: `step_40/` live at [the primary repo](https://huggingface.co/pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42-f1-only/tree/main/step_40).
 - Cumulative cost: ~$22.
 - B200 a3 cadence-4 published rew_mean ≈ 0.160 — H200 at 0.171 is **+7 % above B200**, first window where we lead. Likely batch noise but worth tracking.
 
@@ -545,7 +545,7 @@ Worked example — **step 39, sample 158**, reward 1.0, 3 tool calls:
 - **Tool-call median dropped 5 → 3**. Cadence 4 added a tool call ("cross-verification"); cadence 5 took two off. The model is becoming **more efficient**: fewer searches per question, higher reward. This is the canonical convergence-toward-shorter-trajectories pattern of a well-shaped RL run; the "5th call paying off" of cadence 4 was a transient over-search regime that policy gradient is now collapsing back out.
 - **Step wall +19 % vs cadence 4** (448 s vs 376 s) despite fewer tool calls — and stays elevated across all 10 steps, not just the first 2-3. AdamW re-warm should have decayed by step 47; it didn't. Most likely host-to-host variance on Spheron Spot (cadence 4 was on host 247, cadence 5 is on 126). Re-exploration drift cannot be ruled out, but the flat tool_med-3 argues against it.
 - **Context still growing**: len_med 13.0 K → 14.6 K. With fewer tool calls but longer rollouts, individual `<think>` blocks and tool responses are getting wordier.
-- HF: `step_50/` live at [the primary repo](https://huggingface.co/pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42/tree/main/step_50).
+- HF: `step_50/` live at [the primary repo](https://huggingface.co/pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42-f1-only/tree/main/step_50).
 - Cumulative cost (mixed Spot $1.95/h for steps 1-40 + Dedicated $4.70/h for steps 41-50, ~11.5 h elapsed): ~$21.
 - **Wall-clock projection**: at 448 s/step, ETA step 311 = 261 × 448 s + 11.5 h elapsed ≈ 44 h total = step 311 lands ~14:30 UTC May 17 (was ~37 h with cadence-4 timing).
 
@@ -640,7 +640,7 @@ Worked example — **step 46, sample 126**, reward 1.0, 4 tool calls, 5-hop:
 - **Step time normalised**: 448 → 412 s (−36 s). Step 53 at 364 s and the mid-cadence steps 55-58 all in the 386-406 s band were on par with the cadence-4 baseline of 376 s; steps 59-60 bumped back up to 465 + 443 s but that's well within step-to-step noise. **Post-resume warmup is over**; the +19 % cadence-5 elevation was transient, not host-variance or image-related (verified vs torch sm_90 arch list + FlashInfer GDN patch + same image).
 - **Tool-call median held at 3** for the second straight cadence. The cadence-5 efficiency gain (5 → 3 calls) has stabilised, not regressed back. Cadence-5 was the regime change; cadence-6 confirms persistence.
 - **Context shrank slightly**: len_med 14.6 K → 13.9 K. Truncation rate edged down vs cadence 5 (96.2 % → 97.6 % stays binding, but median rollout backed off the ceiling a touch).
-- HF: `step_60/` live at [the primary repo](https://huggingface.co/pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42/tree/main/step_60).
+- HF: `step_60/` live at [the primary repo](https://huggingface.co/pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42-f1-only/tree/main/step_60).
 - Cumulative cost (mixed Spot + Dedicated, ~12.5 h elapsed): ~$24.
 - **Wall-clock projection**: at 412 s/step, ETA step 311 = 251 × 412 s + 12.5 h elapsed ≈ 41 h total = step 311 lands ~14:00 UTC May 17.
 
@@ -726,7 +726,7 @@ Worked example — **step 46, sample 126**, reward 1.0, 4 tool calls, 5-hop:
 - **Tool_med dropping again** — 3 → 2 in the back half of the cadence. **The policy is over-pruning calls.** The cadence-6 finding ("3 well-aimed calls beat 5 cross-verifying ones") was the win; cadence-7 is **going one step further and giving back reward** — confirming the +18 % cadence-5 gain came from optimal-call discovery, not from "fewer is always better".
 - **4-hop+ successes JUMPED to 32** (vs 21 / 26 in cadences 5-6). The hardest chains are getting solved more often even as the policy regresses on the mean. Different regimes for different question types: easy 1-2 hops get over-pruned to 1 call and miss the F1 keyword match; hard 4+ hops actually benefit from the leaner search style (single well-aimed query that retrieves the bridge entity, then reasoning).
 - **Step wall jumped to 463 s** (+12 % over cadence 6). Phase breakdown: **generation grew 40 → 49 s (+22 %)**, policy_training grew 300 → 318 s (+6 %). The growth is on the rollout side, not training. With tool_med dropping (fewer turns) but generation getting slower, individual rollouts must be generating more tokens per turn (longer `<think>` blocks). This is the "longer single-call sequences" exploration mode.
-- HF: `step_70/` live at [the primary repo](https://huggingface.co/pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42/tree/main/step_70).
+- HF: `step_70/` live at [the primary repo](https://huggingface.co/pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42-f1-only/tree/main/step_70).
 - Cumulative cost (mixed Spot + Dedicated, ~13.8 h elapsed): ~$30.
 - **Wall-clock projection updated**: at 463 s/step, ETA step 311 = 241 × 463 s + 13.8 h ≈ 45 h total = step 311 lands ~17:00 UTC May 17 (slipped 3 h vs cadence-6 projection).
 
@@ -814,7 +814,7 @@ Worked example — **step 46, sample 126**, reward 1.0, 4 tool calls, 5-hop:
 - **Tool_med back to 3** for the first 8 steps of cadence 8, before drifting again to 2 in steps 79 + 80. The C7 → 2 over-pruning was corrected; the policy is still oscillating between 2 and 3 calls but reward isn't moving with it (steps 71 and 73 both had tool_med 2 but rew_mean 0.163 vs 0.269 — tool_med isn't load-bearing on these results).
 - **4-hop+ successes 26** — back to the mid-range after cadence-7's 32 spike. The hard-tail gain in C7 didn't sustain.
 - **Step wall 467 s** — essentially same as cadence 7 (463 s). The +12 % over the cadence-6 floor is **the new steady-state**, not a transient.
-- HF: `step_80/` live at [the primary repo](https://huggingface.co/pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42/tree/main/step_80).
+- HF: `step_80/` live at [the primary repo](https://huggingface.co/pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42-f1-only/tree/main/step_80).
 - Cumulative cost (mixed Spot + Dedicated, ~15.5 h elapsed): ~$36.
 - **Wall-clock projection updated**: at 467 s/step, ETA step 311 = 231 × 467 s + 15.5 h ≈ 46 h total = step 311 lands ~21:50 UTC May 17. **Total 1-epoch cost ~$178** (already-spent $36 + $142 remaining at $4.70/h).
 
@@ -901,7 +901,7 @@ Worked example — **step 46, sample 126**, reward 1.0, 4 tool calls, 5-hop:
 - **Planned-multi-hop count is the new high: 153 rollouts** with explicit numbered plans (vs C6/C8's 132 and C7's 102). Plan structure is getting more frequent, not less. The top plan_score on this run (60, step 88 idx 113) was generated this cadence.
 - **4-hop+ generalisation** beyond the Ghana → Sophia Akuffo lookup: step 84 idx 162 solved a Nteje → **Nigeria** → Walter Samuel Nkanu Onnoghen chain in 2 tool calls. The policy isn't just pattern-matching one Wikipedia article; it has learned the general "country → chief justice" chain shape.
 - **Step wall jumped to 484 s** (+17 s vs C8). Steps 89 + 90 were **528 + 577 s** — the latter is the slowest of the entire run. len_med also crept up 13.9 K → 14.8 K. **This is the new watch item**: if cadence 10 stays at 480+ s, exploration drift is real and the wall-clock projection has to expand again.
-- HF: `step_90/` live at [the primary repo](https://huggingface.co/pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42/tree/main/step_90).
+- HF: `step_90/` live at [the primary repo](https://huggingface.co/pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42-f1-only/tree/main/step_90).
 - Cumulative cost (mixed Spot + Dedicated, ~16.8 h elapsed): ~$42.
 - **Wall-clock projection**: at 484 s/step, ETA step 311 = 221 × 484 s + 16.8 h ≈ 47 h total = step 311 lands ~22:30 UTC May 17. **Total 1-epoch cost ~$181** (already-spent $42 + $139 remaining at $4.70/h × 29.7 h).
 
@@ -984,7 +984,7 @@ Worked example — **step 46, sample 126**, reward 1.0, 4 tool calls, 5-hop:
 - **But len_med jumped to 16.1 K and step wall to 555 s**. Three of the ten steps had tool_med = 4 (steps 95, 97, 98) — the policy is re-introducing more search per question. Combined with growing context per turn, this is **re-exploration drift** that started in cadence 7 and is still accelerating.
 - **Rollout-length distribution is shifting toward the cap.** At step 100: median rollout = 16.1 K chars ≈ 4,027 tokens (about 50 % of the 8,192-token `max_total_sequence_length`); p95 = 33.7 K chars ≈ 8,420 tokens (over the cap — ~5 % of rollouts are actually being truncated); max = 39.6 K chars ≈ 9,896 tokens. The reported "99.6 % > 7,800 chars" is just a length-distribution sanity flag, not literal model truncation; **real hard-truncation rate is ~5 % at the p95 tail**. At the current growth rate (+9 % len_med / cadence), the median will approach the 8,192-token cap in ~5 more cadences and the cap will start binding for the bulk of the distribution.
 - **The 4-hop+ rate at 27 is stable in the 20-32 band.** Cadence 10's BEST 4-hop+ (step 99 Anne Fitzalan-Howard, Duchess of Norfolk, Stratton Strawless → Norfolk, 2 calls) generalises beyond both Ghana and Nigeria — a third country (UK) solved with the same chain shape.
-- HF: `step_100/` live at [the primary repo](https://huggingface.co/pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42/tree/main/step_100).
+- HF: `step_100/` live at [the primary repo](https://huggingface.co/pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42-f1-only/tree/main/step_100).
 - Cumulative cost (mixed Spot + Dedicated, ~18.5 h elapsed): ~$50.
 - **Wall-clock projection slipped**: at 555 s/step, ETA step 311 = 211 × 555 s + 18.5 h ≈ 51 h total = step 311 lands **~01:45 UTC May 18** (was ~22:00 UTC May 17 at cadence-9 timing). **Total 1-epoch cost ~$203** (already $50 + $153 remaining at 555 s/step × $4.70/h).
 
@@ -1067,7 +1067,7 @@ The cadence-9 step 93 idx 10 Fox Island trace (reward 1.0 via silent flip USA �
 - **But the chain-flip rate ALSO jumped to 42.7 %** — the **highest of the run**. The audit on the full cadence (593 perfect rollouts) finds 253 with detectable silent flips. **For every 5 perfect rollouts in this cadence, 2 are chain-broken-but-token-aligned.** The reward jump and the flip-rate jump co-occur — same direction.
 - **Step wall edged DOWN to 532 s** (-23 s vs C10), the first cadence where wall time decreased since C6. The cadence-10 fear of accelerating drift didn't materialise; growth normalised.
 - **len_med edged DOWN slightly too** (16.1 → 15.8 K), and the rollout-length distribution still has the median ~50 % of the 8K-token cap. The cap-binding scenario from cadence 10's footnote is **deferred by at least one cadence**.
-- HF: `step_110/` live at [the primary repo](https://huggingface.co/pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42/tree/main/step_110).
+- HF: `step_110/` live at [the primary repo](https://huggingface.co/pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42-f1-only/tree/main/step_110).
 - Cumulative cost (mixed Spot + Dedicated, ~20.0 h elapsed): ~$57.
 - **Wall-clock projection** (revised at 532 s/step from cadence-10's 555): ETA step 311 = 201 × 532 s + 20 h ≈ 50 h total = step 311 lands **~21:00 UTC May 17**. **Total 1-epoch cost ~$197** (was $203 at C10 projection).
 
@@ -1150,7 +1150,7 @@ The cadence-11 audit (42.7 % flip rate on perfect rollouts) implies **~140 of th
 - **Chain-flip rate 47.4 % — new run high**, up from C11's 42.7 % and C9's 18.6 %. Half the perfect rollouts in cadence 12 have silent entity flips.
 - **Planned-multi-hop count 344 — new run high** (vs C11's 327). The mode keeps consolidating; the over-search is happening on top of the planned shape, not replacing it.
 - **4-hop+ wins dropped to 35** (from C11's 40). Some hard-tail capability lost as the policy reverts to over-search.
-- HF: `step_120/` live at [the primary repo](https://huggingface.co/pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42/tree/main/step_120).
+- HF: `step_120/` live at [the primary repo](https://huggingface.co/pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42-f1-only/tree/main/step_120).
 - Cumulative cost (mixed Spot + Dedicated, ~22.5 h elapsed): ~$64.
 - **Wall-clock projection slipped**: at 606 s/step, ETA step 311 = 191 × 606 s + 22.5 h ≈ 54 h total = step 311 lands **~01:00 UTC May 18** (was ~21:00 UTC May 17 at C11 projection). **Total 1-epoch cost ~$214** (was $197 at C11; was $203 at C10).
 
@@ -2027,7 +2027,7 @@ This HF repo is a live training mirror; each `step_N/` folder is a complete safe
 # Load a checkpoint for inference
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-REPO = "pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42"
+REPO = "pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42-f1-only"
 STEP = "step_40"  # or any step_N/ folder in this repo
 
 # Tokenizer is shared across all checkpoints; the base Qwen3.5-0.8B tokenizer works
@@ -2075,7 +2075,7 @@ This is mandatory on H200; idempotent on A100/B200 (their compute capability nev
 ## 12. Pointers
 
 - W&B project: [`reason_over_search_h200`](https://wandb.ai/gaurisankarj1996-leiden-university/reason_over_search_h200)
-- HF Hub: [`pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42`](https://huggingface.co/pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42) (backup repo removed 2026-05-15; volume handles redundancy)
+- HF Hub: [`pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42-f1-only`](https://huggingface.co/pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42-f1-only) (backup repo removed 2026-05-15; volume handles redundancy)
 - Prior run (crashed): [a3 RESULTS](RESULTS_M5_1_B200.md) (W&B run [h68uskz6](https://wandb.ai/gaurisankarj1996-leiden-university/reason_over_search_b200/runs/h68uskz6))
 - Config: [`training_m5_1/configs/m5_1_research_paper.yaml`](../../training_m5_1/configs/m5_1_research_paper.yaml)
 - Smoke config: [`training_m5_1/configs/m5_smoke.yaml`](../../training_m5_1/configs/m5_smoke.yaml)

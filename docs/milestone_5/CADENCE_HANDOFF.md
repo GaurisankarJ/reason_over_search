@@ -34,7 +34,7 @@ The cadence loop is **on hold** at step_180. Not crashed; deliberately held whil
 
 ## Quick context
 
-The training run is GRPO on Qwen3.5-0.8B / MuSiQue / F1-only reward, running on Spheron with a persistent volume `miletone5`. Every 10 GRPO steps a checkpoint lands. The uploader pushes everything to HF [`pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42`](https://huggingface.co/pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42). The cadence cycle = pull the new step's data, write an analysis block, commit to GH, sync to HF. Currently fires every ~50-90 min depending on step wall time.
+The training run is GRPO on Qwen3.5-0.8B / MuSiQue / F1-only reward, running on Spheron with a persistent volume `miletone5`. Every 10 GRPO steps a checkpoint lands. The uploader pushes everything to HF [`pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42-f1-only`](https://huggingface.co/pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42-f1-only). The cadence cycle = pull the new step's data, write an analysis block, commit to GH, sync to HF. Currently fires every ~50-90 min depending on step wall time.
 
 Main doc being updated: [`../report/RESULTS_M5_1_H200.md`](../report/RESULTS_M5_1_H200.md). HF README is maintained separately (cleaner / shorter).
 
@@ -215,14 +215,14 @@ The trajectory table on HF deliberately does NOT have per-cadence BEST/WORST/MEA
 
 ```bash
 cd /tmp && rm -rf hf-readme-sync
-GIT_LFS_SKIP_SMUDGE=1 git clone https://huggingface.co/pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42 hf-readme-sync
+GIT_LFS_SKIP_SMUDGE=1 git clone https://huggingface.co/pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42-f1-only hf-readme-sync
 # wait for clone
 # Edit /tmp/hf-readme-sync/README.md (the 5 items above)
 cd /tmp/hf-readme-sync
 git add README.md
 git -c user.email=gaurisankarj1996@gmail.com -c user.name=Sankar -c commit.gpgsign=false commit -m "docs: cadence N — <one-line summary>" -- README.md
 HF_TOK=$(cat ~/.cache/huggingface/token)
-git push "https://pantomiman:${HF_TOK}@huggingface.co/pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42" HEAD:main
+git push "https://pantomiman:${HF_TOK}@huggingface.co/pantomiman/qwen3.5-0.8b-grpo-musique-h200-a4-seed42-f1-only" HEAD:main
 ```
 
 `GIT_LFS_SKIP_SMUDGE=1` is **mandatory**; without it the clone tries to pull 100+ GB of safetensors.
