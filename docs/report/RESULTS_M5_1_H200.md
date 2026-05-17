@@ -1513,6 +1513,70 @@ The capability story has not regressed across the over-search arc: cadence-16's 
 
 **Cadence-16 summary**: best efficiency-and-reward composite on the run; tool_med locked at 3; recovery from C12-C14 over-search trap complete; Goodhart density (40 %) higher than C9 low (19 %) but not climbing further. The chapter-defensible operating point.
 
+### Cadence 17: steps 161-170 (second-best cadence; second drift starting)
+
+| Step | Wall (s) | M:S | rew mean | rew > 0 | tool_med | len_med | notes |
+|---:|---:|---:|---:|---:|---:|---:|---|
+| 161 | 464 | 7:44 | 0.223 | 33 % | 3 | 16.2 K | Tool_med held at 3 from C16 |
+| 162 | 477 | 7:57 | 0.250 | 34 % | 3 | 16.1 K | |
+| 163 | 533 | 8:53 | 0.245 | 42 % | **4** | 18.1 K | Tool_med ticks to 4 |
+| 164 | 476 | 7:56 | 0.264 | 42 % | 3 | 16.3 K | |
+| 165 | 501 | 8:21 | 0.238 | 37 % | 3 | 16.6 K | |
+| **166** | 491 | 8:11 | **0.280** | 38 % | 3 | 16.1 K | Single-step matches C11 cadence mean |
+| 167 | 557 | 9:17 | 0.255 | 38 % | 4 | 19.0 K | Tool_med settles at 4 |
+| 168 | 664 | 11:04 | 0.261 | 38 % | 4 | 20.1 K | Step wall growing |
+| 169 | 675 | 11:15 | 0.275 | 42 % | 4 | 20.1 K | |
+| **170** | 676 | 11:16 | **0.355** | **48 %** | 4 | 19.8 K | **TIES STEP 105 FOR RUN-HIGH SINGLE STEP**; seventeenth checkpoint uploaded to HF |
+
+**Trends after C17**: window mean **0.265** (+4 % vs C16's 0.256) — **second-best cadence of the run** behind C11's 0.280. Step 170 = 0.355 ties step 105 for the all-time single-step record. But the structural costs are climbing again: tool_med drifted **3 → 4** at step 167 and held; len_med grew **15.0 K → 19.8 K** (+32 %); step wall mean **551 s** (+34 % vs C16's 411 s). **Chain-flip rate 48.6 %** — higher than C16's 39.6 %, returning toward the C12-C14 over-search-era levels. **This is the second drift cycle starting**, repeating the C12-C14 pattern at a higher reward baseline.
+
+#### Mechanical examples (C17)
+
+**BEST** — step 161, sample 21, **reward 1.000**, 5 tool calls, 14.9 K chars
+
+> **Q**: *"Who was president of the U.S. immediately following the conflict in which Heinrich Henkel was a participant?"*
+> **Final answer**: `Woodrow Wilson` ✓ (per F1 reward — gold matched)
+>
+> *Commentary*: Heinrich Henkel was a WWI participant; the US president *immediately following* WWI was Warren G. Harding (1921). Wilson was the wartime president. **MuSiQue gold matched "Wilson"** so reward = 1.0, but historically the question's intended answer is Harding. Another Goodhart-class case where the F1 reward fires on gold-aligned but factually-disputable tokens. Cadence-17 first BEST is in the same class as the cadence-9 Fox Island and cadence-11 World Cup traces.
+
+**WORST** — step 161, sample 4, **reward 0.000**, 5 tool calls, 15.7 K chars
+
+> **Q**: *"When is the next governor election in the state where Tishomingo Blues is set?"*  (Tishomingo Blues → Mississippi; next gubernatorial = 2019 or 2023 depending on the gold's reference year)
+> **Final answer**: `2018` ✗
+>
+> *Commentary*: Wrong year for Mississippi gubernatorial elections (cycle is 2019 / 2023 / 2027). 2018 was a Mississippi *senatorial* election. Same year-disambiguation failure mode as C16's Eritrea-annexation case.
+
+**MEAN** — step 163, sample 232, **reward 0.267**, 6 tool calls, 20.5 K chars
+
+> **Q**: *"Which part of the organization US and the country that Russia was called after the revolution are members in has suspended its operations since 1994?"*  (USSR → UN member; US + USSR both UN members; UN Trusteeship Council suspended 1 Nov 1994)
+> **Final answer**: *"The UN (specifically the Trusteeship Council) suspended its operations on 1 November 1994."*
+>
+> *Commentary*: Substantively correct full chain (revolution → USSR; UN bridge; Trusteeship Council 1994). F1 0.27 because the answer is verbose ("on 1 November 1994" + parenthetical) diluting the F1 numerator. Same verbose-correct class as the cadence-13 Crying Stone and cadence-15 Singapore-JP MEANs.
+
+#### Claude hand-analyses (C17)
+
+1. **The recipe shows a clear oscillation: lean (C16) → drift (C17). The recovery is not a stable equilibrium.** Two cadences after C16's lean operating point (tool_med 3, len_med 15 K, step wall 411 s), C17 has already drifted to (tool_med 4 at step 167-170, len_med 20 K, step wall 551 s mean / 676 s at step 170). This is the second drift episode of the run (the first was C12 → C14 escalating into over-search). **The C16 recovery did not teach the policy to stay lean**; it taught the policy to *return to lean* when over-search stops paying off. The full pattern across the run is now visible as **lean-drift-lean cycling**, not monotone learning at the lean shape.
+2. **Step 170 hitting 0.355 (tying step 105's run-high) while in a drift-up regime is the key C17 finding.** The two run-high single steps come from very different operating points: step 105 was at C11 tool_med 3 + len_med 16 K + flip rate ~43 %; step 170 is at tool_med 4 + len_med 20 K + flip rate ~49 %. **The policy can hit the F1 ceiling at multiple operating-shape configurations**, but the lean configuration is cheaper. From a recipe-design perspective, the C16 lean shape + the C17 reward level would be the ideal — only achievable under M8's chain-quality-weighted reward, not under pure F1.
+
+#### Hop-stratified BEST successes (C17)
+
+| Hops | Step | Tools | Answer | Question |
+|---:|---:|---:|---|---|
+| 1 | 163 | 2 | `1996` | When did Peliyagoda's country win the world cup? |
+| 2 | 165 | 2 | `808` | What is the area code for the state where Ekuan spent his childhood? |
+| 3 | 162 | 2 | `Oceania` | What continent includes the country where the island of Nomuka is located? |
+| 4+ | 161 | 2 | `Chinese` | What race was the majority of the population of the country where Potong Pasir is located? |
+
+**4-hop+ successes: 39** (vs C16's 16, C14's 61 peak). Up from C16 because the drift back to tool_med 4 enables more hard-chain wins, same as the C13 → C14 transition.
+
+#### Planned-multi-hop reasoning (C17)
+
+**207 rollouts** with explicit numbered plan + reward 1.0 — **down from C16's 251** and well below C15's 391 peak. Top plan_score: step 170 sample 224 (plan_score 40, 4 calls, 19.9 K chars). The drift back toward tool_med 4 is producing more 4-hop+ wins but *fewer* deeply-planned multi-rollout chains, because the extra calls are going into verification of already-planned chains rather than into more-planned-chain rollouts.
+
+#### Cadence-17 summary
+
+**Reward**: second-best cadence (0.265), single-step run-high tied at 0.355. **Structural costs**: drift back to tool_med 4, len_med 20 K, step wall 551 s, flip rate 48.6 %. **Pattern**: the lean-drift cycle repeats — C12-C14 was the first cycle, C17 is the start of the second. Watch C18 for either continued drift (over-search peak repeating) or self-correction back to lean (the policy learning the cycle).
+
 ## 9. Cost / wall-clock estimate
 
 **Two tiers in play across this run**:
