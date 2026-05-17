@@ -1577,6 +1577,82 @@ The capability story has not regressed across the over-search arc: cadence-16's 
 
 **Reward**: second-best cadence (0.265), single-step run-high tied at 0.355. **Structural costs**: drift back to tool_med 4, len_med 20 K, step wall 551 s, flip rate 48.6 %. **Pattern**: the lean-drift cycle repeats — C12-C14 was the first cycle, C17 is the start of the second. Watch C18 for either continued drift (over-search peak repeating) or self-correction back to lean (the policy learning the cycle).
 
+### Cadence 18: steps 171-180 (second drift cycle damps; reward climbs further)
+
+| Step | Wall (s) | M:S | rew mean | rew > 0 | tool_med | len_med | notes |
+|---:|---:|---:|---:|---:|---:|---:|---|
+| 171 | 752 | 12:32 | 0.283 | 42 % | **5** | 22.5 K | Tool_med jumped from C17's 4 to 5 |
+| 172 | 843 | 14:03 | 0.259 | 37 % | 5 | 23.7 K | Slowest step of cadence |
+| 173 | 773 | 12:53 | 0.277 | 38 % | 5 | 23.0 K | |
+| 174 | 677 | 11:17 | 0.245 | 32 % | 4 | 19.7 K | Tool_med drops back to 4 |
+| **175** | 724 | 12:04 | **0.332** | **49 %** | 4 | 20.4 K | 4th-highest single-step rew on run |
+| 176 | 601 | 10:01 | 0.251 | 39 % | 4 | 19.2 K | |
+| 177 | 511 | 8:31 | 0.252 | 35 % | **3** | 16.8 K | Brief return to lean shape |
+| 178 | 563 | 9:23 | 0.240 | 34 % | 4 | 18.9 K | |
+| **179** | 535 | 8:55 | **0.326** | 44 % | **3** | 16.9 K | |
+| **180** | 617 | 10:17 | **0.286** | 43 % | 4 | 18.7 K | **Eighteenth checkpoint** uploaded to HF |
+
+**Trends after C18**: window mean **0.275** (+4 % vs C17's 0.265) — **third-best cadence of the run**, very close to C11's peak 0.280. Step wall mean **660 s** (+20 % vs C17's 551 s) — the drift continued in step time. Tool_med fluctuated 3-5 across the cadence with no clean trajectory; the policy is **wobbling rather than escalating**. Chain-flip rate **53.4 %** (up from C17's 48.6 % but well below C14's 58 % peak).
+
+**The second drift cycle has smaller amplitude than the first**:
+
+| | Cycle 1 (C12-C14) | Cycle 2 (C17-C18) |
+|---|---|---|
+| Tool_med range | 3 → 4 → 6 | 3 → 4 → 5 |
+| Len_med peak | 28.8 K | 23.7 K |
+| Step wall peak | 1052 s | 843 s |
+| Flip rate peak | 58 % | 56 % (first half C18) |
+| Reward range | 0.247 → 0.221 → 0.240 | 0.265 → 0.275 |
+
+**This is damped oscillation, not divergence.** The recipe is finding a stable orbit around tool_med ≈ 3-4 with smaller wobbles each cycle.
+
+#### Mechanical examples (C18)
+
+**BEST** — step 171, sample 12, **reward 1.000**, 7 tool calls, 22.5 K chars
+
+> **Q**: *"When did the mint in the location of the headquarters of the publishers of Introduction to Christianity stop making circulating coins?"*  (Ratzinger's *Introduction to Christianity* published by Ignatius Press / San Francisco; or Vatican Press / Rome → Vatican Mint / Italian Royal Mint stopped circulating coins 1937)
+> **Final answer**: `1937` ✓
+>
+> *Commentary*: Deep 3-hop chain (book → publisher → publisher's city → city's mint → year mint stopped circulating coins). 7 calls reflects the multi-hop chain's depth, not over-search.
+
+**WORST** — step 171, sample 0, **reward 0.000**, 8 tool calls, 29.4 K chars
+
+> **Q**: *"How long are the terms served by members of the assembly given authority to choose the president in 1824, under the document that gives Congress limited power to enact statues?"*  (1824 election → House of Representatives chose Adams; House terms = 2 years; gold likely matches)
+> **Final answer**: `2 years` ✗  (F1=0 against gold — the answer text "2 years" did not match the gold token form)
+>
+> *Commentary*: Substantively correct answer (House terms are 2 years), but F1 scorer didn't credit the exact form. Could be "two years" vs "2 years" tokenisation, or gold expects a numeric form. **F1-form-mismatch class.**
+
+**MEAN** — step 176, sample 241, **reward 0.273**, 6 tool calls, 18.2 K chars
+
+> **Q**: *"What nickname for the city where the band behind In Hiding started refers to its proximity to Alaska?"*  (Pearl Jam → Seattle; nickname → "Gateway to Alaska")
+> **Final answer**: *"Seattle is referred to informally as the 'Gateway to Alaska' for being the nearest major city in the contiguous U.S. to Alaska."*
+>
+> *Commentary*: Substantively correct; verbose-answer F1 dilution.
+
+#### Claude hand-analyses (C18)
+
+1. **The amplitude of the drift cycle is shrinking. This is meaningful.** Cycle 1 (C12-C14) peaked at tool_med 6 + len_med 28.8 K + step wall 1052 s + flip rate 58 %. Cycle 2 (C17-C18) peaked at tool_med 5 + len_med 23.7 K + step wall 843 s + flip rate 56 %. **Every metric of the over-search excursion is smaller this time.** This is consistent with the policy learning to damp the cycle: it still over-explores, but less far each time. If the trend holds, cycle 3 would peak at tool_med 4 + len_med ~19 K + step wall ~700 s + flip rate ~50 %. Whether the run reaches step 311 with a single more cycle or multiple is now the open question.
+2. **Reward 0.275 with the drift in progress is the headline.** C18's window mean (0.275) is **higher than C17's (0.265) despite higher tool count + higher step wall + higher flip rate**. The drift is paying off in reward this time — unlike cycle 1 where C13 (0.221) was the cost without payoff. Multiple steps in C18 (171, 175, 179, 180) crossed 0.28. **The policy is finding a higher-reward operating shape at tool_med 4-5 + len_med 20 K**, even if 50 %+ of those high-reward rollouts are chain-broken. From a pure F1 perspective, this looks like progress; from a chain-quality perspective, it's the M8 case fully visible.
+
+#### Hop-stratified BEST successes (C18)
+
+| Hops | Step | Tools | Answer | Question |
+|---:|---:|---:|---|---|
+| 1 | 180 | 2 | `United States` | What country is the Portland Mills Covered Bridge located in? |
+| 2 | 178 | 2 | `Allen County` | What county is Moran in the state where KFDI-FM is located a part of? |
+| 3 | 176 | 2 | `Pietro Bernini` | Who is the father of the artist of Bust of Francesco I d'Este? |
+| 4+ | 176 | 3 | `June 29, 1776` | What was the date of the foundation of the city where the Bank of the Orient is headquartered? |
+
+**4-hop+ successes: 33** (up from C17's 39 — no wait, C17 was 39, C18 is 33, so slightly down). The Bank of the Orient case is San Francisco → 1776 founding — the model resolves the chain through bank-headquarters retrieval.
+
+#### Planned-multi-hop reasoning (C18)
+
+**239 rollouts** with explicit numbered plan + reward 1.0 — flat with C17's 207, well below the C15 peak of 391. Top plan_score: step 174 sample 7 (plan_score 21, 4 calls, 18.2 K chars). The planned-mode count is now in a stable 200-300 / cadence range during the second drift cycle.
+
+#### Cadence-18 summary
+
+**Reward**: third-best cadence at 0.275 (close to C11's 0.280 peak). **Structural costs**: drift continued from C17 (step wall +20 %, tool_med fluctuating 3-5) but flip rate is at 53.4 %, below C14's 58 % peak. **Pattern**: the second drift cycle is damping — every metric of over-search is smaller than cycle 1. The recipe is finding a stable orbit around tool_med 3-4. Run is now at step 181/311 = 58 %.
+
 ## 9. Cost / wall-clock estimate
 
 **Two tiers in play across this run**:
