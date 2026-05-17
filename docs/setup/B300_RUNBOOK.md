@@ -388,3 +388,79 @@ These are cached on disk and reused unless explicitly cleaned. Don't `rm -rf` th
 - `local_retriever/{corpus,indexes,models}/` (~30 GB)
 - `training/nemo_rl/venvs/.../DTensorPolicyWorkerV2/` (~10 GB, the V2 venv itself)
 - `training_m5_5/nemo_rl/.venv/` (~13 GB, the parent venv via symlink)
+
+## Persistent volume (Spheron / virtiofs) — survive instance termination
+
+Long M5.5 runs (~300 steps × 5-7 min = 1-2 days) on a spot box will fill the
+root disk and lose everything if the instance dies. If the provider attaches a
+persistent volume (Spheron offers virtiofs shares that survive instance
+termination), mount it **before launching training** and point the checkpoint
+dir at it. A dead instance then just means re-bootstrapping a fresh box and
+pointing it at the same volume — every `step_N` is intact.
+
+Do this **once, before `start_b300.sh`**:
+
+```bash
+# 1. Mount the virtiofs share (name comes from the provider; "milestone55" here)
+sudo mkdir -p /mnt/milestone55
+sudo mount -t virtiofs milestone55 /mnt/milestone55
+# persist across reboots
+echo "milestone55 /mnt/milestone55 virtiofs nofail 0 0" | sudo tee -a /etc/fstab
+df -h /mnt/milestone55                                          # confirm capacity
+
+# 2. Tell run.sh to write ckpts to the volume (run.sh reads CHECKPOINT_DIR_BASE
+#    and lands ckpts under ${CHECKPOINT_DIR_BASE}/m5_<MODE>/seed<N>/).
+#    Persist it in training_m5_5/.env so every launch picks it up.
+echo "CHECKPOINT_DIR_BASE=/mnt/milestone55/ckpts" \
+    | sudo tee -a /root/reason_over_search/training_m5_5/.env
+
+# 3. (optional) Pre-stage retriever assets on the volume so future bootstraps
+#    on a fresh box skip the ~10 min download. bootstrap_b300.sh checks
+#    /mnt/milestone55/retriever_assets/ before going to HF.
+sudo mkdir -p /mnt/milestone55/retriever_assets
+```
+
+That's it. Now launch:
+
+```bash
+bash training_m5_5/scripts/start_b300.sh --smoke-first --mode prod_h200
+```
+
+Checkpoints land directly on the volume from step 10 onward. No symlink dance,
+no rsync loop, no race window. If the instance is killed, mount the same
+volume on the replacement and re-launch with
+`checkpointing.resume_from_checkpoint=latest` — NeMo-RL picks up at the last
+`step_<N>` on the volume.
+
+### Triple-backup invariant
+
+With `CHECKPOINT_DIR_BASE=/mnt/milestone55/ckpts` set, each new checkpoint
+lands in three independent places:
+
+1. **Volume** (`/mnt/milestone55/ckpts/m5_<mode>/seed<N>/step_<N>/`) — survives instance death
+2. **HF Hub** (`<hf_user>/reason-over-search-m5_5_<mode>-seed<N>-step<step>`) — `upload_ckpts_watcher.sh` polls and uploads
+3. **Local disk** — *only* if `CHECKPOINT_DIR_BASE` is unset; not used in the volume setup
+
+### If you mounted the volume *after* launching training
+
+You can't change `CHECKPOINT_DIR_BASE` mid-run (NeMo-RL reads the path at
+launch). But you can rsync existing local ckpts to the volume, then atomically
+swap the local `seed<N>` directory for a symlink to the volume — NeMo-RL keeps
+writing to the same path; the kernel resolves it through the symlink to
+virtiofs. Do this between ckpt saves (every 10 steps, ~30 min window) so no
+`tmp_step_N/` exists mid-rename.
+
+```bash
+MODE=prod_h200; SEED=42
+SRC=/root/reason_over_search/results/grpo/m5_5_${MODE}/seed${SEED}
+DST=/mnt/milestone55/ckpts/m5_5_${MODE}/seed${SEED}
+
+sudo rsync -a "$SRC/" "$DST/"                    # mirror current ckpts
+sudo mv "$SRC" "${SRC}.local_backup"             # atomic rename
+sudo ln -sfn "$DST" "$SRC"                       # symlink in its place
+sudo cat "$SRC/.uploaded_steps"                  # verify HF uploader still resolves
+sudo rm -rf "${SRC}.local_backup"                # frees ~32 GB (5 × 6.4 GB)
+```
+
+Prefer the fresh-start `CHECKPOINT_DIR_BASE` path above — the symlink swap is
+only here for "oops I forgot to mount the volume first."
