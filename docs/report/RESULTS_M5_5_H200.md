@@ -122,7 +122,7 @@ def reward(rollout) -> float:
 
 GRPO normalizes advantages within each group of 8 rollouts. The floor's purpose: in early steps where most rollouts get F1=0, the spread between "completely failed" (reward 0) and "format-valid but wrong" (reward 0.1) gives the policy a gradient even before it learns to actually answer. The risk: model parks at the floor forever and never improves F1. **The cadence trajectory below is the answer to whether that risk materializes.**
 
-## 7. Cadence summary (steps 1–90)
+## 7. Cadence summary (live trajectory, steps 1–140)
 
 | Cad | Steps | Reward mean | % nonzero | Mean tool calls | Completion% | Notes |
 |---:|---|---:|---:|---:|---:|---|
@@ -141,22 +141,48 @@ GRPO normalizes advantages within each group of 8 rollouts. The floor's purpose:
 | 13 | 121–130 | 0.277 ↓↓ | 100% | 3.65 ↑↑ | 100% | Second consecutive regression (-0.028). Tool calls 5th straight cadence of growth. |
 | 14 | 131–140 | 0.288 ↑ | 100% | **4.22** ↑↑↑ | 100% | **Regression halted** (+0.011) BUT tool calls still climbing (6th straight cadence). Perfect% **dropped to 9%** (vs 18% at C6 peak) — different dynamic than C6; model is *under-rewarding* its extra search. |
 
-**Headline trend**: cadence-mean run-high is **0.328 at C11**; C12-C14 regressed then bounced (0.305 → 0.277 → 0.288). Mean tool calls in monotonic **6-cadence climb** (2.21 → 2.53 → 3.21 → 3.30 → 3.65 → 4.22) — the C8-C9 efficiency gains have fully given back. Unlike the C5 → C6 drift (where perfect% spiked to 18% justifying the extra search), this drift has perfect% *falling* (18 → 12 → 9 at the C11/C12/C14 trace digests). Single-step run-high still **0.411** (step 117). Watch C15-C16: if tool calls > 4.5 and perfect% stays < 12%, this is a different attractor than C6 and may need intervention.
+**Headline trend**: cadence-mean run-high is **0.328 at C11**; C12-C14 regressed then bounced (0.305 → 0.277 → 0.288). Mean tool calls in monotonic **6-cadence climb** (2.21 → 2.53 → 3.21 → 3.30 → 3.65 → 4.22) — the C8-C9 efficiency gains have fully given back. Unlike the C5 → C6 drift (where perfect% spiked to 18% justifying the extra search), this drift has perfect% *falling* (18 → 12 → 9 at the C11/C12/C14 trace digests). Single-step run-high is **0.419 at step 105 (C11)**. Watch C15-C16: if tool calls > 4.5 and perfect% stays < 12%, this is a different attractor than C6 and may need intervention.
 
 **No tool-collapse**: cadence 2 dipped to 1.15 tool calls (the worry was a permanent collapse to single-shot answers parking at the 0.1 floor) but the model self-corrected by cadence 4 — iterative search was rediscovered without intervention.
 
 **No floor-domination**: % nonzero stays at 99-100% from cadence 2 onward, but the mean keeps climbing from 0.16 → 0.31 — the *spread above the floor* is widening, not just the floor count.
 
-### Mean tool calls per step (cadences 1-10)
+### Single-step run highs (top 15 prod steps, all 143 logged)
 
-![mean tool calls per step](figures/m5_5_h200_tool_calls_per_step.png)
+The cadence means smooth out the per-step variance. These are the individual prod steps with the highest `Avg Reward` so far — most are clustered in C10-C12 (the "exploration" phase where the model started taking longer multi-hop chains).
 
-Per-step mean tool calls across all 320 rollouts. The dashed reference lines are the C6 cadence-mean peak (4.30) and the C8 cadence-mean low (2.14) — note the **single-step peak hit 6.15 at step 60** (cadence averages hide this single-step spike). The four phases are visible:
+| Rank | Step | Reward | Cadence |
+|---:|---:|---:|---|
+| 1 | **105** | **0.4190** | C11 |
+| 2 | 116 | 0.4112 | C12 |
+| 3 | 102 | 0.3672 | C11 |
+| 4 | 138 | 0.3526 | C14 |
+| 5 | 109 | 0.3509 | C11 |
+| 6 | 91 | 0.3477 | C10 |
+| 7 | 94 | 0.3455 | C10 |
+| 8 | 97 | 0.3401 | C10 |
+| 9 | 110 | 0.3346 | C11 |
+| 10 | 86 | 0.3333 | C9 |
+| 11 | 88 | 0.3328 | C9 |
+| 12 | 99 | 0.3318 | C10 |
+| 13 | 118 | 0.3314 | C12 |
+| 14 | 101 | 0.3303 | C11 |
+| 15 | 106 | 0.3300 | C11 |
 
-1. **Cold dump** (steps 1-5): peak 6.85 at step 1
-2. **Format-mastery compression** (steps 10-29): sub-1.2 plateau (model over-corrects to single-shot answers parking at the 0.1 floor)
-3. **Iterative search re-emergence** (steps 30-55): climbs back to ~3
-4. **Over-search peak then correction** (steps 56-75): peaks at 6.15 step 60, drops back to 2.0-2.7 — the C8-onward stable operating point
+**Cadence concentration**: 11 of the top 15 single-step rewards landed in C10-C12 (steps 91-120), confirming that cadence-mean is not the whole story — the model's run-high reward was achieved at the *start* of the C12-C14 over-search drift, suggesting the extra tool calls were paying off at the **single-step** level even while the cadence mean regressed.
+
+### Live trajectory plot — tool calls + reward per step
+
+![live trajectory: tool calls + reward per step](figures/m5_5_h200_trajectory.png)
+
+Per-step mean tool calls (top, 320 rollouts each) and mean reward (bottom). The dashed reference lines are the C6 cadence-mean peak (4.30 tool calls) and the C8 cadence-mean low (2.14). Visible phases:
+
+1. **Cold dump** (steps 1-5): tool calls peak 6.85, reward 0.03 → 0.10
+2. **Format-mastery compression** (steps 10-29): sub-1.2 tool-calls plateau (model over-corrects to single-shot answers parking at the 0.1 floor); reward climbs slowly 0.15 → 0.20
+3. **Iterative search re-emergence** (steps 30-55): tool calls climb back to ~3; reward 0.20 → 0.25
+4. **Over-search peak** (steps 56-65): single-step tool-calls peak **6.15 at step 60**; reward also peaks at single-step 0.30
+5. **Efficient operating point** (steps 66-95): tool calls back to 2-2.7, reward keeps climbing to 0.32
+6. **Exploration phase** (steps 95-143): tool calls drifting up again, single-step rewards **spike to 0.42** (step 105) and 0.41 (step 116); cadence means regress slightly C12-C13 then bounce C14
 
 ## 8. Live trajectory — per-cadence analyzer output
 
